@@ -506,7 +506,7 @@ use std::path::PathBuf;
         let _ = tokio::fs::create_dir_all(&tmp).await;
         let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
 
-        // Boards config does NOT contain 'plan' column
+        // 'plan' column exists only in the non-active board; active board has no 'plan'.
         let boards_cfg = serde_json::json!({
             "active_board_id": "development",
             "boards": [
@@ -515,6 +515,16 @@ use std::path::PathBuf;
                     "name": "Разработка",
                     "columns": [
                         { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                },
+                {
+                    "id": "planning",
+                    "name": "Планирование",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог" },
+                        { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
                         { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
                         { "id": "ready", "title": "Готово", "terminal": true }
                     ]
@@ -528,28 +538,10 @@ use std::path::PathBuf;
         .await
         .expect("write boards.json");
 
-        // Pipeline config DOES contain 'plan' column
-        let pipeline_cfg = serde_json::json!({
-            "id": "development",
-            "title": "Pipeline",
-            "columns": [
-                { "id": "backlog", "title": "Бэклог" },
-                { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
-                { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
-                { "id": "ready", "title": "Готово", "terminal": true }
-            ]
-        });
-        tokio::fs::write(
-            tmp.join(".cvh").join("pipeline.json"),
-            serde_json::to_string_pretty(&pipeline_cfg).unwrap(),
-        )
-        .await
-        .expect("write pipeline.json");
-
         let _task = internal_create_task(
             &tmp,
             "Pipeline Plan Task".to_string(),
-            "Move to plan from pipeline".to_string(),
+            "Move to plan from boards".to_string(),
             "backlog".to_string(),
             Some("development".to_string()),
             Some(true),
@@ -562,7 +554,7 @@ use std::path::PathBuf;
         .await
         .expect("create task");
 
-        // Move task to 'plan' column which only exists in pipeline.json
+        // Move task to 'plan' column which only exists in the non-active board
         let moved = internal_move_task_stage(
             &tmp,
             "CVH-102",
@@ -575,9 +567,9 @@ use std::path::PathBuf;
             Some("development".to_string()),
         )
         .await
-        .expect("move task to plan from pipeline must succeed");
+        .expect("move task to plan from boards must succeed");
 
-        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan' from pipeline");
+        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan' from boards");
         assert_ne!(moved.stage_id, "ready", "Task must NEVER falsely fall back to 'ready'");
         assert_eq!(moved.status.as_deref(), Some("running"));
 

@@ -68,8 +68,7 @@
 .cvh/
 ├── harness.db             # высокопроизводительная SQLite база (WAL-режим): диалоги и стриминг
 ├── config.json            # проект: имя, модель/endpoint по умолчанию, providers
-├── pipeline.json          # пайплайн: columns (+зеркало boards/activeBoardId) — см. §2.2
-├── boards.json            # мульти-доски: { activeBoardId, boards[] } — см. §2.3
+├── boards.json            # мульти-доски: { activeBoardId, boards[] } — единственный SSOT (pipeline.json deprecated) — см. §2.3
 ├── tasks.json             # задачи: массив Task (CVH-001, CVH-002, …) — см. §2.4
 ├── agents/
 │   └── <role>/            # модульная папка роли (канонический путь):

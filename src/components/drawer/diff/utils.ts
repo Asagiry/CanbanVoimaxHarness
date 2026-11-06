@@ -120,7 +120,7 @@ export const isCvhPath = (p: string): boolean => {
 
   // 3. Explicitly allowed CVH configuration files & directories:
   //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
-  //    .cvh/boards.json, .cvh/pipeline.json
+  //    .cvh/boards.json
   const isCvhConfig =
     norm.startsWith('.cvh/rules/') ||
     norm.includes('/.cvh/rules/') ||
@@ -133,9 +133,7 @@ export const isCvhPath = (p: string): boolean => {
     norm.startsWith('.cvh/hooks/') ||
     norm.includes('/.cvh/hooks/') ||
     norm === '.cvh/boards.json' ||
-    norm.endsWith('/.cvh/boards.json') ||
-    norm === '.cvh/pipeline.json' ||
-    norm.endsWith('/.cvh/pipeline.json');
+    norm.endsWith('/.cvh/boards.json');
 
   if (isCvhConfig) {
     return false;

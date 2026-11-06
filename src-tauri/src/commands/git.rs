@@ -104,7 +104,7 @@ pub fn get_image_mime_type(path: &str) -> &'static str {
 
 /// Returns true if a path refers to a user-facing CVH configuration or rule file
 /// (e.g. `.cvh/rules/**`, `.cvh/agents/**`, `.cvh/settings/**`, `.cvh/tools/**`,
-/// `.cvh/hooks/**`, `.cvh/boards.json`, `.cvh/pipeline.json`).
+/// `.cvh/hooks/**`, `.cvh/boards.json`).
 /// Runtime artifacts (db, logs, spills, worktrees, dialogs, secrets) return false.
 pub fn is_cvh_config_path(path: &str) -> bool {
     let raw = path.replace('\\', "/");
@@ -158,14 +158,12 @@ pub fn is_cvh_config_path(path: &str) -> bool {
         || norm.contains("/.cvh/hooks/")
         || norm == ".cvh/boards.json"
         || norm.ends_with("/.cvh/boards.json")
-        || norm == ".cvh/pipeline.json"
-        || norm.ends_with("/.cvh/pipeline.json")
 }
 
 /// Returns true if the file path is an internal CVH runtime, database, secret,
 /// or worktree artifact that must be hidden from Git diffs.
 /// Configuration files under `.cvh/` (rules, agents, settings, tools, hooks,
-/// boards.json, pipeline.json) return false so they can be tracked and reviewed.
+/// boards.json) return false so they can be tracked and reviewed.
 pub fn is_cvh_path(path: &str) -> bool {
     let norm = path.replace('\\', "/");
     let norm = norm.trim();
@@ -213,7 +211,7 @@ pub fn is_cvh_path(path: &str) -> bool {
 
     // 3. Explicitly allowed CVH configuration files & directories:
     //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
-    //    .cvh/boards.json, .cvh/pipeline.json
+    //    .cvh/boards.json
     if is_cvh_config_path(norm) {
         return false;
     }
@@ -859,8 +857,8 @@ mod tests {
         assert!(!is_cvh_path(".cvh/hooks/on_enter.bat"));
         assert!(!is_cvh_path(".cvh/boards.json"));
         assert!(!is_cvh_path(".cvh\\boards.json"));
-        assert!(!is_cvh_path(".cvh/pipeline.json"));
-        assert!(!is_cvh_path(".cvh\\pipeline.json"));
+        assert!(is_cvh_path(".cvh/pipeline.json"));
+        assert!(is_cvh_path(".cvh\\pipeline.json"));
         assert!(!is_cvh_path("subproject/.cvh/boards.json"));
 
         // Normal codebase files outside .cvh

@@ -130,7 +130,7 @@ describe('isCvhPath (Path Filtering & Exclusion Invariant)', () => {
     expect(isCvhPath('.cvh/tools/custom-tool.json')).toBe(false);
     expect(isCvhPath('.cvh/hooks/on-enter.ps1')).toBe(false);
     expect(isCvhPath('.cvh/boards.json')).toBe(false);
-    expect(isCvhPath('.cvh/pipeline.json')).toBe(false);
+    expect(isCvhPath('.cvh/pipeline.json')).toBe(true);
   });
 
   it('hides unwhitelisted arbitrary internal files in .cvh/', () => {

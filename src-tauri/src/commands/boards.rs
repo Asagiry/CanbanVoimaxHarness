@@ -577,7 +577,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
 
 /// Удаляет персону: каталог `.cvh/agents/<role>`.
 /// Удаление встроенной персоны `cvh-dev` строго запрещено.
-/// При удалении сбрасывает ссылки на персону у колонок в boards.json и pipeline.json.
+/// При удалении сбрасывает ссылки на персону у колонок в boards.json.
 pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), String> {
     if role == "cvh-dev" {
         return Err("Запрещено удалять встроенную персону 'cvh-dev'".to_string());
@@ -599,7 +599,7 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
         return Err(format!("Персона '{}' не найдена", role));
     }
 
-    // Сброс ссылок на persona в boards.json и pipeline.json с возвратом дефолтной иконки стадии
+    // Сброс ссылок на persona в boards.json с возвратом дефолтной иконки стадии
     if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
         let mut changed = false;
         for board in &mut boards_cfg.boards {
@@ -615,30 +615,6 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
             let _ = crate::config::save_boards_config(root, &boards_cfg).await;
         }
     }
-    if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
-        let mut changed = false;
-        for col in &mut pipeline_cfg.stages {
-            if col.persona.as_deref() == Some(role) {
-                col.persona = None;
-                col.icon = Some(default_stage_icon(&col.id));
-                changed = true;
-            }
-        }
-        if let Some(boards) = &mut pipeline_cfg.boards {
-            for board in boards {
-                for col in &mut board.stages {
-                    if col.persona.as_deref() == Some(role) {
-                        col.persona = None;
-                        col.icon = Some(default_stage_icon(&col.id));
-                        changed = true;
-                    }
-                }
-            }
-        }
-        if changed {
-            let _ = crate::config::save_pipeline_config(root, &pipeline_cfg).await;
-        }
-    }
 
     Ok(())
 }
@@ -647,7 +623,7 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
 /// 1. Валидирует `new_role` через `is_valid_persona_role`.
 /// 2. Запрещает переименование `cvh-dev`.
 /// 3. Переименовывает директорию `.cvh/agents/<old_role>` в `.cvh/agents/<new_role>` (и flat-файл, если был).
-/// 4. Обновляет ссылки на persona в boards.json и pipeline.json с old_role на new_role.
+/// 4. Обновляет ссылки на persona в boards.json с old_role на new_role.
 pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &str) -> Result<(), String> {
     if old_role == "cvh-dev" {
         return Err("Запрещено переименовывать встроенную персону 'cvh-dev'".to_string());
@@ -686,7 +662,7 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
             .map_err(|e| format!("Не удалось переименовать файл персоны '{}.md' в '{}.md': {}", old_role, new_role, e))?;
     }
 
-    // Обновление ссылок на persona в boards.json и pipeline.json
+    // Обновление ссылок на persona в boards.json
     if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
         let mut changed = false;
         for board in &mut boards_cfg.boards {
@@ -699,28 +675,6 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
         }
         if changed {
             let _ = crate::config::save_boards_config(root, &boards_cfg).await;
-        }
-    }
-    if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
-        let mut changed = false;
-        for col in &mut pipeline_cfg.stages {
-            if col.persona.as_deref() == Some(old_role) {
-                col.persona = Some(new_role.to_string());
-                changed = true;
-            }
-        }
-        if let Some(boards) = &mut pipeline_cfg.boards {
-            for board in boards {
-                for col in &mut board.stages {
-                    if col.persona.as_deref() == Some(old_role) {
-                        col.persona = Some(new_role.to_string());
-                        changed = true;
-                    }
-                }
-            }
-        }
-        if changed {
-            let _ = crate::config::save_pipeline_config(root, &pipeline_cfg).await;
         }
     }
 
