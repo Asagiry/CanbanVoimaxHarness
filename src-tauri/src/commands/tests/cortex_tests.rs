@@ -51,6 +51,7 @@ use std::path::PathBuf;
             color: Some("#0284c7".to_string()),
             context_window: Some(400000),
             reasoning_effort: Some("medium".to_string()),
+            model: None,
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
@@ -75,6 +76,7 @@ use std::path::PathBuf;
             color: Some("#6366f1".to_string()),
             context_window: Some(128000),
             reasoning_effort: None,
+            model: None,
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));

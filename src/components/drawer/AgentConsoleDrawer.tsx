@@ -357,11 +357,11 @@ export default function AgentConsoleDrawer() {
     return merged;
   }, [task, activeSubagentId, activityFeed, streamEntries, toolExecutions]);
 
-  const effectiveModel = task?.model || settings.model || 'gemini-3.8-flash-high';
+  const effectiveModel = settings.model || 'crouton-alpha-free';
   const selectableModels = useMemo(() => {
     const seen = new Set<string>([effectiveModel]);
     const catalogIds = providers.flatMap((p) => p.models.map((m) => m.id));
-    const fallback = catalogIds.length > 0 ? catalogIds : [settings.model || 'gemini-3.8-flash-high'];
+    const fallback = catalogIds.length > 0 ? catalogIds : [settings.model || 'crouton-alpha-free'];
     for (const id of fallback) {
       if (id) seen.add(id);
     }
@@ -666,6 +666,7 @@ export default function AgentConsoleDrawer() {
                 effectiveModel={effectiveModel}
                 selectableModels={selectableModels}
                 onSelectModel={(m) => {
+                  const prevModel = effectiveModel;
                   updateTask(task.id, { model: m });
                   syncTasksBackend(tasks.map((t) => (t.id === task.id ? { ...t, model: m } : t)));
                   void (async () => {
@@ -674,6 +675,12 @@ export default function AgentConsoleDrawer() {
                     if (inCatalog) {
                       settingsStore.setSettings({ model: m });
                       await settingsStore.saveSettings();
+                    }
+                    const prov = settingsStore.providers.find((p) => p.models.some((model) => model.id === m));
+                    const display = prov?.models.find((model) => model.id === m)?.displayName || m;
+                    const label = prov ? `${prov.name} / ${display}` : display;
+                    if (prevModel !== m) {
+                      useDrawerStore.getState().appendOutput(task.id, `Модель изменена на ${label}`, 'system');
                     }
                   })();
                 }}

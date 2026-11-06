@@ -352,6 +352,7 @@ export const createCortexSlice: StateCreator<
         color: roleColor,
         contextWindow: item.contextWindow ?? item.context_window,
         reasoningEffort: item.reasoningEffort ?? item.reasoning_effort ?? null,
+        model: item.model ?? null,
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));

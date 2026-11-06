@@ -51,7 +51,7 @@ export default function ProviderList({ onEdit, onAdd }: ProviderListProps) {
               <button
                 type="button"
                 onClick={() => handleSelect(provider.id)}
-                className="flex items-center gap-2 min-w-0 text-left cursor-pointer"
+                className={`flex items-center gap-2 min-w-0 text-left cursor-pointer rounded-md px-1 py-0.5 -ml-1 ${isActive ? 'bg-[#f4f4f5] dark:bg-[#232328] ring-1 ring-[#ebebeb] dark:ring-[#2c2c33]' : 'hover:bg-[#fafafa] dark:hover:bg-[#17171b]'}`}
                 aria-label={provider.name}
               >
                 <span className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] font-sans truncate">{provider.name}</span>
@@ -67,7 +67,11 @@ export default function ProviderList({ onEdit, onAdd }: ProviderListProps) {
                 <span className={`text-[11px] font-sans ${signedIn ? 'text-[#22c55e]' : 'text-[#666666] dark:text-[#71717a]'}`}>
                   {signedIn ? t('settings.providers.signedIn') : t('settings.providers.notSignedIn')}
                 </span>
-                {isActive && <span className="sr-only">active</span>}
+                {isActive && (
+                  <span className="shrink-0 rounded-full bg-[#22c55e]/15 text-[#16a34a] dark:text-[#4ade80] border border-[#22c55e]/30 px-1.5 py-0.5 text-[10px] font-sans">
+                    Active
+                  </span>
+                )}
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <button
