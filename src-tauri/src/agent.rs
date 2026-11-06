@@ -2671,6 +2671,7 @@ pub struct AgentSessionConfig {
     pub steer_prompt: Option<String>,
     pub steer_images: Option<Vec<String>>,
     pub steering: Arc<Mutex<AgentSteering>>,
+    pub advance_aborted: Option<Arc<AtomicBool>>,
     pub base_url: String,
     pub api_key: Option<String>,
     pub model: String,
@@ -4078,15 +4079,24 @@ Endpoint: {}
             ) || canonical_tool_name(&norm_name) == "advance_task";
 
             if is_stage_transition && success {
-                // Immediately trip abort_flag to prevent any subsequent ticks or parallel operations
+                let (steer_appended, user_instruction) = drain_pending_steers(
+                    &config,
+                    &mut messages,
+                    &mut context_cursor,
+                    false,
+                )?;
+                if steer_appended && user_instruction {
+                    completion_nudges = 0;
+                    sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+                    crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+                        .await.map_err(anyhow::Error::msg)?;
+                    continue;
+                }
+                if let Some(ref flag) = config.advance_aborted {
+                    flag.store(true, Ordering::SeqCst);
+                }
                 abort_flag.store(true, Ordering::SeqCst);
-
-                // Synchronize messages to in-memory context state before exiting
                 sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
-
-                // Advance_task and stage transitions already append dedicated "summary" or "reject"
-                // dialog activity cards via append_task_dialog_activity. Suppress intermediate stream
-                // output and empty the final_response to eliminate duplicate output cards (§ CVH-051).
                 event_sink(AgentEvent::Finished {
                     final_response: String::new(),
                 });

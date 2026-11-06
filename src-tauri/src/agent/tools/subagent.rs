@@ -218,6 +218,7 @@ pub async fn execute_subagent(
                     abort_flag: Arc::clone(&sub_abort_handle),
                     join_handle: Arc::clone(&sub_join_slot),
                     steering: None,
+                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
             );
             if let Ok(mut map) = state_ref.active_agents.lock() {
@@ -227,6 +228,7 @@ pub async fn execute_subagent(
                         abort_flag: Arc::clone(&sub_abort_handle),
                         join_handle: Arc::clone(&sub_join_slot),
                     steering: None,
+                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     },
                 );
             }
@@ -409,6 +411,7 @@ pub async fn execute_subagent_bg(
                     abort_flag: Arc::clone(&sub_abort_handle),
                     join_handle: Arc::clone(&sub_join_slot),
                     steering: None,
+                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
             );
             if let Ok(mut map) = state_ref.active_agents.lock() {
@@ -418,6 +421,7 @@ pub async fn execute_subagent_bg(
                         abort_flag: Arc::clone(&sub_abort_handle),
                         join_handle: Arc::clone(&sub_join_slot),
                     steering: None,
+                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     },
                 );
             }

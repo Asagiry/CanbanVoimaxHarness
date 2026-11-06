@@ -103,6 +103,7 @@ use std::path::PathBuf;
                 abort_flag,
                 join_handle: join_slot,
                 steering: None,
+                advance_aborted: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         );
 
@@ -124,6 +125,7 @@ use std::path::PathBuf;
                 abort_flag: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 join_handle: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 steering: None,
+                advance_aborted: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         );
         let guard2 = active_map.lock().unwrap();
