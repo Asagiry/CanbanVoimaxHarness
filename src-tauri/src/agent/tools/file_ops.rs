@@ -167,7 +167,7 @@ pub fn glob_match_slices(pattern: &[u8], candidate: &[u8]) -> bool {
 pub async fn grep_walk(
     target: &Path,
     worktree_root: &Path,
-    needle: &str,
+    pattern: &regex::Regex,
     out: &mut Vec<String>,
 ) -> Result<()> {
     if target.is_file() {
@@ -179,7 +179,7 @@ pub async fn grep_walk(
                 .replace('\\', "/");
 
             for (idx, line) in content.lines().enumerate() {
-                if line.contains(needle) {
+                if pattern.is_match(line) {
                     out.push(format!("{}:{}: {}", rel, idx + 1, line.trim()));
                     if out.len() >= 200 {
                         return Ok(());
@@ -221,7 +221,7 @@ pub async fn grep_walk(
                         .replace('\\', "/");
 
                     for (idx, line) in content.lines().enumerate() {
-                        if line.contains(needle) {
+                        if pattern.is_match(line) {
                             out.push(format!("{}:{}: {}", rel, idx + 1, line.trim()));
                             if out.len() >= 200 {
                                 return Ok(());
@@ -265,7 +265,7 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
         .get("read_file")
         .and_then(|v| v.get("max_lines"))
         .and_then(|v| v.as_u64())
-        .unwrap_or(2000) as usize;
+        .unwrap_or(200) as usize;
     let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
     let limit = args
         .get("limit")
@@ -282,7 +282,7 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
     if start >= lines.len() {
         return Ok("(File is empty or offset out of range)\n".to_string());
     }
-    let end = (start + limit).min(lines.len());
+    let end = start.saturating_add(limit).min(lines.len());
     if start > end {
         return Ok("(File is empty or offset out of range)\n".to_string());
     }
@@ -294,6 +294,8 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
 
     if output.is_empty() {
         output.push_str("(File is empty or offset out of range)\n");
+    } else if end < lines.len() {
+        output.push_str(&format!("[Showing lines {}-{} of {}. Use offset={} to continue.]\n", start + 1, end, lines.len(), end + 1));
     }
 
     Ok(output)
@@ -389,9 +391,11 @@ pub async fn execute_grep(ctx: &ToolContext<'_>, args: &serde_json::Value) -> Re
         .context("Missing required parameter 'pattern'")?;
     let sub_path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
     let search_target = resolve_safe_path(ctx.worktree_dir, sub_path)?;
+    let pattern = regex::Regex::new(pattern)
+        .map_err(|err| anyhow::anyhow!("Invalid regular expression: {err}"))?;
 
     let mut matches = Vec::new();
-    grep_walk(&search_target, ctx.worktree_dir, pattern, &mut matches).await?;
+    grep_walk(&search_target, ctx.worktree_dir, &pattern, &mut matches).await?;
 
     if matches.is_empty() {
         Ok("No matches found.".to_string())

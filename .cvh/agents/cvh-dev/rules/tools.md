@@ -41,11 +41,11 @@ All standard tools are defined in Rust backend (`src-tauri/src/agent.rs` and `sr
 - **`todo_write`**: Records and updates task checklist plan (`todos: [{content, status}]`).
 
 ### 2.5 File System & Code Inspection Operations
-- `read_file`: Reads UTF-8 text file with line numbers (`file_path`, `offset`, `limit`). Subject to 2,000 lines / 128 KB spilling limit.
+- `read_file`: Reads UTF-8 text file with line numbers (`file_path`, `offset`, `limit`), defaulting to 200 lines. Request a targeted offset/limit when more context is needed. Subject to 2,000 lines / 128 KB spilling limit.
 - `write_file`: Writes complete UTF-8 file content (`file_path`, `content`).
 - `edit_file` (alias: `str_replace`): Precise text replacement with progressive line-ending normalization and whitespace tolerance.
 - `glob`: Finds files by pattern within active worktree.
-- `grep`: Searches file contents by regex within active worktree.
+- `grep`: Searches file contents line by line with Rust regex within the active worktree, returning at most 200 matching lines. Supports alternatives (`a|b`), anchors, character classes and inline flags (`(?i)`); look-around and backreferences are unsupported. Invalid expressions return an error.
 
 ### 2.6 Shell Execution & Sensor Verification Tools
 - **`execute_command` (alias: `bash`)**: Runs shell commands inside the worktree with timeout bounds and output spilling (>500 lines / 64 KB).

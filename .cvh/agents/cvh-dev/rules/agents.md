@@ -48,7 +48,7 @@ Shared architectural contracts, system-wide invariants, and repository navigatio
 ```
 - **Universal Availability**: Global rules in `.cvh/rules/` are accessible to all agents via `load_rule("<rule_stem>")` without requiring a role prefix.
 - **Zero Duplication**: Shared architectural contracts, router maps, and cross-cutting specifications belong in `.cvh/rules/` rather than duplicated across role directories.
-- **Subagent Codebase Discovery Mandate**: When initializing or configuring a project, `cvh-dev` MUST NOT copy CVH-specific internal paths (e.g. `src-tauri/`, Tauri IPC, React stores) into external repositories. Instead, `cvh-dev` must dispatch specialized subagents (`subagent`) to explore the directory structure, identify key frameworks, and author tailored, project-specific navigation maps directly into `.cvh/rules/`.
+- **Project-Specific Discovery**: When initializing or configuring a project, `cvh-dev` MUST NOT copy CVH-specific internal paths (e.g. `src-tauri/`, Tauri IPC, React stores) into external repositories. Inspect the actual structure and frameworks, then author tailored navigation maps in `.cvh/rules/`. Delegate independent, complex discovery only when its benefit justifies extra context and coordination; direct exploration is valid.
 - **Architectural Map Synchronization Mandate**: Whenever agents add, remove, rename, or relocate modules/files in the project, they MUST update the corresponding project navigation maps in `.cvh/rules/` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
 
 ---
@@ -73,5 +73,5 @@ When instantiating personas, `cvh-dev` must NEVER generate shallow placeholder p
 Refer to `load_rule("pipeline-setup")` for the complete behavioral specifications:
 - **Developer**: OpenCode 4 Laws (anti-overengineering), Ponytail minimal diffs, Zero-TDD, contrastive diff self-audit.
 - **Reviewer**: Read-only (Tool Policy Level B), Presumption of Guilt, Three-Axis Review, Anthropic Claude Code convergence (immunity to historical pre-existing bugs, diff-only re-review, line-by-line actionable references).
-- **Planner**: Read-only, context window protection for developer, subagent explorer, question-based clarification.
+- **Planner**: Read-only exploration, context window protection for developer, question-based clarification, and actionable handoff.
 - **Retro**: Engine code prohibition (`src/` strictly forbidden), Karpathy LLM-Wiki knowledge ingest, Cue-Lesson-Evidence protocol, automated audit hardening.

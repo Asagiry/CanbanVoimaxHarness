@@ -15,11 +15,11 @@ Every code modification must be verified against real compiler, linter, and auto
 ### Command Execution Discipline (Zero Unnecessary Commands)
 1. **Never Run Commands on Startup**: Do NOT run `cargo check`, `pnpm test`, `pnpm exec tsc`, `npm run build`, or test suites at the start of a task before code edits are made. Initial exploration is strictly static (`read_file`, `glob`, `grep`).
 2. **Subsystem-Targeted Sensors**: Run ONLY sensors corresponding to the files you modified. Never run backend checks for frontend-only tasks, and never run frontend builds for backend-only tasks.
-3. **Run Sensors at Verification Phase**: Execute sensors strictly after code implementation is complete, just before calling `advance_task`.
+3. **Run Sensors at Verification Phase**: Execute applicable sensors once after implementation. Repeat only when relevant changes invalidate prior results, a check failed, or a concrete uncovered risk needs verification.
 4. **Strict Prohibition of Unix Pipelines on Windows**: In `execute_command`, NEVER execute Unix shell pipelines (`| wc -l`, `| grep`, `| head`, `| tail`, `export VAR=...`) on Windows. Use dedicated built-in tools (`grep`, `glob`, `read_file`) or platform-safe scripts.
 
 **Never rely on hallucinations or synthetic assumptions.**
-If a sensor command fails, you must analyze the compiler or test diagnostics, fix the root cause, and re-run the sensor until it exits with code 0.
+If a sensor fails, inspect diagnostics and fix the cause before rerunning the affected check. If an external blocker prevents verification, report it explicitly; do not repeat an unchanged failing command or claim success.
 
 ---
 
@@ -96,7 +96,7 @@ git merge-tree --write-tree main HEAD
 
 ## 3. Sensor Output in Handover Summary
 
-When invoking `advance_task(summary)`, the Developer MUST include explicit sensor proof:
+When invoking `advance_task(summary)`, include commands, exit codes, and log references for the applicable checks, plus the delivered commit and relevant environment. This allows the Reviewer to reuse evidence when sources, dependencies, configuration, and toolchain are unchanged. The following full-stack example is not a requirement to run checks for untouched subsystems:
 ```text
 - Sensors Verified:
   1. pnpm test: EXIT 0 (100% Vitest suites passing, 0 failures)

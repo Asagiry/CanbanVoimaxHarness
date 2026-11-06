@@ -1,5 +1,5 @@
 ---
-description: Rigorous 5-sensor gatekeeper verification protocol, presumption of guilt, and line-by-line review standards.
+description: Verification evidence policy, presumption of guilt, and line-by-line review standards.
 ---
 # Rule: Ultra-Strict Review Checklist & Harness2.0 Verification Protocol (review-checklist.md)
 
@@ -45,17 +45,14 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
 - Update rules ONLY if universal system architecture or public contracts fundamentally changed.
 - If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
-- **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, inspect whether `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` was updated. If new files/modules were introduced without updating the respective navigation map, REJECT with `CHANGES_REQUESTED`.
+- **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, verify the relevant topic map in `.cvh/rules/` was updated. Update `backend_map.md` or `frontend_map.md` only when their topic routes change. Reject missing or incorrect file routes, not the absence of an unrelated router edit.
 
-### Gate 2: The 5-Sensor Ground Truth Checklist
-The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_command`:
-1. **Frontend Unit Tests (Vitest)**: `pnpm test` (100% pass across all test suites, 0 failures).
-2. **TypeScript Compiler Sensor**: `pnpm exec tsc --noEmit` (exit code 0, 0 type errors).
-3. **Frontend Linter Sensor**: `pnpm exec oxlint --deny-warnings` (exit code 0, 0 linter warnings).
-4. **Backend Unit Tests (mbx)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% pass across core test suites, 0 failures).
-5. **Backend Compiler & Clippy Sensor (mbx)**: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (exit code 0, 0 errors, 0 warnings).
+### Gate 2: Verification Evidence for the Changed Scope
+- Require successful verification for affected subsystems. Frontend checks are `pnpm test`, `pnpm exec tsc --noEmit`, and `pnpm exec oxlint --deny-warnings`; backend checks are `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`, with targeted tests when changed behavior needs them. Do not run checks for untouched subsystems without a concrete cross-system risk.
+- Accept existing command logs and exit codes tied to the reviewed commit when relevant sources, dependencies, configuration, toolchain, and environment are unchanged. A bare claim that checks passed is not evidence.
+- Run only checks whose evidence is missing, failed, stale, or unverifiable, or whose scope does not cover a concrete risk found in the diff. State why each additional check is needed. Entering review alone does not invalidate successful verification.
+- For documentation and prompt-only changes, inspect the diff, references, and affected contracts; compiler/test runs are needed only if executable behavior or configuration is affected.
 - **Windows Command Hygiene**: When executing sensor checks via `execute_command`, strictly avoid Unix shell pipelines (`| wc -l`, `| grep`, `| head`, `| tail`) on Windows `cmd.exe`.
-- The Reviewer does not accept claims of success without live sensor verification logs.
 
 ### Gate 3: Backend Architectural Invariants & Uncle Bob Clean Architecture
 - **Single Responsibility Principle (SRP)**: Code strictly partitioned into `db/` (repositories & pool), `config/` (I/O, models, scaffold, tool policy), `domain/` (Value Objects & state machines), and `agent/` (ReAct engine, compactor, tools).

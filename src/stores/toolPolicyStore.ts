@@ -142,7 +142,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
       properties: {
         file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
         offset: { type: 'integer', description: '1-based starting line number (default: 1).' },
-        limit: { type: 'integer', description: 'Maximum number of lines to return (default: 2000).' },
+        limit: { type: 'integer', description: 'Maximum number of lines to return (default: 200).' },
       },
       required: ['file_path'],
     },
@@ -201,13 +201,13 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     id: 'grep',
     name: 'grep',
     label: 'Поиск по тексту',
-    description: 'Search file contents with a regular expression inside the isolated worktree.',
+    description: 'Search file contents line by line with a Rust regular expression inside the isolated worktree. Use | for alternatives; returns at most 200 matching lines.',
     category: 'fs',
     tokenWeight: 250,
     parameters: {
       type: 'object',
       properties: {
-        pattern: { type: 'string', description: 'Regular expression pattern.' },
+        pattern: { type: 'string', description: 'Rust regex: foo|bar, ^prefix, [A-Z]+, or (?i)name for case-insensitive search. No look-around or backreferences.' },
         path: { type: 'string', description: "Directory or file to search (default: '.')." },
       },
       required: ['pattern'],
@@ -442,7 +442,7 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
     {
       key: 'max_lines',
       label: 'Лимит чтения строк за раз',
-      defaultValue: 2000,
+      defaultValue: 200,
       min: 50,
       max: 10000,
       step: 100,
@@ -507,7 +507,7 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
 export type ToolSettings = Record<string, Record<string, number>>;
 
 export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
-  read_file: { max_lines: 2000 },
+  read_file: { max_lines: 200 },
   subagent: { max_concurrent: 3 },
   subagent_bg: { max_concurrent: 3 },
   todo_write: { min_items: 3, max_items: 20 },

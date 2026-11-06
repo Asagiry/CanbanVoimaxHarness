@@ -1,11 +1,17 @@
 ---
-description: Authoritative navigation map and file-by-file router for the Rust Tauri backend (src-tauri/src/).
+description: Backend entrypoints and topic-map router.
 ---
-# Backend Navigation Map & File-by-File Router (backend_map.md)
+# Backend map
 
-Authoritative directory topology, file mapping table, and subsystem architecture for the Rust 2021 / Tauri v2 backend of **CanbanVoimaxHarness (`src-tauri/src/`)**.
+Rust/Tauri code lives in `src-tauri/src/`. Load only the topic needed for the task; known files can be opened directly.
 
----
+| Task | Rule to load | Start here |
+| --- | --- | --- |
+| Prompts, agent loop, compaction, tools and subagents | `load_rule("backend_agent_map")` | `src-tauri/src/agent.rs` |
+| Providers, model fetch, cache routing, config and tool policy | `load_rule("backend_config_map")` | `src-tauri/src/llm/client.rs` |
+| Start/stop/steer, task lifecycle, stage hooks and Git | `load_rule("backend_tasks_map")` | `src-tauri/src/commands/tasks/runner.rs` |
+| Domain states/IDs, dialogue history and exact context snapshots | `load_rule("backend_storage_map")` | `src-tauri/src/db/context_repo.rs` |
+| Desktop bootstrap, IPC wiring, notifications and logging | `load_rule("backend_platform_map")` | `src-tauri/src/lib.rs` |
 
 ## 1. Quick File-by-File Router ("What to modify" -> "Exact file path")
 
@@ -164,3 +170,4 @@ For rapid Rust compile checks and test execution in CanbanVoimaxHarness, use the
 - Configured via `.mbx.toml` in repository root and uses `.toolchain/mbx-cache`.
 - **MANDATORY**: Agents MUST use `mbx check` and `mbx test` instead of raw `cargo`. `mbx` leverages persistent compiler cache for sub-second verification (<0.6s). Raw `cargo` is prohibited unless `mbx` is not installed in PATH.
 
+Keep exact file routes current in the relevant topic map when modules move. Verification commands and build policy belong to the active role's `sensors` rule.

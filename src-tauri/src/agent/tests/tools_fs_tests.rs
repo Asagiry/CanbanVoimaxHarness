@@ -51,6 +51,20 @@ line 2 again"
         assert!(read_res.contains("3: line 3"), "got: {}", read_res);
         assert!(!read_res.contains("1: line 1"));
 
+        assert!(read_res.contains("Use offset=4"));
+        let long_text = (1..=250).map(|n| format!("row {n}\n")).collect::<String>();
+        tokio::fs::write(base.join("large.txt"), &long_text).await.unwrap();
+        let first = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt"})).await.unwrap();
+        assert!(first.contains("200: row 200\n"));
+        assert!(!first.contains("201: row 201\n"));
+        assert!(first.contains("Use offset=201"));
+        let rest = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt", "offset": 201})).await.unwrap();
+        assert!(rest.contains("201: row 201\n"));
+        assert!(rest.contains("250: row 250\n"));
+        assert!(!rest.contains("Use offset="));
+        let full = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt", "limit": 250})).await.unwrap();
+        assert!(full.contains("250: row 250\n"));
+
         // 3. edit_file with single replacement
         let edit_res = execute_tool(&tool_ctx, "edit_file", &serde_json::json!({
             "file_path": "src/demo.txt",
@@ -313,6 +327,38 @@ line 2 again"
         .expect("grep execution");
         assert!(grep_res.contains("main.rs:1:"), "got: {}", grep_res);
         assert!(grep_res.contains("HELLO_GREP_MARKER"), "got: {}", grep_res);
+
+        tokio::fs::write(base.join("src/regex.txt"),
+            "alpha42\nbeta7\nalphabet\nALPHA99\nconfig.toml\nconfigXtoml\nпривет5\na|b\n"
+        ).await.unwrap();
+        for path in ["src", "src/regex.txt"] {
+            let result = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+                "pattern": r"^(alpha|beta)\d+$", "path": path
+            })).await.unwrap();
+            assert_eq!(result, "src/regex.txt:1: alpha42\nsrc/regex.txt:2: beta7");
+        }
+        for (pattern, expected) in [
+            (r"(?i)^alpha\d+$", "src/regex.txt:1: alpha42\nsrc/regex.txt:4: ALPHA99"),
+            (r"^config\.toml$", "src/regex.txt:5: config.toml"),
+            (r"^\p{Cyrillic}+\d+$", "src/regex.txt:7: привет5"),
+            (r"^a\|b$", "src/regex.txt:8: a|b"),
+            ("^missing$", "No matches found."),
+        ] {
+            let result = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+                "pattern": pattern, "path": "src/regex.txt"
+            })).await.unwrap();
+            assert_eq!(result, expected, "pattern: {pattern}");
+        }
+        let error = execute_tool(&tool_ctx, "grep", &serde_json::json!({"pattern": "["}))
+            .await.expect_err("Malformed regex must fail, not claim no matches");
+        assert!(error.to_string().contains("Invalid regular expression"));
+        assert!(error.to_string().contains("unclosed character class"));
+        tokio::fs::write(base.join("many.txt"), "match\n".repeat(250)).await.unwrap();
+        let capped = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+            "pattern": "^match$", "path": "many.txt"
+        })).await.unwrap();
+        assert_eq!(capped.lines().count(), 200);
+
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

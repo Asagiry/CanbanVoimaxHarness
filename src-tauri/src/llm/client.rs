@@ -271,6 +271,8 @@ impl LlmClient {
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
         let mut first_chunk_sent = false;
         let mut pending_usage: Option<StreamChunk> = None;
+        let mut terminal_marker = false;
+        let mut stream_error = None;
 
         loop {
             let item = tokio::select! {
@@ -284,10 +286,25 @@ impl LlmClient {
                 Ok(event) => {
                     let data = event.data.trim();
                     if data == "[DONE]" {
+                        terminal_marker = true;
                         break;
                     }
 
-                    if let Ok(chunk) = serde_json::from_str::<OpenAIChatChunk>(data) {
+                    let Ok(payload) = serde_json::from_str::<serde_json::Value>(data) else {
+                        stream_error = Some("Invalid JSON in LLM stream".to_string());
+                        break;
+                    };
+                    if let Some(error) = payload.get("error").filter(|error| !error.is_null()) {
+                        stream_error = Some(format!("LLM stream error: {error}"));
+                        break;
+                    }
+                    if ["/stop_reason", "/delta/stop_reason", "/message/stop_reason"].iter()
+                        .any(|path| payload.pointer(path).and_then(|value| value.as_str()) == Some("max_tokens"))
+                    {
+                        stream_error.get_or_insert_with(|| "LLM response incomplete: max_tokens".to_string());
+                    }
+
+                    if let Ok(chunk) = serde_json::from_value::<OpenAIChatChunk>(payload) {
                         if !first_chunk_sent {
                             first_chunk_sent = true;
                             let _ = tx.send(StreamChunk::FirstChunk).await;
@@ -315,6 +332,13 @@ impl LlmClient {
 
                         if let Some(choices) = chunk.choices {
                             for choice in choices {
+                                if let Some(reason) = choice.finish_reason.as_deref().filter(|reason| !reason.is_empty()) {
+                                    if matches!(reason, "stop" | "tool_calls" | "function_call") {
+                                        terminal_marker = true;
+                                    } else {
+                                        stream_error.get_or_insert_with(|| format!("LLM response incomplete: {reason}"));
+                                    }
+                                }
                                 // Content delta
                                 if let Some(content) = choice.delta.content {
                                     if !content.is_empty() {
@@ -357,14 +381,33 @@ impl LlmClient {
                                 }
                             }
                         }
+                    } else {
+                        stream_error = Some("Invalid response shape in LLM stream".to_string());
+                        break;
                     }
                 }
                 Err(err) => {
-                    let err_msg = format!("SSE stream decode error: {}", err);
-                    let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
-                    bail!(err_msg);
+                    stream_error = Some(format!("SSE stream decode error: {}", err));
+                    break;
                 }
             }
+        }
+
+        if stream_error.is_none() && !terminal_marker {
+            stream_error = Some("LLM stream ended before a completion marker".to_string());
+        }
+        if stream_error.is_none() && tool_calls_in_progress.values().any(|(_, name, args)| {
+            name.trim().is_empty() || !serde_json::from_str::<serde_json::Value>(args)
+                .is_ok_and(|value| value.is_object())
+        }) {
+            stream_error = Some("LLM returned an incomplete or invalid tool call".to_string());
+        }
+        if let Some(err_msg) = stream_error {
+            if let Some(usage_chunk) = pending_usage.take() {
+                let _ = tx.send(usage_chunk).await;
+            }
+            let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
+            bail!(err_msg);
         }
 
         // Flush any completed tool calls
@@ -400,6 +443,103 @@ impl LlmClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn stream_test_response(response: String) -> (Result<()>, Vec<StreamChunk>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let count = socket.read(&mut buffer).await.unwrap();
+                assert_ne!(count, 0);
+                request.extend_from_slice(&buffer[..count]);
+                if let Some(end) = request.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&request[..end]).to_lowercase();
+                    let length: usize = headers.lines().find_map(|line| line.strip_prefix("content-length: "))
+                        .unwrap().parse().unwrap();
+                    if request.len() >= end + 4 + length { break; }
+                }
+            }
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).as_bytes()).await.unwrap();
+        });
+        let client = LlmClient {
+            client: reqwest::Client::builder().no_proxy().build().unwrap(),
+            ..LlmClient::new()
+        };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        let request = OpenAIChatRequest {
+            model: "test".into(), messages: vec![ChatMessage::user("test")], temperature: None,
+            stream: true, tools: None, reasoning_effort: None, stream_options: None,
+        };
+        let result = tokio::time::timeout(std::time::Duration::from_secs(3), client.stream_openai(&endpoint, None, request, tx))
+            .await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(3), server).await.unwrap().unwrap();
+        let mut events = Vec::new();
+        while let Some(event) = rx.recv().await { events.push(event); }
+        (result, events)
+    }
+
+    fn tool_stream_frame(arguments: &str) -> String {
+        format!("data: {}\n\n", serde_json::json!({"choices": [{"delta": {"tool_calls": [{
+            "index": 0, "id": "call-1", "function": {"name": "read_file", "arguments": arguments}
+        }]}}]}))
+    }
+
+    #[tokio::test]
+    async fn incomplete_streams_never_release_tool_calls() {
+        let tool = tool_stream_frame("{}");
+        let mut cases = Vec::new();
+        for reason in ["length", "content_filter", "max_tokens"] {
+            cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
+                "choices": [{"delta": {}, "finish_reason": reason}], "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+            })));
+            for ending in ["data: [DONE]\n\n", ""] {
+                cases.push(format!("{tool}data: {}\n\ndata: {}\n\n{ending}",
+                    serde_json::json!({"choices": [{"delta": {}, "finish_reason": reason}]}),
+                    serde_json::json!({"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 4}}),
+                ));
+            }
+        }
+        let cases_with_usage = cases.len();
+        cases.push(format!("{tool}data: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"max_tokens\"}}}}\n\n"));
+        cases.push(format!("{tool}data: {{\"stop_reason\":\"max_tokens\"}}\n\n"));
+        cases.push(tool.clone());
+        cases.push(format!("{}data: [DONE]\n\n", tool_stream_frame("{\"path\":")));
+        cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
+            "choices": [{"delta": {"tool_calls": [{"index": 1, "function": {"name": "read_file", "arguments": "{"}}]}}]
+        })));
+        cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
+            "error": {"message": "upstream generation failed", "type": "server_error"}
+        })));
+        for (index, response) in cases.into_iter().enumerate() {
+            let (result, events) = stream_test_response(response).await;
+            assert!(result.is_err());
+            assert!(events.iter().any(|event| matches!(event, StreamChunk::Error(_))));
+            assert!(events.iter().all(|event| !matches!(event, StreamChunk::ToolCall { .. } | StreamChunk::Done)));
+            if index < cases_with_usage {
+                assert!(events.iter().any(|event| matches!(event, StreamChunk::Usage { input_tokens: 10, output_tokens: 4, .. })));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_accepts_done_or_successful_finish_reason() {
+        for reason in ["stop", "tool_calls", "function_call"] {
+            let response = format!("{}data: {}\n\n", tool_stream_frame("{}"), serde_json::json!({
+                "choices": [{"delta": {}, "finish_reason": reason}]
+            }));
+            let (result, events) = stream_test_response(response).await;
+            assert!(result.is_ok());
+            assert_eq!(events.iter().filter(|event| matches!(event, StreamChunk::ToolCall { .. })).count(), 1);
+            assert!(matches!(events.last(), Some(StreamChunk::Done)));
+        }
+        let (result, events) = stream_test_response(format!("{}data: [DONE]\n\n", tool_stream_frame("{}"))).await;
+        assert!(result.is_ok());
+        assert!(matches!(events.last(), Some(StreamChunk::Done)));
+    }
 
     #[tokio::test]
     async fn opencode_transport_omits_cache_markers_and_preserves_history() {

@@ -11,7 +11,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "properties": {
                     "file_path": { "type": "string", "description": "Relative file path within worktree (or 'path')." },
                     "offset": { "type": "integer", "description": "1-based starting line number (default: 1)." },
-                    "limit": { "type": "integer", "description": "Maximum number of lines to return (default: 2000)." }
+                    "limit": { "type": "integer", "description": "Maximum number of lines to return (default: 200)." }
                 },
                 "required": ["file_path"]
             }),
@@ -56,11 +56,11 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "grep",
-            "Search file contents with a regular expression inside the isolated worktree. (Batch-friendly: emit multiple grep/read_file calls concurrently to search different patterns or paths).",
+            "Search file contents line by line with a Rust regular expression inside the isolated worktree. Use | for alternatives; returns at most 200 matching lines. (Batch-friendly: emit multiple grep/read_file calls concurrently to search different patterns or paths).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "pattern": { "type": "string", "description": "Regular expression pattern." },
+                    "pattern": { "type": "string", "description": "Rust regex: foo|bar, ^prefix, [A-Z]+, or (?i)name for case-insensitive search. No look-around or backreferences." },
                     "path": { "type": "string", "description": "Directory or file to search (default: '.')." }
                 },
                 "required": ["pattern"]

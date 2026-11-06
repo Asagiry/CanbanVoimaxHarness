@@ -116,7 +116,7 @@ pub async fn execute_todo_write(
             }
         } else {
             // Atomically save todos to SQLite table task_todos
-            let _ = crate::db::db_save_todos(repo_root, tid, &parsed_todos);
+            crate::db::db_save_todos(repo_root, tid, &parsed_todos).map_err(anyhow::Error::msg)?;
 
             // Update in SQLite tasks table if task exists
             if let Ok(Some(mut db_task)) = crate::db::db_get_task(repo_root, tid) {

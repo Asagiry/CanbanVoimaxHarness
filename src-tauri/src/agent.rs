@@ -310,7 +310,7 @@ Paths (repo-root relative, single source of truth):
 
 Architectural Map Discovery Mandate:
 - When initializing or configuring any repository, `cvh-dev` MUST NOT copy CanbanVoimaxHarness internal paths into target projects.
-- Dispatch specialized subagents (`subagent`) to explore codebase topology, inspect framework structures, and author project-tailored navigation maps directly into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`).
+- Explore the actual codebase and author project-tailored navigation maps in `.cvh/rules/`. Delegate independent complex discovery only when the benefit justifies extra context and coordination; file count alone does not require subagents.
 
 Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep ≤30 lines, link detail, never copypaste):
 ```yaml
@@ -356,13 +356,13 @@ Rules (apply to every step):
 - Rationalization vs Reality: state only what sensors prove; no invented files, no assumed green build.
 
 Initializer flow (empty project):
-1. Explore: dispatch subagents (`subagent`) to explore directory topology, detect stack + build/test cmds, and inspect framework structure.
+1. Explore: inspect directory topology, detect stack and verification commands. Delegate independent complex work only when useful.
 2. Author Maps: write tailored architectural navigation maps into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`) matching the actual codebase. Never copy CVH-internal paths into external projects.
 3. Spec: draft minimal boards.json + pipeline.json mapping statuses to columns (todo->backlog, review, done->ready).
 4. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
 5. Verify before declare done.
 
-Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
+Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (run the applicable checks for affected subsystems once; repeat only after relevant changes or to resolve failures), Commit (1 slice = 1 commit).
 - Ironclad Completion Rule: Before calling advance_task, you MUST mark all TODO items as completed via todo_write. After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
 
 Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance to next stage / ready; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
@@ -370,7 +370,7 @@ Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSen
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
 What to ask when blocked: stack + build cmd, target board template, allowed tools per stage, sensor to gate on.
 Red Flags: prompt >150 lines; any rule telling you to read monolithic rule files/.agents/skills/docs into context; absolute path outside worktree; `terminal:true` missing on ready; duplicate column id.
-Verification[evidence]: paste `cargo check`, `cargo clippy -- -D warnings`, changed files as `path:line`, verdict token; no evidence = no APPROVED.
+Verification[evidence]: include applicable commands, exit codes, logs, commit and environment, changed files as `path:line`, verdict token. Reuse valid results for unchanged sources and environment; run missing checks. No evidence = no APPROVED.
 Instructions for Empty & New Projects: run Initializer flow above; Columns = Agents invariant holds from turn 1.
 "#;
 
@@ -407,15 +407,19 @@ You are executing inside the CanbanVoimaxHarness autonomous multi-agent control 
 - Concise Delivery: Minimize conversational commentary. Avoid unnecessary preamble or postamble. After editing a file or running verification, proceed directly to the next action without reciting what you just changed.
 - Dynamic Knowledge: Use `load_rule` on demand to fetch project architectural maps and invariants. Never guess.
 - Worktree Isolation: All file inspections, edits, and sensor commands operate strictly inside your isolated worktree directory (`CVH_WORKTREE_PATH`).
-- Execution Protocol & Final Answer Discipline: Do not write concluding summaries or farewell messages while tool calls are still in flight; emit the comprehensive final answer only when all tool executions are finished."#;
+- Execution Protocol & Final Answer Discipline: A progress update must accompany the tools that perform the next action. Continue until the requested work and required handoff are complete, or report a concrete blocker. Do not finish by promising future work."#;
 
 /// Strips leading YAML frontmatter block (`---\n...\n---`) from markdown content.
 pub fn strip_yaml_frontmatter(content: &str) -> &str {
-    let trimmed = content.trim_start();
-    if let Some(rest) = trimmed.strip_prefix("---") {
-        if let Some(end_idx) = rest.find("\n---") {
-            let after_marker = &rest[end_idx + 4..];
-            return after_marker.trim_start_matches(['\r', '\n']);
+    let trimmed = content.trim_start_matches('\u{feff}').trim_start();
+    let mut lines = trimmed.split_inclusive('\n');
+    if lines.next().map(str::trim) == Some("---") {
+        let mut offset = trimmed.find('\n').map_or(trimmed.len(), |idx| idx + 1);
+        for line in lines {
+            offset += line.len();
+            if line.trim() == "---" {
+                return trimmed[offset..].trim_start_matches(['\r', '\n']);
+            }
         }
     }
     content
@@ -539,26 +543,26 @@ pub async fn compile_primed_system_prompt_with_tools(
     };
 
     // 1. Role Persona: directory path (.cvh/agents/<role>/persona.md) → built-in fallback.
-    // YAML frontmatter does NOT store allowed tools; any legacy 'tools:' line is stripped.
+    // Persona metadata configures the UI; only its body belongs in the prompt.
     let persona_path = crate::config::agent_persona_path(repo_root, role);
     if persona_path.is_file() {
         if let Ok(persona_text) = tokio::fs::read_to_string(&persona_path).await {
-            let sanitized_persona = crate::config::strip_frontmatter_tools(&persona_text);
+            let sanitized_persona = strip_yaml_frontmatter(&persona_text);
             sections.push(format!("# Role Persona: {}\n\n{}", role, sanitized_persona.trim()));
         } else if role == "cvh-dev" {
-            let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT);
+            let sanitized = strip_yaml_frontmatter(BUILTIN_CVH_DEV_PROMPT).to_string();
             sections.push(sanitized);
         } else if role == "developer" {
-            let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT);
+            let sanitized = strip_yaml_frontmatter(BUILTIN_DEVELOPER_PROMPT).to_string();
             sections.push(sanitized);
         } else {
             sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
         }
     } else if role == "cvh-dev" {
-        let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT);
+        let sanitized = strip_yaml_frontmatter(BUILTIN_CVH_DEV_PROMPT).to_string();
         sections.push(sanitized);
     } else if role == "developer" {
-        let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT);
+        let sanitized = strip_yaml_frontmatter(BUILTIN_DEVELOPER_PROMPT).to_string();
         sections.push(sanitized);
     } else {
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
@@ -569,7 +573,7 @@ pub async fn compile_primed_system_prompt_with_tools(
     let runtime_content = if runtime_path.is_file() {
         tokio::fs::read_to_string(&runtime_path)
             .await
-            .map(|s| strip_yaml_frontmatter(&crate::config::strip_frontmatter_tools(&s)).to_string())
+            .map(|s| strip_yaml_frontmatter(&s).to_string())
             .unwrap_or_else(|_| DEFAULT_RUNTIME_MANDATE.to_string())
     } else {
         DEFAULT_RUNTIME_MANDATE.to_string()
@@ -629,7 +633,7 @@ pub async fn compile_primed_system_prompt_with_tools(
         rules.sort_by(|a, b| a.0.cmp(&b.0));
         rules.dedup_by(|a, b| a.0 == b.0);
         for (fname, content) in rules {
-            sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
+            sections.push(format!("## Rule: {}\n\n{}", fname, strip_yaml_frontmatter(&content).trim()));
         }
     }
 
@@ -1542,7 +1546,7 @@ Invariants:
 - Execute the task thoroughly and verify results.
 - When done, output your comprehensive final report.",
         role,
-        persona_content.as_deref().unwrap_or("You are a specialized autonomous subagent."),
+        persona_content.as_deref().map(strip_yaml_frontmatter).unwrap_or("You are a specialized autonomous subagent."),
         effective_sub_tools
     );
 
@@ -3214,6 +3218,7 @@ where
     let mut context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
         .map_err(anyhow::Error::msg)?;
     let mut context_revision = local_compaction_rev;
+    let mut completion_reminder_sent = false;
 
     // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
     // через терминальный ответ модели (текст без тул-коллов), abort_flag
@@ -3564,6 +3569,25 @@ Messages count: {}
             crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                 .await.map_err(anyhow::Error::msg)?;
             sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+            let unfinished = active_tool_names.iter().any(|name| name == "todo_write")
+                && crate::db::db_has_unfinished_todos(&config.repo_root, &config.task_id)
+                    .map_err(anyhow::Error::msg)?;
+            if unfinished {
+                if !completion_reminder_sent {
+                    completion_reminder_sent = true;
+                    messages.push(ChatMessage::user(
+                        "[Runtime completion check] Your task checklist still has unfinished items. \
+                         Continue the requested work using tools, then update the checklist and perform any required handoff. \
+                         Do not mark items completed unless the work is done. If blocked, use question when available \
+                         or explain the concrete blocker. This reminder is sent only once per run.",
+                    ));
+                    sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+                    crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+                        .await.map_err(anyhow::Error::msg)?;
+                    continue;
+                }
+                bail!("Агент остановился с незавершённым планом после одного напоминания. Ответ сохранён. Проверьте блокер в диалоге и продолжите задачу, когда он устранён.");
+            }
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
             });

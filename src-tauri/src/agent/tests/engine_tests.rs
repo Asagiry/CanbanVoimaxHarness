@@ -77,7 +77,7 @@ use std::sync::Arc;
         tokio::fs::write(role_dir.join("rules").join("b_second.md"), "RULE_B_MARKER")
             .await
             .expect("rule b");
-        tokio::fs::write(role_dir.join("rules").join("a_first.md"), "RULE_A_MARKER")
+        tokio::fs::write(role_dir.join("rules").join("a_first.md"), "---\ndescription: PRIVATE_RULE_METADATA\n---\nRULE_A_MARKER")
             .await
             .expect("rule a");
         tokio::fs::write(role_dir.join("rules").join("notes.txt"), "IGNORED")
@@ -92,6 +92,7 @@ use std::sync::Arc;
 
         assert!(prompt.contains("FLAT_PERSONA_MARKER"));
         assert!(prompt.contains("RULE_A_MARKER"));
+        assert!(!prompt.contains("PRIVATE_RULE_METADATA"));
         assert!(prompt.contains("RULE_B_MARKER"));
         assert!(!prompt.contains("IGNORED"), "non-md rules must be skipped");
         let pos_a = prompt.find("RULE_A_MARKER").expect("rule a pos");
@@ -259,7 +260,7 @@ use std::sync::Arc;
         tokio::fs::create_dir_all(&dev_dir).await.expect("test dirs");
         tokio::fs::write(
             dev_dir.join("persona.md"),
-            "---\nname: developer\ntools: [read_file, write_file, edit_file, advance_task]\n---\nYou are a developer.",
+            "---\nname: developer\nmodel: private-model\nicon: PrivateIcon\ncolor: private-color\nscope: private-scope\nactivation: private-activation\ntools: [read_file, write_file, edit_file, advance_task]\n---\nYou are a developer.",
         )
         .await
         .expect("persona seed");
@@ -271,6 +272,10 @@ use std::sync::Arc;
             .expect("compile prompt");
 
         assert!(!prompt.contains("tools: [read_file"), "frontmatter tools must be stripped");
+        assert!(prompt.contains("You are a developer."));
+        for field in ["name: developer", "private-model", "PrivateIcon", "private-color", "private-scope", "private-activation"] {
+            assert!(!prompt.contains(field), "metadata leaked: {}", field);
+        }
         assert!(!prompt.contains("read_file"), "disabled read_file must NOT leak in prompt");
         assert!(!prompt.contains("write_file"), "disabled write_file must NOT leak in prompt");
         assert!(!prompt.contains("Authorized Tools"), "backend-authoritative tools block must NOT appear in prompt");
@@ -303,10 +308,19 @@ use std::sync::Arc;
                 "anti-sycophancy",
                 "antislop",
                 "architecture",
+                "backend_agent_map",
+                "backend_config_map",
                 "backend_map",
+                "backend_platform_map",
+                "backend_storage_map",
+                "backend_tasks_map",
                 "be-ambitious",
                 "decomposition",
+                "frontend_board_map",
+                "frontend_drawer_map",
                 "frontend_map",
+                "frontend_settings_map",
+                "frontend_shared_map",
                 "ponytail",
                 "review-checklist",
                 "rules-sync",
@@ -321,9 +335,18 @@ use std::sync::Arc;
                 "anti-sycophancy",
                 "antislop",
                 "backend",
+                "backend_agent_map",
+                "backend_config_map",
                 "backend_map",
+                "backend_platform_map",
+                "backend_storage_map",
+                "backend_tasks_map",
                 "frontend",
+                "frontend_board_map",
+                "frontend_drawer_map",
                 "frontend_map",
+                "frontend_settings_map",
+                "frontend_shared_map",
                 "ponytail",
                 "review-checklist",
                 "rules-sync",
@@ -338,9 +361,18 @@ use std::sync::Arc;
                 "anti-sycophancy",
                 "antislop",
                 "backend-invariants",
+                "backend_agent_map",
+                "backend_config_map",
                 "backend_map",
+                "backend_platform_map",
+                "backend_storage_map",
+                "backend_tasks_map",
                 "frontend-invariants",
+                "frontend_board_map",
+                "frontend_drawer_map",
                 "frontend_map",
+                "frontend_settings_map",
+                "frontend_shared_map",
                 "ponytail",
                 "review-checklist",
                 "rules-sync",
@@ -356,8 +388,17 @@ use std::sync::Arc;
             vec![
                 "anti-sycophancy",
                 "antislop",
+                "backend_agent_map",
+                "backend_config_map",
                 "backend_map",
+                "backend_platform_map",
+                "backend_storage_map",
+                "backend_tasks_map",
+                "frontend_board_map",
+                "frontend_drawer_map",
                 "frontend_map",
+                "frontend_settings_map",
+                "frontend_shared_map",
                 "ponytail",
                 "reflection-methodology",
                 "review-checklist",
@@ -373,9 +414,18 @@ use std::sync::Arc;
                 "agents",
                 "anti-sycophancy",
                 "antislop",
+                "backend_agent_map",
+                "backend_config_map",
                 "backend_map",
+                "backend_platform_map",
+                "backend_storage_map",
+                "backend_tasks_map",
                 "boards",
+                "frontend_board_map",
+                "frontend_drawer_map",
                 "frontend_map",
+                "frontend_settings_map",
+                "frontend_shared_map",
                 "hooks",
                 "pipeline-setup",
                 "ponytail",
@@ -1031,3 +1081,48 @@ data: [DONE]
     }
 
 
+
+#[test]
+fn test_frontmatter_preserves_markdown_and_handles_crlf() {
+    assert_eq!(strip_yaml_frontmatter("\u{feff}---\r\nmodel: hidden\r\n---\r\n# Body\r\n---\r\nContent"), "# Body\r\n---\r\nContent");
+    for text in ["---\nno closing marker", "--- not metadata\nbody\n---", "# Body\n---\ntext"] {
+        assert_eq!(strip_yaml_frontmatter(text), text);
+    }
+}
+
+#[tokio::test]
+async fn test_unfinished_todos_get_only_one_completion_reminder() {
+    for pending in [true, false] {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_completion_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.unwrap();
+        let task = make_test_task("CVH-069", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.unwrap();
+        crate::db::db_save_todos(&base, "CVH-069", &[TodoItem {
+            id: "work".into(), content: "Implement the requested feature".into(),
+            status: if pending { "in_progress" } else { "completed" }.into(),
+        }]).unwrap();
+        let sse = "data: {\"choices\":[{\"delta\":{\"content\":\"I am inspecting the code.\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server) = start_mock_sse_server(sse, Arc::clone(&counter)).await;
+        let config = AgentSessionConfig {
+            repo_root: base.clone(), worktree_path: base.clone(), role: "developer".into(),
+            stage_id: "dev".into(), task_id: "CVH-069".into(), task_title: "Implement feature".into(),
+            task_description: "Do work".into(), handover_summary: None, task_attachments: None,
+            steer_prompt: None, steer_images: None, base_url, api_key: None, model: "test-model".into(),
+            temperature: None, reasoning_effort: None, max_turns: 10, app_handle: None, context_window: None,
+        };
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = Arc::clone(&events);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), run_agent_loop(
+            config, Arc::new(AtomicBool::new(false)), move |event| captured.lock().unwrap().push(event),
+        )).await.unwrap();
+        server.abort();
+        assert_eq!(counter.load(Ordering::SeqCst), if pending { 2 } else { 1 });
+        assert_eq!(result.is_err(), pending);
+        assert_eq!(events.lock().unwrap().iter().any(|event| matches!(event, AgentEvent::Finished { .. })), !pending);
+        let saved = crate::db::load_conversation_context(&base, "CVH-069").unwrap().unwrap();
+        assert_eq!(saved.messages.iter().filter(|msg| msg.content.as_deref().unwrap_or("").contains("[Runtime completion check]")).count(), usize::from(pending));
+        assert_eq!(saved.messages.last().unwrap().content.as_deref(), Some("I am inspecting the code."));
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+}

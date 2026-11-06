@@ -35,7 +35,7 @@ Load modular guidelines dynamically using `load_rule("<rule>")`:
 - `load_rule("rule-evolution")`: Rule evolution hierarchy, CLE triad, and Uncle Bob clean code invariants.
 - `load_rule("backend-invariants")`: Rust backend architecture, modular SRP, Value Objects, ADTs, SQLite WAL.
 - `load_rule("frontend-invariants")`: React 19, `tauriEventGateway`, <=350 lines ceiling, Vitest test requirements.
-- `load_rule("review-checklist")`: The 5-sensor gatekeeper checklist and review gates.
+- `load_rule("review-checklist")`: Verification evidence policy and review gates.
 
 ---
 
