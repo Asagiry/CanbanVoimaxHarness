@@ -183,6 +183,7 @@ export const en = {
   'drawer.agentExplanation': 'Agent Explanation',
   'drawer.userSteer': 'User Steer',
   'drawer.deleteMessage': 'Delete message',
+  'drawer.stopBeforeDelete': 'Stop the agent before deleting messages',
   'drawer.sensorRejection': 'Gatekeeper Sensor Rejected',
   'drawer.agentMessage': 'Agent message',
   'drawer.hookRejection': 'Hook Execution Rejected',

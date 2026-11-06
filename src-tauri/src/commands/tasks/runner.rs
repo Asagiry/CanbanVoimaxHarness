@@ -777,22 +777,7 @@ pub async fn run_agent(
                     );
                 }
                 AgentEvent::Error(err) => {
-                    let _ = app_inner.emit(
-                        "agent:error",
-                        serde_json::json!({ "taskId": tid_inner, "error": &err }),
-                    );
-                    let _ = app_inner.emit(
-                        "agent:status",
-                        serde_json::json!({ "taskId": tid_inner, "status": "error", "error": &err }),
-                    );
-                    let _ = app_inner.emit(
-                        "agent:output",
-                        serde_json::json!({
-                            "taskId": tid_inner,
-                            "output": format!("\n[LLM Error: {}]\n", &err),
-                            "content": format!("\n[LLM Error: {}]\n", &err),
-                        }),
-                    );
+                    eprintln!("CVH [agent]: {}", err);
                 }
             }
         };
@@ -886,14 +871,7 @@ pub async fn run_agent(
                         "agent:error",
                         serde_json::json!({ "taskId": tid, "error": &err_str, "projectPath": &project_path_str }),
                     );
-                    let _ = app.emit(
-                        "agent:output",
-                        serde_json::json!({
-                            "taskId": tid,
-                            "output": format!("\n[LLM Error: {}]\n", &err_str),
-                            "content": format!("\n[LLM Error: {}]\n", &err_str),
-                        }),
-                    );
+
                     let mut tasks = load_tasks_from_disk(&root_task).await;
                     if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
                         tasks[task_idx].status = Some("error".to_string());
@@ -1443,6 +1421,7 @@ pub async fn compact_context(
 
         for it in items_slice {
             ids_to_archive.push(it.id.clone());
+            if it.is_runtime_error() || it.item_type == "system" { continue; }
             match it.item_type.as_str() {
                 "user" | "steer" => {
                     messages_to_condense.push(crate::llm::ChatMessage::user(

@@ -5,6 +5,7 @@ import ToolExecutionCard from './ToolExecutionCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import ImageLightboxModal from './ImageLightboxModal';
+import ActivityItemActions from './stream/ActivityItemActions';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -146,6 +147,7 @@ export default function DrawerActivityStream({
             {/* Unified Chronological Activity Stream */}
             {(displayActivities ?? []).map((activity, idx) => {
               const key = activity?.id ?? `activity-${idx}`;
+              const renderCard = () => {
 
               // e) Interactive Question Prompt Card (Human-in-the-Loop)
               if (
@@ -226,7 +228,6 @@ export default function DrawerActivityStream({
                     key={key}
                     activity={activity}
                     onImageClick={handleOpenLightbox}
-                    onDelete={(id) => useDrawerStore.getState().deleteDialogItem?.(task.id, id)}
                   />
                 );
               }
@@ -318,6 +319,13 @@ export default function DrawerActivityStream({
                   onToggleExpanded={() => toggleOutput(key)}
                   onImageClick={handleOpenLightbox}
                 />
+              );
+              };
+              const card = renderCard();
+              return card && (
+                <ActivityItemActions key={key} taskId={activeSubagentId || task.id} itemId={activity.id} disabled={isRunning}>
+                  {card}
+                </ActivityItemActions>
               );
             })}
           </div>

@@ -494,28 +494,35 @@ pub async fn delete_dialog_item(
     item_id: String,
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let safe_id = sanitize_task_id(&task_id)?;
     let root = state.get_root();
-    crate::db::delete_dialog_item(&root, &safe_id, &item_id)?;
-
-    if let Ok(map) = state.agent_contexts.lock() {
-        if let Some(cs) = map.get(&safe_id) {
-            if let Ok(mut guard) = cs.lock() {
-                guard.messages.retain(|m| {
-                    if let Some(ref c) = m.content {
-                        !c.contains(&item_id)
-                    } else {
-                        true
-                    }
-                });
-                guard.compaction_revision += 1;
-            }
+    let parent_id = safe_id.split(":sub:").next().unwrap_or(&safe_id);
+    let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+    for session in sessions.values() {
+        let info = session.retry_info.try_lock().map_err(|_| "Agent session is busy; retry deletion after it stops")?;
+        if AppState::normalize_root_key(&info.ctx.repo_root) == AppState::normalize_root_key(&root)
+            && (info.parent_task_id == parent_id || info.subagent_id == safe_id)
+            && info.status == "running"
+            && !session.abort_handle.load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err("Stop the agent before deleting messages".to_string());
         }
     }
+    let active = state.active_agents.lock().map_err(|_| "Failed to lock active agents")?;
+    if AppState::is_agent_active_in_map(&active, &root, parent_id) {
+        return Err("Stop the agent before deleting messages".to_string());
+    }
+    let deleted_ids = crate::db::delete_dialog_item(&root, &safe_id, &item_id)?;
+    let mut contexts = state.agent_contexts.lock().map_err(|_| "Failed to lock agent contexts")?;
+    contexts.remove(&AppState::agent_key(&root, &safe_id));
+    contexts.remove(&safe_id);
+    drop(contexts);
+    drop(active);
+    drop(sessions);
 
     let _ = app_handle.emit("dialog:updated", serde_json::json!({ "taskId": &safe_id, "deletedItemId": &item_id }));
-    Ok(())
+    Ok(deleted_ids)
 }
 
 #[tauri::command]

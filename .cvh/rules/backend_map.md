@@ -17,7 +17,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Database Facade & Module Exports** | `src-tauri/src/db/mod.rs` | Submodule re-exports (`pool`, `task_repo`, `dialog_repo`, `telemetry_repo`). |
 | **Database Pool & Migrations** | `src-tauri/src/db/pool.rs` | R2D2 pool, WAL mode, foreign keys, 5s timeout. |
 | **Task SQLite CRUD & Monotonic IDs** | `src-tauri/src/db/task_repo.rs` | Monotonic ID allocation, subtask cascade. |
-| **Dialogue Items & Streaming Chunks** | `src-tauri/src/db/dialog_repo.rs` | Atomic upsert, tool JSON persistence. |
+| **Dialogue Items & Streaming Chunks** | `src-tauri/src/db/dialog_repo.rs` | Atomic upsert, tool JSON persistence; deletion tombstones reject stale saves and invalidate context snapshots. |
 | **Exact Conversation Checkpoints** | `src-tauri/src/db/context_repo.rs` | Hidden SQLite snapshots preserve message boundaries and pending user input across restarts. |
 | **Token Usage & TPS Telemetry Repo** | `src-tauri/src/db/telemetry_repo.rs` | Aggregated tokens, non-decaying TPS metrics. |
 | **Config Facade & Module Exports** | `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). |

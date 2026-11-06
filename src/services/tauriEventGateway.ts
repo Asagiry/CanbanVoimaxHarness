@@ -707,11 +707,12 @@ export function setupTauriEventGateway(): () => void {
 
       // 9. agent:error
       await addListener('agent:error', (payload) => {
-        const { taskId } = payload || {};
+        const { taskId, error } = payload || {};
         if (taskId) {
           useBoardStore.getState().clearActiveQuestion(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
+            if (error) useDrawerStore.getState().appendOutput(taskId, error, 'error');
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
             useDrawerStore.getState().saveTaskActivity(taskId);
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
