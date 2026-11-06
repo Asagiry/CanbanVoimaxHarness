@@ -611,7 +611,7 @@ export function setupTauriEventGateway(): () => void {
         const inTok = num(inputTokens);
         const cRead = num(cacheReadTokens);
         const cCreate = num(cacheCreationTokens);
-        const totalIn = inTok + cRead;
+        const totalIn = inTok;
         const hitRate = num(cacheHitRate) || (totalIn > 0 ? (cRead / totalIn) * 100 : 0);
         const sysTok = typeof systemTokens === 'number' && Number.isFinite(systemTokens) ? systemTokens : undefined;
         const toolTok = typeof toolTokens === 'number' && Number.isFinite(toolTokens) ? toolTokens : undefined;

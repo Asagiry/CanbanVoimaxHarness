@@ -637,6 +637,19 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
         assert!(!fallback_result.is_empty());
     }
 
+    #[tokio::test]
+    async fn cache_spill_bounds_single_line_utf8_and_keeps_full_log() {
+        let root = std::path::PathBuf::from("target").join(format!("cvh_cache_spill_{}", uuid::Uuid::new_v4()));
+        let output = format!("START{}END", "界🙂".repeat(30_000));
+        let preview = maybe_spill_output(&root, None, "execute_command", output.clone()).await.unwrap();
+        assert!(preview.len() < 9000);
+        assert!(preview.contains("START"));
+        assert!(preview.contains("END"));
+        let log = tokio::fs::read_dir(root.join(".cvh/spill")).await.unwrap()
+            .next_entry().await.unwrap().unwrap().path();
+        assert_eq!(tokio::fs::read_to_string(log).await.unwrap(), output);
+    }
+
     #[test]
     fn test_build_enriched_windows_paths() {
         use super::build_enriched_windows_paths;

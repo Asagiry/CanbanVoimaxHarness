@@ -322,9 +322,9 @@ pub struct TokenUsageStats {
 
 impl TokenUsageStats {
     pub fn compute_hit_rate(&mut self) {
-        let total = self.input_tokens + self.cache_read_input_tokens;
+        let total = self.input_tokens;
         if total > 0 {
-            self.cache_hit_rate = (self.cache_read_input_tokens as f64) / (total as f64);
+            self.cache_hit_rate = (self.cache_read_input_tokens.min(total) as f64) / (total as f64);
         } else {
             self.cache_hit_rate = 0.0;
         }

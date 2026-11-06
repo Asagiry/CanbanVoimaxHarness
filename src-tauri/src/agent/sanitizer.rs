@@ -59,6 +59,16 @@ pub fn reconstruct_messages_from_dialog(
         ChatMessage::user(initial_user_prompt).with_cache_control(CacheControl::ephemeral()),
     ];
 
+    append_messages_from_dialog(&mut messages, initial_user_prompt, items);
+    messages
+}
+
+pub fn append_messages_from_dialog(
+    messages: &mut Vec<ChatMessage>,
+    initial_user_prompt: &str,
+    items: &[ActivityItem],
+) {
+
     for item in items {
         match item.item_type.as_str() {
             "summary" => {
@@ -190,8 +200,7 @@ pub fn reconstruct_messages_from_dialog(
         }
     }
 
-    sanitize_unclosed_tool_calls(&mut messages);
-    messages
+    sanitize_unclosed_tool_calls(messages);
 }
 
 #[cfg(test)]

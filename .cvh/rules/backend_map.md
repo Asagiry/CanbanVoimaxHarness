@@ -18,6 +18,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Database Pool & Migrations** | `src-tauri/src/db/pool.rs` | R2D2 pool, WAL mode, foreign keys, 5s timeout. |
 | **Task SQLite CRUD & Monotonic IDs** | `src-tauri/src/db/task_repo.rs` | Monotonic ID allocation, subtask cascade. |
 | **Dialogue Items & Streaming Chunks** | `src-tauri/src/db/dialog_repo.rs` | Atomic upsert, tool JSON persistence. |
+| **Exact Conversation Checkpoints** | `src-tauri/src/db/context_repo.rs` | Hidden SQLite snapshots preserve message boundaries and pending user input across restarts. |
 | **Token Usage & TPS Telemetry Repo** | `src-tauri/src/db/telemetry_repo.rs` | Aggregated tokens, non-decaying TPS metrics. |
 | **Config Facade & Module Exports** | `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). |
 | **Pipeline & Board Data Models** | `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules. |
@@ -62,6 +63,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Lifecycle Hooks Runner** | `src-tauri/src/hooks.rs` | Transition scripts, process tree kill on Windows. |
 | **LLM Facade & Module Exports** | `src-tauri/src/llm/mod.rs` | LLM client and models module re-exports. |
 | **Universal LLM Client & SSE Stream** | `src-tauri/src/llm/client.rs` | OpenAI / Gemini streaming, thought extraction. |
+| **Provider Cache Headers & Prefix Diagnostics** | `src-tauri/src/llm/cache.rs` | OpenCode session routing and comparison of previously submitted message prefixes. |
 | **LLM Configuration & Models** | `src-tauri/src/llm/models.rs` | Model overrides, endpoints, temperature. |
 | **Custom SQLite UDFs** | `src-tauri/src/udf.rs` | Custom regex and search functions for SQLite connection. |
 | **Structured Logger** | `src-tauri/src/logger.rs` | Rotating file & terminal logging configuration. |

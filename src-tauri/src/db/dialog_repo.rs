@@ -102,19 +102,23 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
 /// Loads all dialog items for a task ordered chronologically by created_at,
 /// excluding compacted archived intermediate messages.
 pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>, String> {
+    load_dialog_items_after(root, task_id, 0)
+}
+
+pub fn load_dialog_items_after(root: &Path, task_id: &str, cursor: i64) -> Result<Vec<ActivityItem>, String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
             "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
              FROM dialog_items
-             WHERE task_id = ?1 AND type != 'compacted_archived'
+             WHERE task_id = ?1 AND type NOT IN ('compacted_archived', 'context_snapshot') AND rowid > ?2
              ORDER BY created_at ASC, rowid ASC",
         )
         .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
 
     let rows = stmt
-        .query_map(params![task_id], |row| {
+        .query_map(params![task_id, cursor], |row| {
             let id: String = row.get(0)?;
             let item_type: String = row.get(1)?;
             let content: Option<String> = row.get(2)?;
@@ -164,6 +168,8 @@ pub fn persist_compacted_dialog(
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     // 1. Mark intermediate items as compacted_archived
+    tx.execute("DELETE FROM dialog_items WHERE task_id = ?1 AND type = 'context_snapshot'", params![task_id])
+        .map_err(|e| format!("Failed to invalidate conversation context: {e}"))?;
     for id in ids_to_archive {
         let _ = tx.execute(
             "UPDATE dialog_items SET type = 'compacted_archived' WHERE task_id = ?1 AND id = ?2",
@@ -246,7 +252,7 @@ pub fn persist_compacted_dialog(
 pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<(), String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
     conn.execute(
-        "DELETE FROM dialog_items WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND id = ?2",
+        "DELETE FROM dialog_items WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND (id = ?2 OR type = 'context_snapshot')",
         params![task_id, item_id],
     )
     .map_err(|e| format!("Failed to delete dialog item: {}", e))?;

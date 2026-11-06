@@ -71,6 +71,10 @@ function loadStoredNotificationSettings(): NotificationSettings {
 }
 
 const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: string }> = {
+  'OpenCode Go': {
+    gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
+    defaultModel: '',
+  },
   'Antigravity Proxy': {
     gatewayUrl: 'http://127.0.0.1:8045/v1',
     defaultModel: 'gemini-3.8-flash-high',
@@ -158,12 +162,16 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     if (partial.provider && partial.provider !== current.provider) {
       const preset = PROVIDER_PRESETS[partial.provider];
       if (preset) {
-        if (!partial.gatewayUrl && current.gatewayUrl === PROVIDER_PRESETS[current.provider]?.gatewayUrl) {
+        if (!partial.gatewayUrl && (partial.provider === 'OpenCode Go' || current.gatewayUrl === PROVIDER_PRESETS[current.provider]?.gatewayUrl)) {
           next.gatewayUrl = preset.gatewayUrl;
           next.baseUrl = preset.gatewayUrl;
         }
-        if (!partial.model && current.model === PROVIDER_PRESETS[current.provider]?.defaultModel) {
+        if (!partial.model && (partial.provider === 'OpenCode Go' || current.model === PROVIDER_PRESETS[current.provider]?.defaultModel)) {
           next.model = preset.defaultModel;
+        }
+        if (partial.provider === 'OpenCode Go') {
+          next.apiKey = partial.apiKey ?? '';
+          next.compactorModel = 'inherit';
         }
       }
     }
@@ -294,7 +302,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           .filter(Boolean);
         if (models.length > 0) {
           const unique = Array.from(new Set(models));
-          set({ availableModels: unique, errorMessage: null });
+          set({ errorMessage: null });
           return unique;
         }
       }
@@ -306,6 +314,8 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     // 2. Client-side direct fetch fallback
     const cleanBase = baseUrl.replace(/\/+$/, '');
     const endpointsToTry = [
+      ...(cleanBase.startsWith('https://opencode.ai/inference/go/')
+        ? ['https://opencode.ai/inference/go/v1/models'] : []),
       `${cleanBase}/models`,
       cleanBase.endsWith('/v1') ? `${cleanBase}/models` : `${cleanBase}/v1/models`,
     ];
@@ -329,7 +339,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
               .filter(Boolean);
             if (models.length > 0) {
               const unique = Array.from(new Set(models));
-              set({ availableModels: unique, errorMessage: null });
+              set({ errorMessage: null });
               return unique;
             }
           }

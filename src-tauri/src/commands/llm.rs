@@ -38,7 +38,9 @@ pub async fn fetch_available_models(
 
     // Prepare candidate endpoints in priority order
     let mut candidates = Vec::new();
-    if trimmed_base.ends_with("/models") || trimmed_base.ends_with("/api/tags") {
+    if reqwest::Url::parse(trimmed_base).is_ok_and(|url| url.host_str() == Some("opencode.ai") && url.path().starts_with("/inference/go/")) {
+        candidates.push("https://opencode.ai/inference/go/v1/models".to_string());
+    } else if trimmed_base.ends_with("/models") || trimmed_base.ends_with("/api/tags") {
         candidates.push(trimmed_base.to_string());
     } else if trimmed_base.ends_with("/v1") {
         candidates.push(format!("{}/models", trimmed_base));
@@ -54,7 +56,7 @@ pub async fn fetch_available_models(
     let mut last_error = String::new();
 
     for url in candidates {
-        let mut req = client.get(&url);
+        let mut req = client.get(&url).headers(crate::llm::cache::opencode_headers(&url, "model-discovery"));
         if let Some(ref key) = api_key {
             let key_trimmed = key.trim();
             if !key_trimmed.is_empty() {

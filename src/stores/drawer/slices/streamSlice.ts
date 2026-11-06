@@ -246,10 +246,8 @@ export const createStreamSlice: StateCreator<
         cacheHitRate: 0,
       };
       const merged = { ...current, ...telemetry };
-      const totalInput = (merged.inputTokens || 0) + (merged.cacheReadTokens || 0);
-      if (typeof merged.cacheHitRate !== 'number' || !Number.isFinite(merged.cacheHitRate) || merged.cacheHitRate < 0) {
-        merged.cacheHitRate = totalInput > 0 ? ((merged.cacheReadTokens || 0) / totalInput) * 100 : 0;
-      }
+      const totalInput = merged.inputTokens || 0;
+      merged.cacheHitRate = totalInput > 0 ? Math.min(100, ((merged.cacheReadTokens || 0) / totalInput) * 100) : 0;
       return {
         taskTelemetry: {
           ...state.taskTelemetry,

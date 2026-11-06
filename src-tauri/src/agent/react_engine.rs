@@ -316,7 +316,6 @@ pub struct StreamConsumerOptions<'a> {
     pub system_tokens: u64,
     pub tool_tokens: u64,
     pub fallback_input_tokens: u64,
-    pub prefix_hash: Option<u64>,
     pub log_prefix: &'a str,
     pub subagent_id: Option<&'a str>,
     pub emit_thoughts: bool,
@@ -330,7 +329,6 @@ impl<'a> StreamConsumerOptions<'a> {
             system_tokens: 0,
             tool_tokens: 0,
             fallback_input_tokens,
-            prefix_hash: None,
             log_prefix: "telemetry",
             subagent_id: None,
             emit_thoughts: true,
@@ -390,12 +388,20 @@ impl StreamChunkConsumer {
         let mut final_input_tokens = 0u64;
         let mut final_output_tokens = 0u64;
 
-        while let Some(chunk) = rx.recv().await {
-            received_any_chunk = true;
+        loop {
             if abort_flag.load(Ordering::SeqCst) {
+                rx.close();
                 is_aborted = true;
                 break;
             }
+            let chunk = tokio::select! {
+                chunk = rx.recv() => match chunk {
+                    Some(chunk) => chunk,
+                    None => break,
+                },
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => continue,
+            };
+            received_any_chunk = true;
 
             match chunk {
                 StreamChunk::FirstChunk => {
@@ -463,7 +469,7 @@ impl StreamChunkConsumer {
                     cache_creation_tokens,
                 } => {
                     received_usage = true;
-                    let total_input = input_tokens + cache_read_tokens;
+                    let total_input = input_tokens;
                     let (duration_secs, duration_ms, ttft_ms) =
                         compute_timing_metrics(turn_start_instant, first_token_instant, last_token_instant);
                     let TurnTelemetry { cache_hit_rate, tps } =
@@ -490,22 +496,6 @@ impl StreamChunkConsumer {
                             duration_secs,
                             tps,
                             ttft_ms
-                        );
-                    } else if let Some(prefix_hash) = options.prefix_hash {
-                        eprintln!(
-                            "CVH [{}] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} ttft={:.1}ms prefix_hash={:016x}",
-                            options.log_prefix,
-                            options.turn,
-                            options.model,
-                            input_tokens,
-                            output_tokens,
-                            cache_read_tokens,
-                            cache_creation_tokens,
-                            cache_hit_rate,
-                            duration_secs,
-                            tps,
-                            ttft_ms,
-                            prefix_hash
                         );
                     } else {
                         eprintln!(
@@ -727,7 +717,6 @@ mod tests {
             system_tokens: 50,
             tool_tokens: 10,
             fallback_input_tokens: 140,
-            prefix_hash: None,
             log_prefix: "test",
             subagent_id: None,
             emit_thoughts: true,
@@ -764,7 +753,6 @@ mod tests {
             system_tokens: 50,
             tool_tokens: 10,
             fallback_input_tokens: 140,
-            prefix_hash: None,
             log_prefix: "test",
             subagent_id: None,
             emit_thoughts: true,
@@ -795,7 +783,6 @@ mod tests {
             system_tokens: 50,
             tool_tokens: 10,
             fallback_input_tokens: 140,
-            prefix_hash: None,
             log_prefix: "test",
             subagent_id: None,
             emit_thoughts: true,
