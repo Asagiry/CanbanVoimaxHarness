@@ -131,6 +131,11 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Cue: When rendering stage progress, timers, or execution indicators across parent tasks and child subtasks (`rootTask`, `subtasks`).
 - Lesson: Decompose hierarchy traversal and duration resolution into pure, testable helper functions (`resolveStageTask`, `resolveStageDuration`, `resolveStageStatus`); never leak cumulative `totalElapsed` into individual stage pills, and preserve parent stage durations when switching views.
 - Evidence: CVH-064 (commit `b99f10ed`) - Resolving disappearing planning duration, 02:04 cumulative bleed on developer stage, and inverted active dot indicators.
+
+### [CLE: Handover Steer Single-Writer & Deterministic Idempotency]
+- Cue: When a stage transition writes a handover/steer dialog item and also emits agent:autorun with the same prompt that run_agent_loop persists again via persist_steer_message.
+- Lesson: Keep exactly one writer per handover (skip direct append_task_dialog_activity when target has autorun), use deterministic handover:{task_id}:{hash} message_id for ON CONFLICT DO NOTHING idempotency, and dedup only handover-marked steer/summary by TRIM(content) - never blanket-dedup user/steer repeats.
+- Evidence: CVH-051 (commit e8b124eb) - Duplicate HANDOVER SUMMARY Agent messages at 21:28:52 from dual UUID writes in transitions.rs + agent.rs; fixed with single-writer gate, deterministic id, and handover-only dedup in dialog_repo/activitySlice/streamHelpers.
 ```
 
 ---
