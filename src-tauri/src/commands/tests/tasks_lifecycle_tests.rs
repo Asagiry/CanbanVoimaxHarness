@@ -920,6 +920,105 @@ use std::path::PathBuf;
     }
 
     #[tokio::test]
+    async fn test_advance_task_auto_completes_unfinished_todos_non_terminal() {
+        let base = PathBuf::from("target").join(format!("cvh_auto_complete_nonterm_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let dev_board = crate::config::BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "development".to_string(),
+                name: "Development".to_string(),
+                stages: vec![
+                    test_col("backlog"),
+                    test_col("dev"),
+                    test_col("review"),
+                    test_col("ready"),
+                ],
+            }],
+        };
+        crate::config::save_boards_config(&base, &dev_board).await.expect("save boards");
+
+        let task_id = "CVH-TODO-2";
+        let initial_todos = vec![
+            crate::agent::TodoItem {
+                id: "todo-1".to_string(),
+                content: "Done item".to_string(),
+                status: "completed".to_string(),
+            },
+            crate::agent::TodoItem {
+                id: "todo-2".to_string(),
+                content: "Unfinished item".to_string(),
+                status: "in_progress".to_string(),
+            },
+        ];
+
+        let task = Task {
+            id: task_id.to_string(),
+            title: "Task with unfinished todos non-terminal".to_string(),
+            description: "Testing non-terminal auto-completion".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: Some(initial_todos.clone()),
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: chrono::Utc::now().timestamp_millis(),
+            updated_at: chrono::Utc::now().timestamp_millis(),
+            stage_entered_at: None,
+            completed_at: None,
+            position: None,
+            hook_states: None,
+            project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
+        };
+
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+        crate::db::db_save_todos(&base, task_id, &initial_todos).expect("save initial todos to db");
+
+        let adv_res = internal_advance_task_to_stage(
+            &base,
+            task_id,
+            Some("review"),
+            "Completed work, advancing to review",
+            None,
+        )
+        .await
+        .expect("internal_advance_task_to_stage must succeed");
+
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let disk_tasks = load_tasks_from_disk(&base).await;
+        let advanced_task = disk_tasks.iter().find(|t| t.id == task_id).expect("task on disk");
+        let disk_todos = advanced_task.todos.as_ref().expect("disk todos present");
+        assert_eq!(disk_todos.len(), 2);
+        assert_eq!(disk_todos[0].status, "completed");
+        assert_eq!(disk_todos[1].status, "completed");
+
+        let db_task = crate::db::db_get_task(&base, task_id).expect("db_get_task").expect("task in db");
+        let db_todos = db_task.todos.as_ref().expect("db todos present");
+        assert_eq!(db_todos.len(), 2);
+        assert_eq!(db_todos[0].status, "completed");
+        assert_eq!(db_todos[1].status, "completed");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
     async fn test_foreign_project_tasks_isolation_and_purge() {
         let base1 = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("cvh_foreign_proj1_{}", uuid::Uuid::new_v4()));
         let base2 = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("cvh_foreign_proj2_{}", uuid::Uuid::new_v4()));

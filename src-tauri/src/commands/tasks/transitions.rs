@@ -1356,10 +1356,10 @@ pub async fn internal_move_task_stage(
     if is_terminal_col {
         current_task.completed_at = Some(Utc::now().timestamp_millis());
         current_task.waiting_for_subtask_id = None;
-        auto_complete_task_todos(root, current_task, app_handle);
     } else {
         current_task.completed_at = None;
     }
+    auto_complete_task_todos(root, current_task, app_handle);
     current_task.updated_at = Utc::now().timestamp_millis();
     if old_stage != canonical_target_stage_id || current_task.stage_entered_at.is_none() {
         current_task.stage_entered_at = Some(Utc::now().timestamp_millis());
@@ -1713,12 +1713,22 @@ pub fn auto_complete_task_todos(
         return false;
     }
 
+    let mut completed_count = 0usize;
     if let Some(ref mut todos) = task.todos {
         for td in todos.iter_mut() {
             if td.status != "completed" {
                 td.status = "completed".to_string();
+                completed_count += 1;
             }
         }
+    }
+    if completed_count > 0 {
+        crate::logger::cvh_log(
+            Some(root),
+            "INFO",
+            "AUTO_COMPLETE_TODOS",
+            &format!("Auto-completed {} unfinished TODO item(s) for task {}", completed_count, task.id),
+        );
     }
 
     match crate::db::db_complete_all_todos(root, &task.id) {
@@ -1915,6 +1925,7 @@ pub async fn internal_advance_task_to_stage(
         app_handle,
     );
     pipeline.execute(&mut current_task).await?;
+    auto_complete_task_todos(root, &mut current_task, app_handle);
 
     // Mirror internal_move_task_stage: run the legacy on_enter_script
     // hook on the agent advance path too, otherwise the Review
@@ -2085,6 +2096,7 @@ pub async fn internal_advance_task_to_stage(
                         sub.completed_at = Some(Utc::now().timestamp_millis());
                     }
                     sub.updated_at = Utc::now().timestamp_millis();
+                    auto_complete_task_todos(root, sub, app_handle);
                     let _ = crate::db::db_upsert_task(root, sub);
                 }
 
@@ -2178,6 +2190,7 @@ pub async fn internal_advance_task_to_stage(
                         sub.completed_at = Some(Utc::now().timestamp_millis());
                     }
                     sub.updated_at = Utc::now().timestamp_millis();
+                    auto_complete_task_todos(root, sub, app_handle);
                     let _ = crate::db::db_upsert_task(root, sub);
                 }
                 if let Some(app) = app_handle {
@@ -2317,6 +2330,7 @@ pub async fn internal_advance_task_to_stage(
                     parent.completed_at = Some(Utc::now().timestamp_millis());
                 }
                 parent.updated_at = Utc::now().timestamp_millis();
+                auto_complete_task_todos(root, parent, app_handle);
                 let _ = crate::db::db_upsert_task(root, parent);
             }
 
@@ -2387,6 +2401,7 @@ pub async fn internal_advance_task_to_stage(
             ));
         }
 
+        auto_complete_task_todos(root, &mut current_task, app_handle);
         let subtask = internal_create_subtask(
             root,
             task_id,
