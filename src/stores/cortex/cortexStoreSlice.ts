@@ -11,6 +11,7 @@ import { DEFAULT_CORTEX_STAGES } from './cortexConstants';
 import {
   buildBuiltinHookDescription,
   buildCommandHookDescription,
+  compareGlobalRules,
   buildGlobalRuleTemplate,
   buildHookFileName,
   buildHookTemplate,
@@ -591,7 +592,7 @@ export const createCortexSlice: StateCreator<
           isDirty: prev?.isDirty ?? false,
         };
       });
-      set({ globalRules: mapped });
+      set({ globalRules: mapped.sort(compareGlobalRules) });
     } catch (err) {
       console.info('loadGlobalRules not available or in web mode:', err);
     }
@@ -1046,7 +1047,7 @@ export const createCortexSlice: StateCreator<
     };
 
     set((state) => ({
-      globalRules: [...state.globalRules, created].sort((a, b) => a.name.localeCompare(b.name)),
+      globalRules: [...state.globalRules, created].sort(compareGlobalRules),
       activeFile: created,
       isEditorOpen: true,
       saveFeedback: null,

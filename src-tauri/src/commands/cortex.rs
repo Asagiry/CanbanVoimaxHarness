@@ -149,7 +149,11 @@ pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, St
             }
         }
     }
-    files.sort_by(|a, b| a.name.cmp(&b.name));
+    files.sort_by(|a, b| {
+        let ra = a.name.eq_ignore_ascii_case("runtime.md");
+        let rb = b.name.eq_ignore_ascii_case("runtime.md");
+        rb.cmp(&ra).then_with(|| a.name.cmp(&b.name))
+    });
     Ok(files)
 }
 
