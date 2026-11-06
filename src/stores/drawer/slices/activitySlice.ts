@@ -412,23 +412,40 @@ export const createActivitySlice: StateCreator<
   },
 
   deleteDialogItem: async (taskId, itemId) => {
-    set((state) => {
-      const feed = state.activityFeed[taskId] || [];
-      const nextFeed = feed.filter((it) => it.id !== itemId);
-      return {
-        activityFeed: {
-          ...state.activityFeed,
-          [taskId]: nextFeed,
-        },
-      };
-    });
-
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_dialog_item', { taskId, itemId });
-    } catch (err) {
-      console.warn('[ActivitySlice] Failed to delete dialog item on backend:', err);
+    const current = get();
+    const resolvedId = current.toolIdToSubagentId[taskId] || taskId;
+    const isBoardTask = useBoardStore.getState().tasks.some((task) => task.id === resolvedId);
+    const targetDbTaskId = !isBoardTask && current.activeTaskId && resolvedId !== current.activeTaskId && !resolvedId.includes(':sub:')
+      ? `${current.activeTaskId}:sub:${resolvedId}` : resolvedId;
+    const aliases = new Set([taskId, resolvedId, targetDbTaskId]);
+    for (const [toolId, subId] of Object.entries(current.toolIdToSubagentId)) {
+      if (subId === resolvedId) aliases.add(toolId);
     }
+    if ([...aliases].some((id) => current.activeAgentTaskIds[id]) || (current.activeTaskId && current.activeAgentTaskIds[current.activeTaskId])) {
+      throw new Error('Stop the agent before deleting messages');
+    }
+    for (const id of aliases) cancelActivitySave(id);
+    const feed = current.activityFeed[taskId] || current.activityFeed[resolvedId] || [];
+    const toolId = feed.find((item) => item.id === itemId)?.tool?.id || itemId;
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('save_task_activity', { taskId: targetDbTaskId, items: feed });
+    const deletedIds = new Set(await invoke<string[]>('delete_dialog_item', { taskId: targetDbTaskId, itemId }));
+    deletedIds.add(itemId);
+    deletedIds.add(toolId);
+    set((state) => {
+      const activityFeed = { ...state.activityFeed };
+      const streamEntries = { ...state.streamEntries };
+      const toolExecutions = { ...state.toolExecutions };
+      for (const id of aliases) {
+        if (activityFeed[id]) activityFeed[id] = activityFeed[id].filter((item) => !deletedIds.has(item.id));
+        if (streamEntries[id]) streamEntries[id] = {
+          thoughts: streamEntries[id].thoughts.filter((item) => !deletedIds.has(item.id)),
+          outputs: streamEntries[id].outputs.filter((item) => !deletedIds.has(item.id)),
+        };
+        if (toolExecutions[id]) toolExecutions[id] = toolExecutions[id].filter((tool) => !deletedIds.has(tool.id));
+      }
+      return { activityFeed, streamEntries, toolExecutions };
+    });
   },
 
   clearTaskActivity: async (taskId) => {

@@ -70,6 +70,7 @@ pub fn append_messages_from_dialog(
 ) {
 
     for item in items {
+        if item.is_runtime_error() { continue; }
         match item.item_type.as_str() {
             "summary" => {
                 if let Some(ref c) = item.content {

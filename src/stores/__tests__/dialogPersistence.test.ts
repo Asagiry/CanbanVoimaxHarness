@@ -27,7 +27,52 @@ describe('Dialog Persistence & Stream Unification (CVH-051)', () => {
       activityFeed: {},
       streamEntries: {},
       toolExecutions: {},
+      activeAgentTaskIds: {},
+      toolIdToSubagentId: {},
     });
+  });
+
+  it('deletes from all client collections only after persistence succeeds', async () => {
+    const taskId = 'DELETE-1';
+    const tool = { id: 'call-1', toolName: 'read_file', status: 'success' as const, timestamp: '', durationMs: 0, params: {} };
+    useDrawerStore.setState({
+      activityFeed: { [taskId]: [{ id: 'call-1', type: 'tool', timestamp: '', tool }] },
+      streamEntries: { [taskId]: { thoughts: [], outputs: [{ id: 'call-1', type: 'output', timestamp: '', content: 'result' }] } },
+      toolExecutions: { [taskId]: [tool] },
+    });
+    mockInvoke.mockImplementation(async (command) => { if (command === 'delete_dialog_item') throw new Error('disk failure'); return []; });
+    await expect(useDrawerStore.getState().deleteDialogItem!(taskId, 'call-1')).rejects.toThrow('disk failure');
+    expect(useDrawerStore.getState().activityFeed[taskId]).toHaveLength(1);
+    mockInvoke.mockResolvedValue([]);
+    await useDrawerStore.getState().deleteDialogItem!(taskId, 'call-1');
+    expect(useDrawerStore.getState().activityFeed[taskId]).toEqual([]);
+    expect(useDrawerStore.getState().streamEntries[taskId].outputs).toEqual([]);
+    expect(useDrawerStore.getState().toolExecutions[taskId]).toEqual([]);
+  });
+
+  it('removes linked question and tool records returned by the backend', async () => {
+    const tool = { id: 'call-1', toolName: 'question', status: 'success' as const, timestamp: '', durationMs: 0, params: {} };
+    useDrawerStore.setState({
+      activityFeed: { TASK: [{ id: 'q-1', type: 'question', timestamp: '', tool: { ...tool, id: 'question-1' } }, { id: 'call-1', type: 'tool', timestamp: '', tool }] },
+      toolExecutions: { TASK: [tool] },
+    });
+    mockInvoke.mockImplementation(async (command) => command === 'delete_dialog_item' ? ['q-1', 'question-1', 'call-1'] : []);
+    await useDrawerStore.getState().deleteDialogItem!('TASK', 'q-1');
+    expect(useDrawerStore.getState().activityFeed.TASK).toEqual([]);
+    expect(useDrawerStore.getState().toolExecutions.TASK).toEqual([]);
+  });
+
+  it('refuses deletion while running and uses the subagent dialogue when stopped', async () => {
+    useDrawerStore.setState({
+      activeTaskId: 'PARENT', toolIdToSubagentId: { alias: 'child' }, activeAgentTaskIds: { child: true },
+      activityFeed: { alias: [{ id: 'out-1', type: 'output', timestamp: '', content: 'answer' }] },
+    });
+    await expect(useDrawerStore.getState().deleteDialogItem!('alias', 'out-1')).rejects.toThrow('Stop the agent');
+    expect(mockInvoke).not.toHaveBeenCalled();
+    useDrawerStore.setState({ activeAgentTaskIds: {} });
+    await useDrawerStore.getState().deleteDialogItem!('alias', 'out-1');
+    expect(mockInvoke).toHaveBeenCalledWith('delete_dialog_item', { taskId: 'PARENT:sub:child', itemId: 'out-1' });
+    expect(useDrawerStore.getState().activityFeed.alias).toEqual([]);
   });
 
   it('markFinalResponse marks isFinal without duplicating streamed text into a double response', () => {

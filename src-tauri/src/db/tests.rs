@@ -3,6 +3,84 @@ use super::*;
 use std::path::PathBuf;
 
 #[tokio::test]
+async fn deleted_dialog_items_stay_out_of_rebuilt_context_after_stale_save() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_dialog_{}", uuid::Uuid::new_v4()));
+    let task = "DELETE-1";
+    let items = vec![
+        ActivityItem { id: "remove-output".into(), item_type: "output".into(), content: Some("remove answer".into()), ..Default::default() },
+        ActivityItem { id: "remove-thought".into(), item_type: "thought".into(), content: Some("remove thinking".into()), ..Default::default() },
+        ActivityItem { id: "remove-tool".into(), item_type: "tool".into(), tool: Some(serde_json::json!({"id":"remove-tool", "toolName":"read_file", "stdout":"remove result"})), ..Default::default() },
+        ActivityItem { id: "keep-tool".into(), item_type: "tool".into(), tool: Some(serde_json::json!({"id":"keep-tool", "toolName":"read_file", "stdout":"keep result"})), ..Default::default() },
+        ActivityItem { id: "keep-output".into(), item_type: "output".into(), content: Some("keep answer".into()), ..Default::default() },
+        ActivityItem { id: "legacy-error".into(), item_type: "output".into(), content: Some("\n[LLM Error: HTTP 400]\n".into()), ..Default::default() },
+    ];
+    append_dialog_items(&root, task, &items).unwrap();
+    let messages = crate::agent::reconstruct_messages_from_dialog("system", "objective", &items);
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    save_conversation_context(&root, task, 3, &messages, context_dialog_cursor(&root, task).unwrap(), &abort).await.unwrap();
+    for id in ["remove-output", "remove-thought", "remove-tool"] { delete_dialog_item(&root, task, id).unwrap(); }
+    assert!(load_conversation_context(&root, task).unwrap().is_none());
+    append_dialog_items(&root, task, &items).unwrap();
+    let remaining = load_dialog_items(&root, task).unwrap();
+    assert_eq!(remaining.len(), 3);
+    assert!(remaining.iter().all(|item| !item.id.starts_with("remove-")));
+    assert_eq!(remaining.iter().find(|item| item.id == "legacy-error").unwrap().item_type, "error");
+    let rebuilt = crate::agent::reconstruct_messages_from_dialog("system", "objective", &remaining);
+    let json = serde_json::to_string(&rebuilt).unwrap();
+    assert!(!json.contains("remove"));
+    assert!(!json.contains("LLM Error"));
+    assert!(json.contains("keep answer"));
+    assert!(json.contains("keep result"));
+    let before_sanitize = rebuilt.clone();
+    let mut sanitized = rebuilt;
+    crate::agent::sanitize_unclosed_tool_calls(&mut sanitized);
+    assert_eq!(sanitized, before_sanitize);
+}
+
+#[test]
+fn deleted_dialog_item_cannot_be_created_by_a_late_save() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_late_{}", uuid::Uuid::new_v4()));
+    delete_dialog_item(&root, "DELETE-2", "late-output").unwrap();
+    append_dialog_items(&root, "DELETE-2", &[ActivityItem {
+        id: "late-output".into(), item_type: "output".into(), content: Some("late".into()), ..Default::default()
+    }]).unwrap();
+    assert!(load_dialog_items(&root, "DELETE-2").unwrap().is_empty());
+}
+
+#[test]
+fn output_deduplication_keeps_the_visible_message_deletable() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_dedup_{}", uuid::Uuid::new_v4()));
+    let ui = ActivityItem { id: "ui-output".into(), item_type: "output".into(), content: Some("answer".into()), ..Default::default() };
+    let server = ActivityItem { id: "server-output".into(), ..ui.clone() };
+    append_dialog_items(&root, "DELETE-3", std::slice::from_ref(&ui)).unwrap();
+    append_dialog_items(&root, "DELETE-3", &[server]).unwrap();
+    append_dialog_items(&root, "DELETE-3", std::slice::from_ref(&ui)).unwrap();
+    let loaded = load_dialog_items(&root, "DELETE-3").unwrap();
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].id, ui.id);
+    delete_dialog_item(&root, "DELETE-3", &ui.id).unwrap();
+    append_dialog_items(&root, "DELETE-3", &[ui]).unwrap();
+    assert!(load_dialog_items(&root, "DELETE-3").unwrap().is_empty());
+}
+
+#[test]
+fn deleting_question_removes_its_tool_record_without_touching_other_calls() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_question_{}", uuid::Uuid::new_v4()));
+    let items = vec![
+        ActivityItem { id: "q-question-id".into(), item_type: "question".into(), tool: Some(serde_json::json!({"id":"question-id", "toolName":"question", "params":{"callId":"call-id"}})), ..Default::default() },
+        ActivityItem { id: "call-id".into(), item_type: "tool".into(), tool: Some(serde_json::json!({"id":"call-id", "toolName":"question", "stdout":"answer"})), ..Default::default() },
+        ActivityItem { id: "keep".into(), item_type: "tool".into(), tool: Some(serde_json::json!({"id":"keep", "toolName":"question", "stdout":"answer"})), ..Default::default() },
+    ];
+    append_dialog_items(&root, "DELETE-4", &items).unwrap();
+    let deleted = delete_dialog_item(&root, "DELETE-4", "q-question-id").unwrap();
+    assert!(deleted.iter().any(|id| id == "call-id"));
+    append_dialog_items(&root, "DELETE-4", &items).unwrap();
+    let remaining = load_dialog_items(&root, "DELETE-4").unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].id, "keep");
+}
+
+#[tokio::test]
 async fn cache_snapshot_preserves_batch_messages_and_pending_steer() {
     use crate::llm::{CacheControl, ChatMessage, FunctionCall, ToolCall};
     let root = PathBuf::from("target").join(format!("cvh_cache_context_{}", uuid::Uuid::new_v4()));

@@ -64,6 +64,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Subagent Activity Card** | `src/components/drawer/stream/SubagentActivityCard.tsx` | Child agent delegation summary and report view. |
 | **Markdown Content Renderer** | `src/components/drawer/stream/MarkdownContent.tsx` | Streaming markdown tokens, copyable codeblocks, lightbox. |
 | **Agent Explanation Card** | `src/components/drawer/stream/AgentExplanationCard.tsx` | Intermediate step commentary, action plan, and todo list. |
+| **Activity Deletion Controls** | `src/components/drawer/stream/ActivityItemActions.tsx` | Stopped-dialog deletion with visible persistence errors. |
 | **Terminal Response Card** | `src/components/drawer/stream/TerminalResponseCard.tsx` | Prominent final response card with copy and duration. |
 | **Task Objective Card** | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
 | **Execution Error Banner** | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |

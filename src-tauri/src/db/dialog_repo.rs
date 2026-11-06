@@ -1,5 +1,5 @@
 use crate::db::get_db_conn;
-use rusqlite::{params, TransactionBehavior};
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -18,6 +18,13 @@ pub struct ActivityItem {
     pub duration_ms: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub images: Option<Vec<String>>,
+}
+
+impl ActivityItem {
+    pub fn is_runtime_error(&self) -> bool {
+        self.item_type == "error" || (matches!(self.item_type.as_str(), "output" | "assistant")
+            && self.content.as_deref().is_some_and(|text| text.trim_start().starts_with("[LLM Error:")))
+    }
 }
 
 /// Persists/appends dialog items for a task into SQLite atomically.
@@ -46,7 +53,8 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
                     timestamp = excluded.timestamp,
                     created_at = excluded.created_at,
                     tool_json = excluded.tool_json,
-                    duration_ms = excluded.duration_ms",
+                    duration_ms = excluded.duration_ms
+                WHERE dialog_items.type != 'deleted'",
             )
             .map_err(|e| format!("Failed to prepare insert statement: {}", e))?;
 
@@ -57,7 +65,8 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
                     let trimmed = text.trim();
                     if !trimmed.is_empty() {
                         let _ = tx.execute(
-                            "DELETE FROM dialog_items WHERE task_id = ?1 AND type = 'output' AND TRIM(content) = ?2 AND id != ?3",
+                            "DELETE FROM dialog_items WHERE task_id = ?1 AND type = 'output' AND TRIM(content) = ?2 AND id != ?3
+                             AND NOT EXISTS (SELECT 1 FROM dialog_items WHERE id = ?3 AND type = 'deleted')",
                             params![task_id, trimmed, item.id],
                         );
                     }
@@ -81,7 +90,7 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
             stmt.execute(params![
                 item.id,
                 task_id,
-                item.item_type,
+                if item.is_runtime_error() { "error" } else { &item.item_type },
                 item.content,
                 images_json,
                 item.timestamp,
@@ -112,7 +121,7 @@ pub fn load_dialog_items_after(root: &Path, task_id: &str, cursor: i64) -> Resul
         .prepare(
             "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
              FROM dialog_items
-             WHERE task_id = ?1 AND type NOT IN ('compacted_archived', 'context_snapshot') AND rowid > ?2
+             WHERE task_id = ?1 AND type NOT IN ('compacted_archived', 'context_snapshot', 'deleted') AND rowid > ?2
              ORDER BY created_at ASC, rowid ASC",
         )
         .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
@@ -139,7 +148,7 @@ pub fn load_dialog_items_after(root: &Path, task_id: &str, cursor: i64) -> Resul
         let images = images_json.and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok());
         let tool = tool_json.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
 
-        items.push(ActivityItem {
+        let mut item = ActivityItem {
             id,
             item_type,
             timestamp,
@@ -147,7 +156,9 @@ pub fn load_dialog_items_after(root: &Path, task_id: &str, cursor: i64) -> Resul
             tool,
             duration_ms,
             images,
-        });
+        };
+        if item.is_runtime_error() { item.item_type = "error".to_string(); }
+        items.push(item);
     }
 
     Ok(items)
@@ -172,7 +183,7 @@ pub fn persist_compacted_dialog(
         .map_err(|e| format!("Failed to invalidate conversation context: {e}"))?;
     for id in ids_to_archive {
         let _ = tx.execute(
-            "UPDATE dialog_items SET type = 'compacted_archived' WHERE task_id = ?1 AND id = ?2",
+            "UPDATE dialog_items SET type = 'compacted_archived' WHERE task_id = ?1 AND id = ?2 AND type != 'deleted'",
             params![task_id, id],
         );
     }
@@ -195,7 +206,8 @@ pub fn persist_compacted_dialog(
                 images_json = excluded.images_json,
                 timestamp = excluded.timestamp,
                 tool_json = excluded.tool_json,
-                duration_ms = excluded.duration_ms",
+                duration_ms = excluded.duration_ms
+             WHERE dialog_items.type != 'deleted'",
             params![
                 tool_act.id,
                 task_id,
@@ -227,7 +239,8 @@ pub fn persist_compacted_dialog(
             images_json = excluded.images_json,
             timestamp = excluded.timestamp,
             tool_json = excluded.tool_json,
-            duration_ms = excluded.duration_ms",
+            duration_ms = excluded.duration_ms
+         WHERE dialog_items.type != 'deleted'",
         params![
             compacted_item.id,
             task_id,
@@ -249,14 +262,50 @@ pub fn persist_compacted_dialog(
 }
 
 /// Deletes a specific dialog item for a task by ID.
-pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<(), String> {
-    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
-    conn.execute(
-        "DELETE FROM dialog_items WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND (id = ?2 OR type = 'context_snapshot')",
-        params![task_id, item_id],
-    )
-    .map_err(|e| format!("Failed to delete dialog item: {}", e))?;
-    Ok(())
+pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<Vec<String>, String> {
+    if item_id.trim().is_empty() || item_id.starts_with("context:") {
+        return Err("Invalid dialog item ID".to_string());
+    }
+    let mut conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+    let tool_json: Option<String> = tx.query_row(
+        "SELECT tool_json FROM dialog_items WHERE LOWER(task_id) = LOWER(?1) AND id = ?2 AND type IN ('tool', 'question')",
+        params![task_id, item_id], |row| row.get(0),
+    ).optional().map_err(|e| e.to_string())?.flatten();
+    let mut ids = vec![item_id.to_string()];
+    if let Some(json) = tool_json {
+        let tool: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        for path in ["/id", "/params/callId", "/params/questionId"] {
+            if let Some(id) = tool.pointer(path).and_then(|value| value.as_str()).filter(|id| !id.is_empty()) {
+                ids.push(id.to_string());
+            }
+        }
+        let identities = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+        let mut stmt = tx.prepare(
+            "SELECT id FROM dialog_items WHERE LOWER(task_id) = LOWER(?1) AND type IN ('tool', 'question') AND (
+                id IN (SELECT value FROM json_each(?2)) OR
+                json_extract(tool_json, '$.id') IN (SELECT value FROM json_each(?2)) OR
+                json_extract(tool_json, '$.params.callId') IN (SELECT value FROM json_each(?2)) OR
+                json_extract(tool_json, '$.params.questionId') IN (SELECT value FROM json_each(?2)))",
+        ).map_err(|e| e.to_string())?;
+        let related = stmt.query_map(params![task_id, identities], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        for id in related { ids.push(id.map_err(|e| e.to_string())?); }
+    }
+    ids.sort();
+    ids.dedup();
+    for id in &ids {
+        tx.execute(
+            "INSERT INTO dialog_items (id, task_id, type, created_at) VALUES (?1, ?2, 'deleted', ?3)
+             ON CONFLICT(id) DO UPDATE SET type = 'deleted', content = NULL, images_json = NULL, tool_json = NULL, duration_ms = NULL
+             WHERE LOWER(dialog_items.task_id) = LOWER(?2)",
+            params![id, task_id, chrono::Utc::now().timestamp_millis()],
+        ).map_err(|e| format!("Failed to delete dialog item: {e}"))?;
+    }
+    tx.execute("DELETE FROM dialog_items WHERE LOWER(task_id) = LOWER(?1) AND type = 'context_snapshot'", params![task_id])
+        .map_err(|e| format!("Failed to invalidate context: {e}"))?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(ids)
 }
 
 /// Deletes all dialog items for a specific task and its cascaded subagents.

@@ -185,6 +185,7 @@ export const ru = {
   'drawer.agentExplanation': 'Пояснение агента',
   'drawer.userSteer': 'Корректировка пользователя',
   'drawer.deleteMessage': 'Удалить сообщение',
+  'drawer.stopBeforeDelete': 'Остановите агента перед удалением сообщений',
   'drawer.sensorRejection': 'Отклонено сенсором гейткипера',
   'drawer.agentMessage': 'Сообщение агента',
   'drawer.hookRejection': 'Отклонено хуком перехода',
