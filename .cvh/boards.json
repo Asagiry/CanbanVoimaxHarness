@@ -190,7 +190,12 @@
             "glob",
             "grep"
           ],
-          "hooks": {},
+          "hooks": {
+            "on_enter": {
+              "script": ".cvh/hooks/on_enter_ready.bat",
+              "description": "Удаляет worktree папку и пушит в main с origin (merge + push + worktree remove)"
+            }
+          },
           "autoRun": null,
           "terminal": true,
           "isIntake": null
