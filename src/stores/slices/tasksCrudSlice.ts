@@ -530,6 +530,20 @@ export const createTasksCrudSlice: StateCreator<
         const next: TaskHookStates = { ...incoming };
         if (live.on_enter?.status === 'running') next.on_enter = live.on_enter;
         if (live.on_leave?.status === 'running') next.on_leave = live.on_leave;
+        if (
+          (live.on_enter?.status === 'success' || live.on_enter?.status === 'failed') &&
+          live.on_enter.stageId === mapped.stageId &&
+          !next.on_enter
+        ) {
+          next.on_enter = live.on_enter;
+        }
+        if (
+          (live.on_leave?.status === 'success' || live.on_leave?.status === 'failed') &&
+          live.on_leave.stageId === mapped.stageId &&
+          !next.on_leave
+        ) {
+          next.on_leave = live.on_leave;
+        }
         return next;
       };
       let nextHookStates = state.hookStates;
@@ -671,6 +685,22 @@ export const createTasksCrudSlice: StateCreator<
         // tasks:updated cannot kill the spinner before hook:finish lands.
         if (nextHookStates[t.id]?.on_enter?.status === 'running') merged.on_enter = nextHookStates[t.id].on_enter;
         if (nextHookStates[t.id]?.on_leave?.status === 'running') merged.on_leave = nextHookStates[t.id].on_leave;
+        if (
+          (nextHookStates[t.id]?.on_enter?.status === 'success' ||
+            nextHookStates[t.id]?.on_enter?.status === 'failed') &&
+          nextHookStates[t.id]?.on_enter?.stageId === t.stageId &&
+          !merged.on_enter
+        ) {
+          merged.on_enter = nextHookStates[t.id].on_enter;
+        }
+        if (
+          (nextHookStates[t.id]?.on_leave?.status === 'success' ||
+            nextHookStates[t.id]?.on_leave?.status === 'failed') &&
+          nextHookStates[t.id]?.on_leave?.stageId === t.stageId &&
+          !merged.on_leave
+        ) {
+          merged.on_leave = nextHookStates[t.id].on_leave;
+        }
         nextHookStates[t.id] = merged;
       }
     }

@@ -164,6 +164,30 @@ describe('useCardHooks left/right routing', () => {
     expect(h.effectiveLeftHookType).toBe('on_leave');
   });
 
+  it('f) subtask in review with on_enter success from parent clone surfaces on LEFT', () => {
+    const hookState: HookExecutionState = {
+      hookName: '.cvh/hooks/gatekeeper_sensor.bat',
+      stageId: 'review',
+      hookType: 'on_enter',
+      status: 'success',
+      startedAt: Date.now() - 5000,
+      durationMs: 1000,
+    };
+    const task = createTask({
+      id: 'CVH-048.2',
+      stageId: 'review',
+      parentId: 'CVH-048',
+      stageEnteredAt: Date.now(),
+      hookStates: { on_enter: hookState },
+    });
+
+    const h = capture(task, reviewColumn);
+
+    expect(h.hasLeftHook).toBe(true);
+    expect(h.effectiveLeftState?.status).toBe('success');
+    expect(h.effectiveLeftHookType).toBe('on_enter');
+  });
+
   it('e) stale finished on_enter targeting another column does not pop a node', () => {
     const stale: HookExecutionState = {
       hookName: '.cvh/hooks/gatekeeper_sensor.bat',
