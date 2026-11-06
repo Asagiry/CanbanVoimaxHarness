@@ -1,4 +1,4 @@
-﻿pub mod cvh_sync;
+pub mod cvh_sync;
 pub use cvh_sync::{mark_worktree_cvh_untracked, sync_cvh_runtime_state, sync_cvh_to_all_worktrees};
 
 use anyhow::{bail, Context, Result};
@@ -25,8 +25,8 @@ async fn run_git(repo_root: &Path, args: &[&str]) -> Result<String> {
         .await
         .with_context(|| format!("Failed to execute 'git {}' in {:?}", args.join(" "), repo_root))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = crate::agent::decode_output_bytes(&output.stdout).trim().to_string();
+    let stderr = crate::agent::decode_output_bytes(&output.stderr).trim().to_string();
 
     if !output.status.success() {
         bail!(

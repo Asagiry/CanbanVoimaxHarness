@@ -12,6 +12,9 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
     let boards_file = root.join(".cvh").join("boards.json");
     if boards_file.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&boards_file).await {
+            if content.trim().is_empty() {
+                eprintln!("CVH [load_boards_config]: boards file is empty at {:?}. Falling back to default.", boards_file);
+            }
             if let Ok(cfg) = serde_json::from_str::<BoardsConfig>(&content) {
                 if !cfg.boards.is_empty() {
                     return Ok(cfg);
@@ -224,6 +227,10 @@ pub async fn load_project_config(root_path: impl AsRef<Path>) -> Result<ProjectC
         .await
         .with_context(|| format!("Failed to read project config at {:?}", config_path))?;
 
+    if content.trim().is_empty() {
+        anyhow::bail!("Project config file is empty at {:?}", config_path);
+    }
+
     let config: ProjectConfig = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse project config JSON at {:?}", config_path))?;
 
@@ -237,6 +244,13 @@ pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<Pipelin
         return Ok(default_pipeline_config());
     }
     match tokio::fs::read_to_string(&boards_file).await {
+        Ok(content) if content.trim().is_empty() => {
+            eprintln!(
+                "CVH [load_pipeline_config]: boards file is empty at {:?}. Falling back to default 5-stage pipeline.",
+                boards_file
+            );
+            Ok(default_pipeline_config())
+        }
         Ok(content) => match serde_json::from_str::<BoardsConfig>(&content) {
             Ok(boards_cfg) => {
                 if boards_cfg.boards.is_empty() {
@@ -325,6 +339,10 @@ pub async fn load_project_registry(registry_path: Option<PathBuf>) -> Result<Pro
     let content = tokio::fs::read_to_string(&path)
         .await
         .with_context(|| format!("Failed to read project registry at {:?}", path))?;
+
+    if content.trim().is_empty() {
+        return Ok(ProjectRegistry::default());
+    }
 
     let registry: ProjectRegistry = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse project registry at {:?}", path))?;

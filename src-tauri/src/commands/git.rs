@@ -568,11 +568,11 @@ pub async fn get_task_git_diff(
         .map_err(|e| format!("Failed to run git status in {:?}: {}", workdir, e))?;
 
     if !status_output.status.success() {
-        let stderr = String::from_utf8_lossy(&status_output.stderr);
+        let stderr = crate::agent::decode_output_bytes(&status_output.stderr);
         return Err(format!("git status failed in {:?}: {}", workdir, stderr));
     }
 
-    let status_stdout = String::from_utf8_lossy(&status_output.stdout);
+    let status_stdout = crate::agent::decode_output_bytes(&status_output.stdout);
     let mut file_entries: Vec<(String, String)> = Vec::new();
 
     for line in status_stdout.lines() {
@@ -643,7 +643,7 @@ pub async fn get_task_git_diff(
     let mut diff_blocks: HashMap<String, String> = HashMap::new();
     if let Ok(out) = git_diff_out {
         if out.status.code().unwrap_or(1) <= 1 {
-            let full_diff = String::from_utf8_lossy(&out.stdout);
+            let full_diff = crate::agent::decode_output_bytes(&out.stdout);
             diff_blocks = parse_diff_blocks(&full_diff);
         }
     }

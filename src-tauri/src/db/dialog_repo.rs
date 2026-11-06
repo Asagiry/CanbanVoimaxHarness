@@ -356,7 +356,7 @@ pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<V
         params![task_id, item_id], |row| row.get(0),
     ).optional().map_err(|e| e.to_string())?.flatten();
     let mut ids = vec![item_id.to_string()];
-    if let Some(json) = tool_json {
+    if let Some(json) = tool_json.filter(|json| !json.trim().is_empty()) {
         let tool: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
         for path in ["/id", "/params/callId", "/params/questionId"] {
             if let Some(id) = tool.pointer(path).and_then(|value| value.as_str()).filter(|id| !id.is_empty()) {
