@@ -18,7 +18,7 @@ export const CANONICAL_BOARD_STAGES: PipelineStage[] = [
     color: '#6366f1',
     icon: 'Bot',
     persona: 'cvh-dev',
-    modelOverride: 'gemini-3.8-flash-high',
+    modelOverride: null,
     temperature: 0.2,
     wipLimit: 3,
     hooks: {},

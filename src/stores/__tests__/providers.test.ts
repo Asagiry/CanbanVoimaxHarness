@@ -10,6 +10,7 @@ import {
   validateProvider,
   type Provider,
 } from '../settings/providers';
+import { syncFlatFromProviders } from '../settingsStore';
 import { toProviderId } from '../../types/domain';
 const toProviderIdValue = toProviderId;
 
@@ -80,6 +81,22 @@ describe('providers domain helpers', () => {
     const deleted = deleteProviderLocal(next, toProviderIdValue('b'), toProviderIdValue('b'));
     expect(deleted.providers.map((p) => p.id)).toEqual(['a']);
     expect(deleted.activeProviderId).toBe(toProviderIdValue('a'));
+  });
+
+  it('syncFlatFromProviders keeps catalog model and falls back when stale', () => {
+    const providers: Provider[] = [{
+      id: toProviderIdValue('opencode go'),
+      name: 'OpenCode Go',
+      isCustom: false,
+      apiKey: '',
+      baseUrl: 'https://opencode.ai/inference/go/openai/v1',
+      protocol: 'openai',
+      models: [{ id: 'beam-free' }, { id: 'crouton-alpha-free' }],
+    }];
+    const base = { provider: 'OpenCode Go', gatewayUrl: '', apiKey: '', model: 'crouton-alpha-free' };
+    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), base).model).toBe('crouton-alpha-free');
+    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), { ...base, model: '' }).model).toBe('beam-free');
+    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), { ...base, model: 'gemini-3.8-flash-high' }).model).toBe('beam-free');
   });
 
   it('legacy provider marks custom names', () => {

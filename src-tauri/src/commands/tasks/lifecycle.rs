@@ -896,7 +896,7 @@ pub async fn internal_create_subtask(
         verdict: None,
         custom_flow: None,
         status: Some(subtask_status.to_string()),
-        model: parent_model.or_else(|| target_col.model_override.clone()),
+        model: parent_model.clone(),
         parent_id: Some(parent_id.to_string()),
         subtask_index: Some(next_subtask_idx),
         waiting_for_subtask_id: None,
