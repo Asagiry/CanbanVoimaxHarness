@@ -24,6 +24,15 @@ export interface TaskTelemetry {
   toolTokens?: number;
 }
 
+export interface TaskTelemetrySummary {
+  totalInputTokens: number;
+  totalCachedTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  cacheHitRate: number;
+  turnCount: number;
+}
+
 export interface DrawerMetaState {
   isOpen: boolean;
   activeTaskId: string | null;
@@ -45,6 +54,7 @@ export interface StreamState {
   connectionWait: Record<string, { streamId: string; delaySecs: number } | null>;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   taskTelemetry: Record<string, TaskTelemetry>;
+  taskTelemetrySummary: Record<string, TaskTelemetrySummary>;
   thinkingStartTime: Record<string, number | null>;
   generationStartTime: Record<string, number | null>;
   generationEndTime: Record<string, number | null>;
@@ -69,6 +79,7 @@ export interface StreamActions {
     streamId?: string
   ) => void;
   updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
+  setTaskTelemetrySummary: (taskId: string, summary: TaskTelemetrySummary) => void;
   setThinkingStartTime: (taskId: string, time: number | null) => void;
   setGenerationStartTime: (taskId: string, time: number | null) => void;
   setGenerationEndTime: (taskId: string, time: number | null) => void;

@@ -88,6 +88,8 @@ export function useContextGaugeMetrics({
   const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId] ?? (s.toolIdToSubagentId[taskId] ? s.tokenOverrides[s.toolIdToSubagentId[taskId]] : undefined));
   const taskCurrentTokens = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.currentTokens);
   const telemetry = useDrawerStore((s) => s.taskTelemetry[taskId] || (s.toolIdToSubagentId[taskId] ? s.taskTelemetry[s.toolIdToSubagentId[taskId]] : undefined) || (s.subagentIdToToolId[taskId] ? s.taskTelemetry[s.subagentIdToToolId[taskId]] : undefined));
+  const telemetrySummary = useDrawerStore((s) => s.taskTelemetrySummary[taskId] || (s.toolIdToSubagentId[taskId] ? s.taskTelemetrySummary[s.toolIdToSubagentId[taskId]] : undefined) || (s.subagentIdToToolId[taskId] ? s.taskTelemetrySummary[s.subagentIdToToolId[taskId]] : undefined));
+  const setTaskTelemetrySummary = useDrawerStore((s) => s.setTaskTelemetrySummary);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
   const genStart = useDrawerStore((s) => s.generationStartTime[taskId] ?? null);
   const genEnd = useDrawerStore((s) => s.generationEndTime[taskId] ?? null);
@@ -331,6 +333,69 @@ export function useContextGaugeMetrics({
   const outputTokens = (telemetry?.outputTokens && telemetry.outputTokens > 0) ? telemetry.outputTokens : (streamedTurnTokens > 0 ? streamedTurnTokens : (cumulativeOutputTokens || 0));
   const totalTokens = uncachedInput + cachedInput + outputTokens;
 
+  const cumulativeInputTokens = telemetrySummary?.totalInputTokens ?? 0;
+  const cumulativeCachedTokens = Math.min(telemetrySummary?.totalCachedTokens ?? 0, cumulativeInputTokens);
+  const cumulativeOutputTokensTotal = telemetrySummary?.totalOutputTokens ?? 0;
+  const cumulativeTotalTokens = telemetrySummary?.totalTokens ?? (cumulativeInputTokens + cumulativeOutputTokensTotal);
+  const cumulativeUncachedInput = Math.max(0, cumulativeInputTokens - cumulativeCachedTokens);
+  const cumulativeCacheHitRate = telemetrySummary?.cacheHitRate ?? (cumulativeInputTokens > 0 ? (cumulativeCachedTokens / cumulativeInputTokens) * 100 : 0);
+  const cumulativeTurnCount = telemetrySummary?.turnCount ?? 0;
+  const hasCumulative = cumulativeTotalTokens > 0;
+
+  const displayTotalTokens = hasCumulative ? cumulativeTotalTokens : totalTokens;
+  const displayUncachedInput = hasCumulative ? cumulativeUncachedInput : uncachedInput;
+  const displayCachedInput = hasCumulative ? cumulativeCachedTokens : cachedInput;
+  const displayOutputTokens = hasCumulative ? cumulativeOutputTokensTotal : outputTokens;
+  const displayCacheHitRate = hasCumulative ? cumulativeCacheHitRate : safeCacheHitRate;
+
+  const refreshTelemetrySummary = useCallback(async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const summary = await invoke<{
+        totalInputTokens: number;
+        totalCachedTokens: number;
+        totalOutputTokens: number;
+        totalTokens: number;
+        cacheHitRate: number;
+        turnCount: number;
+      }>('get_task_telemetry_summary', { taskId });
+      if (summary && typeof summary.totalTokens === 'number') {
+        setTaskTelemetrySummary?.(taskId, summary);
+      }
+    } catch {
+      // Web fallback: cumulative stays unset, UI falls back to last-turn snapshot.
+    }
+  }, [taskId, setTaskTelemetrySummary]);
+
+  useEffect(() => {
+    void refreshTelemetrySummary();
+  }, [refreshTelemetrySummary]);
+
+  useEffect(() => {
+    let isDisposed = false;
+    let unlisten: (() => void) | undefined;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const setupListener = async () => {
+      try {
+        if (isDisposed) return;
+        const u = await listenToEvent('agent:telemetry', (payload) => {
+          if (payload?.taskId && payload.taskId !== taskId) return;
+          if (debounce) clearTimeout(debounce);
+          debounce = setTimeout(() => { void refreshTelemetrySummary(); }, 300);
+        });
+        if (isDisposed) u(); else unlisten = u;
+      } catch {
+        // Web fallback
+      }
+    };
+    setupListener();
+    return () => {
+      isDisposed = true;
+      if (unlisten) unlisten();
+      if (debounce) clearTimeout(debounce);
+    };
+  }, [taskId, refreshTelemetrySummary]);
+
   const radius = 10;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (circumference * percent) / 100;
@@ -405,7 +470,8 @@ export function useContextGaugeMetrics({
     effectiveLimit, percent, usedTokensK, maxTokensK, systemPct, toolPct, msgPct,
     systemPromptTokens, toolDefTokens, messageTokens, isEstimate, effectiveTurns, stepsCount,
     llmTimeSec, toolTimeSec, ttftMs, tpsValue,
-    cacheHitRate: safeCacheHitRate, uncachedInput, cachedInput, outputTokens, totalTokens,
+    cacheHitRate: displayCacheHitRate, uncachedInput: displayUncachedInput, cachedInput: displayCachedInput, outputTokens: displayOutputTokens, totalTokens: displayTotalTokens,
+    cumulativeInputTokens, cumulativeCachedTokens, cumulativeOutputTokens: cumulativeOutputTokensTotal, cumulativeTotalTokens, cumulativeUncachedInput, cumulativeCacheHitRate, cumulativeTurnCount, hasCumulative,
     isCompacting, savingsBadge, handleCompactClick,
     strokeColor, radius, circumference, strokeDashoffset, miniCircumference, miniStrokeDashoffset,
   };

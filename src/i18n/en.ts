@@ -672,6 +672,7 @@ export const en = {
   'telemetry.avgTtft': 'Avg time to first token (TTFT)',
   'telemetry.tps': 'Tokens per second (TPS)',
   'telemetry.tokenUsage': 'Token usage',
+  'telemetry.tokenUsageCumulative': 'Cumulative · all time',
   'telemetry.cacheHit': 'Cache hit',
   'telemetry.uncachedInput': 'Uncached input',
   'telemetry.cachedInput': 'Cached input',

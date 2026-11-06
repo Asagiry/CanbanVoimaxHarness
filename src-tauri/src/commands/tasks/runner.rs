@@ -1875,3 +1875,11 @@ pub async fn get_task_context_window(
 
     Ok(128_000)
 }
+
+pub async fn get_task_telemetry_summary(
+    task_id: String,
+    app_handle: AppHandle,
+) -> Result<crate::db::TelemetrySummary, String> {
+    let root = app_handle.state::<AppState>().get_root();
+    crate::db::db_get_telemetry_summary(&root, task_id.trim())
+}

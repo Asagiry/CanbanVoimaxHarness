@@ -116,4 +116,19 @@ describe('Provider selection and cache accounting', () => {
     });
     expect(useDrawerStore.getState().taskTelemetry['CACHE-1'].cacheHitRate).toBe(0);
   });
+
+  it('keeps cumulative summary untouched by compaction telemetry overwrite', () => {
+    useDrawerStore.getState().setTaskTelemetrySummary('CACHE-1', {
+      totalInputTokens: 3000, totalCachedTokens: 2700, totalOutputTokens: 300,
+      totalTokens: 3300, cacheHitRate: 90, turnCount: 3,
+    });
+    useDrawerStore.getState().updateTelemetry('CACHE-1', {
+      inputTokens: 500, cacheReadTokens: 0, outputTokens: 0,
+    });
+    const summary = useDrawerStore.getState().taskTelemetrySummary['CACHE-1'];
+    expect(summary.totalTokens).toBe(3300);
+    expect(summary.totalInputTokens).toBe(3000);
+    expect(summary.cacheHitRate).toBe(90);
+    expect(useDrawerStore.getState().taskTelemetry['CACHE-1'].inputTokens).toBe(500);
+  });
 });

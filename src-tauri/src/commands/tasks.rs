@@ -223,3 +223,11 @@ pub async fn get_task_context_window(
 ) -> Result<u64, String> {
     runner::get_task_context_window(task_id, persona, app_handle).await
 }
+
+#[tauri::command]
+pub async fn get_task_telemetry_summary(
+    task_id: String,
+    app_handle: AppHandle,
+) -> Result<crate::db::TelemetrySummary, String> {
+    runner::get_task_telemetry_summary(task_id, app_handle).await
+}

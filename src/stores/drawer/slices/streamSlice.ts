@@ -61,6 +61,7 @@ export const createStreamSlice: StateCreator<
   connectionWait: {},
   streamEntries: {},
   taskTelemetry: {},
+  taskTelemetrySummary: {},
   thinkingStartTime: {},
   generationStartTime: {},
   generationEndTime: {},
@@ -335,6 +336,15 @@ export const createStreamSlice: StateCreator<
         },
       };
     });
+  },
+
+  setTaskTelemetrySummary: (taskId, summary) => {
+    set((state) => ({
+      taskTelemetrySummary: {
+        ...state.taskTelemetrySummary,
+        [taskId]: summary,
+      },
+    }));
   },
 
   setThinkingStartTime: (taskId, time) => {

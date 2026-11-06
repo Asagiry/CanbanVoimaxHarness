@@ -130,6 +130,7 @@ export default function ContextGauge({
           cachedInput={metrics.cachedInput}
           outputTokens={metrics.outputTokens}
           totalTokens={metrics.totalTokens}
+          turnCount={metrics.cumulativeTurnCount}
         />
       </div>
 

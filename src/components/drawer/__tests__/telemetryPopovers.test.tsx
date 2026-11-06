@@ -187,6 +187,28 @@ describe('TokenUsagePopover Component', () => {
     expect(html).toContain('6,617,664 tok');
     expect(html).toContain('Output');
     expect(html).toContain('14,876 tok');
+    expect(html).toContain('Cumulative');
+  });
+
+  it('renders cumulative totals where uncached + cached + output = total', () => {
+    const totalInput = 7031711;
+    const totalCached = 6617664;
+    const totalOutput = 14876;
+    const html = renderToString(
+      <TokenUsagePopover
+        cacheHitRate={(totalCached / totalInput) * 100}
+        uncachedInput={totalInput - totalCached}
+        cachedInput={totalCached}
+        outputTokens={totalOutput}
+        totalTokens={totalInput + totalOutput}
+        turnCount={42}
+      />
+    );
+    expect(html).toContain('7,046,587 tok');
+    expect(html).toContain('414,047 tok');
+    expect(html).toContain('6,617,664 tok');
+    expect(html).toContain('14,876 tok');
+    expect(html).toContain('94%');
   });
 });
 

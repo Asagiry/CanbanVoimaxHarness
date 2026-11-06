@@ -52,6 +52,23 @@ fn default_entry_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TelemetrySummary {
+    #[serde(default)]
+    pub total_input_tokens: i64,
+    #[serde(default)]
+    pub total_cached_tokens: i64,
+    #[serde(default)]
+    pub total_output_tokens: i64,
+    #[serde(default)]
+    pub total_tokens: i64,
+    #[serde(default)]
+    pub cache_hit_rate: f64,
+    #[serde(default)]
+    pub turn_count: i64,
+}
+
 /// Records a telemetry metric row into SQLite table.
 pub fn db_record_telemetry(root: &Path, record: &TelemetryRecord) -> Result<(), String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
@@ -117,6 +134,45 @@ pub fn db_get_telemetry_for_task(root: &Path, task_id: &str) -> Result<Vec<Telem
         .map_err(|e| format!("Query failed: {}", e))?;
 
     Ok(rows.flatten().collect())
+}
+
+/// Cumulative telemetry summary for a task and its sub-agents.
+///
+/// Invariant: telemetry rows are written exactly once per turn — under the
+/// parent `task_id` in `runner.rs` and under `subagent_id` (`<parent>.sub-*`)
+/// in `react_engine.rs`. The duplicate emission under `tool_call_id` is
+/// event-only and never persisted, so summing `task_id = parent OR
+/// task_id LIKE parent || '.sub-%'` cannot double-count.
+pub fn db_get_telemetry_summary(root: &Path, task_id: &str) -> Result<TelemetrySummary, String> {
+    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let sub_prefix = format!("{}.sub-%", task_id);
+    let (total_input, total_cached, total_output, turn_count): (i64, i64, i64, i64) = conn
+        .query_row(
+            "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(cached_tokens), 0), \
+             COALESCE(SUM(output_tokens), 0), COUNT(*) \
+             FROM telemetry \
+             WHERE task_id = ?1 OR LOWER(task_id) = LOWER(?1) \
+                OR task_id LIKE ?2 OR LOWER(task_id) LIKE LOWER(?2)",
+            params![task_id, sub_prefix],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .map_err(|e| format!("Failed to summarize telemetry: {}", e))?;
+    let total_input = total_input.max(0);
+    let total_cached = total_cached.max(0).min(total_input);
+    let total_output = total_output.max(0);
+    let cache_hit_rate = if total_input > 0 {
+        ((total_cached as f64) / (total_input as f64) * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    Ok(TelemetrySummary {
+        total_input_tokens: total_input,
+        total_cached_tokens: total_cached,
+        total_output_tokens: total_output,
+        total_tokens: total_input + total_output,
+        cache_hit_rate,
+        turn_count: turn_count.max(0),
+    })
 }
 
 /// Records or updates an engineering ledger entry in SQLite.

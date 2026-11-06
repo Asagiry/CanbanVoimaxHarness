@@ -674,6 +674,7 @@ export const ru = {
   'telemetry.avgTtft': 'Ср. время первого токена (TTFT)',
   'telemetry.tps': 'Токенов в секунду (TPS)',
   'telemetry.tokenUsage': 'Расход токенов',
+  'telemetry.tokenUsageCumulative': 'Суммарно · за всё время',
   'telemetry.cacheHit': 'Попадание в кэш',
   'telemetry.uncachedInput': 'Входные без кэша',
   'telemetry.cachedInput': 'Входные из кэша',

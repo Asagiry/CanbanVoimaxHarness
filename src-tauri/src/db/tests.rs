@@ -510,6 +510,52 @@ fn test_telemetry_and_ledger_persistence() {
 }
 
 #[test]
+fn test_telemetry_summary_cumulative() {
+    let root = PathBuf::from("target").join(format!("cvh_db_test_telem_sum_{}", uuid::Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&root);
+    let root = root.as_path();
+
+    let empty = db_get_telemetry_summary(root, "CVH-999").expect("empty summary");
+    assert_eq!(empty.total_tokens, 0);
+    assert_eq!(empty.turn_count, 0);
+    assert_eq!(empty.cache_hit_rate, 0.0);
+
+    for (id, task_id, input, cached, output) in [
+        ("t1", "CVH-999", 1000, 900, 100),
+        ("t2", "CVH-999", 2000, 1800, 200),
+        ("t3", "CVH-999.sub-1", 500, 400, 50),
+        ("t4", "CVH-OTHER", 9999, 9999, 9999),
+    ] {
+        db_record_telemetry(
+            root,
+            &TelemetryRecord {
+                id: id.to_string(),
+                task_id: task_id.to_string(),
+                model: None,
+                input_tokens: input,
+                output_tokens: output,
+                cached_tokens: cached,
+                tps: 0.0,
+                ttft_ms: 0.0,
+                duration_ms: 0.0,
+                created_at: 3000,
+            },
+        )
+        .expect("record telemetry");
+    }
+
+    let summary = db_get_telemetry_summary(root, "CVH-999").expect("summary");
+    assert_eq!(summary.total_input_tokens, 3500);
+    assert_eq!(summary.total_cached_tokens, 3100);
+    assert_eq!(summary.total_output_tokens, 350);
+    assert_eq!(summary.total_tokens, 3850);
+    assert_eq!(summary.turn_count, 3);
+    assert!((summary.cache_hit_rate - (3100.0 / 3500.0 * 100.0)).abs() < 0.001);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn test_auto_migration_from_json() {
     let root = PathBuf::from("target").join(format!("cvh_db_test_mig_{}", uuid::Uuid::new_v4()));
     let cvh_dir = root.join(".cvh");
