@@ -247,10 +247,11 @@ export default function SettingsModal() {
                   className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] px-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
                 >
                   <option value="Antigravity Proxy">Antigravity Proxy</option>
+                  <option value="OpenCode Go">OpenCode Go</option>
                   <option value="OpenAI">OpenAI</option>
                   <option value="Anthropic">Anthropic</option>
                   <option value="Ollama">Ollama</option>
-                  {!['Antigravity Proxy', 'OpenAI', 'Anthropic', 'Ollama', 'Custom'].includes(settings.provider) && (
+                  {!['Antigravity Proxy', 'OpenCode Go', 'OpenAI', 'Anthropic', 'Ollama', 'Custom'].includes(settings.provider) && (
                     <option value={settings.provider}>{settings.provider}</option>
                   )}
                   <option value="Custom">Custom</option>
@@ -344,9 +345,11 @@ export default function SettingsModal() {
                   <select
                     id={modelId}
                     value={settings.model}
+                    required
                     onChange={(e) => setSettings({ model: e.target.value })}
                     className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs transition cursor-pointer"
                   >
+                    <option value="" disabled>{t('settings.selectFromList')}</option>
                     {!availableModels.includes(settings.model) && settings.model && (
                       <option value={settings.model}>{settings.model}</option>
                     )}

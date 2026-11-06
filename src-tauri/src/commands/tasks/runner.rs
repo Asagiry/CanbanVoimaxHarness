@@ -1694,7 +1694,7 @@ pub async fn compact_context(
             "outputTokens": 0,
             "cacheReadTokens": 0,
             "cacheCreationTokens": 0,
-            "cacheHitRate": 90.0,
+            "cacheHitRate": 0.0,
             "systemTokens": sys_tokens,
             "toolTokens": tool_tokens,
         }),

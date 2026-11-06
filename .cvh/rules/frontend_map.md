@@ -110,6 +110,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
 | **Agent Session Status Store** | `src/stores/agentSessionStore.ts` | Authoritative background agent execution tracker. |
 | **Settings Store** | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings. |
+| **Provider Selection & Cache Accounting Tests** | `src/stores/__tests__/settingsCache.test.ts` | Provider presets, explicit model selection, and total-input cache ratios. |
 | **Theme Management Store** | `src/stores/themeStore.ts` | Obsidian tactile theme configuration. |
 | **Tool Policy Matrix Store** | `src/stores/toolPolicyStore.ts` | Frontend cache for tool policy permissions. |
 | **Language & Translation Store** | `src/stores/languageStore.ts` | Russian/English localization switching. |

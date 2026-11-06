@@ -2,13 +2,15 @@ use super::models::*;
 use anyhow::{bail, Result};
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Debug, Clone)]
 pub struct LlmClient {
     client: reqwest::Client,
+    session: String,
+    prefix: std::sync::Arc<std::sync::Mutex<super::cache::PrefixTracker>>,
 }
 
 impl Default for LlmClient {
@@ -24,11 +26,22 @@ impl Default for LlmClient {
 /// `cache_read_input_tokens`). Try each in order; missing keys yield 0.
 /// Pure functions so prefix/telemetry behaviour is unit-testable.
 pub fn extract_openai_input_tokens(usage: &serde_json::Value) -> u64 {
-    usage
-        .get("prompt_tokens")
-        .and_then(|v| v.as_u64())
-        .or_else(|| usage.get("input_tokens").and_then(|v| v.as_u64()))
-        .unwrap_or(0)
+    if let Some(total) = usage.get("prompt_tokens").and_then(|v| v.as_u64()) {
+        return total;
+    }
+    let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+    if usage.get("input_tokens_details").is_some() {
+        return input;
+    }
+    if usage.get("cache_read_input_tokens").is_some() || usage.get("cache_creation_input_tokens").is_some() {
+        return input.saturating_add(extract_openai_cache_read(usage))
+            .saturating_add(extract_openai_cache_creation(usage));
+    }
+    if usage.get("input_tokens").is_none() {
+        return usage.get("prompt_cache_miss_tokens").and_then(|v| v.as_u64())
+            .map(|miss| miss.saturating_add(extract_openai_cache_read(usage))).unwrap_or(0);
+    }
+    input
 }
 
 pub fn extract_openai_output_tokens(usage: &serde_json::Value) -> u64 {
@@ -120,7 +133,13 @@ impl LlmClient {
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
+            session: uuid::Uuid::new_v4().to_string(),
+            prefix: std::sync::Arc::new(std::sync::Mutex::new(super::cache::PrefixTracker::default())),
         }
+    }
+
+    pub fn for_conversation(root: &std::path::Path, task_id: &str) -> Self {
+        Self { session: format!("{}:{task_id}", root.display()), ..Self::new() }
     }
 
     /// Stream an OpenAI-compatible endpoint (OpenAI, Local Antigravity proxy, DeepSeek, Ollama).
@@ -135,6 +154,8 @@ impl LlmClient {
         if let Some(tools) = &mut request.tools {
             tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
         }
+        self.prefix.lock().map_err(|_| anyhow::anyhow!("Prompt cache tracker lock poisoned"))?
+            .observe(&request)?;
 
         let endpoint = if base_url.ends_with("/chat/completions") {
             base_url.to_string()
@@ -144,7 +165,7 @@ impl LlmClient {
             format!("{}/chat/completions", base_url)
         };
 
-        let mut headers = HeaderMap::new();
+        let mut headers = super::cache::opencode_headers(base_url, &self.session);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         if let Some(key) = api_key {
             if !key.trim().is_empty() {
@@ -155,7 +176,8 @@ impl LlmClient {
         }
 
         let mut attempt = 0;
-        let max_reconnects = 10;
+        let is_opencode = headers.contains_key("x-opencode-session");
+        let max_reconnects = if is_opencode { 2 } else { 10 };
 
         let response = loop {
             let req = self
@@ -164,7 +186,11 @@ impl LlmClient {
                 .headers(headers.clone())
                 .json(&request);
 
-            match req.send().await {
+            let response = tokio::select! {
+                _ = tx.closed() => return Ok(()),
+                response = req.send() => response,
+            };
+            match response {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         break resp;
@@ -176,7 +202,7 @@ impl LlmClient {
                         .await
                         .unwrap_or_else(|_| "Failed to read error body".to_string());
                     let err_summary = if text.len() > 120 {
-                        format!("{}...", &text[..120])
+                        format!("{}...", text.chars().take(120).collect::<String>())
                     } else {
                         text.clone()
                     };
@@ -186,12 +212,15 @@ impl LlmClient {
                         attempt += 1;
                         let delay_secs = attempt * 10;
                         let notice = format!(
-                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
-                            err_msg, attempt, delay_secs
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/{} через {}с...]\n",
+                            err_msg, attempt, max_reconnects, delay_secs
                         );
                         eprintln!("CVH [llm_client]: {}", notice);
                         let _ = tx.send(StreamChunk::Output(notice)).await;
-                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        tokio::select! {
+                            _ = tx.closed() => return Ok(()),
+                            _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},
+                        }
                         if tx.is_closed() {
                             bail!("Stream channel closed by receiver");
                         }
@@ -205,16 +234,19 @@ impl LlmClient {
                 }
                 Err(e) => {
                     let err_msg = e.to_string();
-                    if attempt < max_reconnects {
+                    if attempt < max_reconnects && (!is_opencode || e.is_connect()) {
                         attempt += 1;
                         let delay_secs = attempt * 10;
                         let notice = format!(
-                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
-                            err_msg, attempt, delay_secs
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/{} через {}с...]\n",
+                            err_msg, attempt, max_reconnects, delay_secs
                         );
                         eprintln!("CVH [llm_client]: {}", notice);
                         let _ = tx.send(StreamChunk::Output(notice)).await;
-                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        tokio::select! {
+                            _ = tx.closed() => return Ok(()),
+                            _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},
+                        }
                         if tx.is_closed() {
                             bail!("Stream channel closed by receiver");
                         }
@@ -237,7 +269,14 @@ impl LlmClient {
         let mut first_chunk_sent = false;
         let mut pending_usage: Option<StreamChunk> = None;
 
-        while let Some(item) = stream.next().await {
+        loop {
+            let item = tokio::select! {
+                _ = tx.closed() => return Ok(()),
+                item = stream.next() => match item {
+                    Some(item) => item,
+                    None => break,
+                },
+            };
             match item {
                 Ok(event) => {
                     let data = event.data.trim();
@@ -360,6 +399,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cache_usage_normalizes_provider_accounting() {
+        for usage in [
+            serde_json::json!({"prompt_tokens": 100000, "prompt_cache_hit_tokens": 99000, "prompt_cache_miss_tokens": 1000}),
+            serde_json::json!({"prompt_cache_hit_tokens": 99000, "prompt_cache_miss_tokens": 1000}),
+            serde_json::json!({"input_tokens": 700, "cache_read_input_tokens": 99000, "cache_creation_input_tokens": 300}),
+            serde_json::json!({"input_tokens": 100000, "input_tokens_details": {"cached_tokens": 99000}}),
+        ] {
+            let total = extract_openai_input_tokens(&usage);
+            let cached = extract_openai_cache_read(&usage);
+            assert_eq!(total, 100000);
+            assert_eq!(cached, 99000);
+            assert_eq!(crate::agent::compute_cache_hit_rate(cached, total), 99.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_stop_closes_pending_http_request() {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut data = [0; 8192];
+            assert!(stream.read(&mut data).await.unwrap() > 0);
+            ready_tx.send(()).unwrap();
+            loop {
+                match stream.read(&mut data).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {},
+                }
+            }
+        });
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        let request = OpenAIChatRequest {
+            model: "test".into(), messages: vec![ChatMessage::user("test")], temperature: None,
+            stream: true, tools: None, reasoning_effort: None, stream_options: None,
+        };
+        let client = tokio::spawn(async move { LlmClient::new().stream_openai(&endpoint, None, request, tx).await });
+        ready_rx.await.unwrap();
+        drop(rx);
+        tokio::time::timeout(std::time::Duration::from_secs(2), client).await.unwrap().unwrap().unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(2), server).await.unwrap().unwrap();
+    }
+
+    #[test]
     fn test_extract_openai_cache_read_openai_shape() {
         let usage = serde_json::json!({
             "prompt_tokens": 15000,
@@ -411,8 +496,7 @@ mod tests {
         stats.input_tokens = 1000;
         stats.cache_read_input_tokens = 500;
         stats.compute_hit_rate();
-        // 500 / (1000 + 500) = 0.333333...
-        assert!((stats.cache_hit_rate - (1.0 / 3.0)).abs() < 1e-6);
+        assert!((stats.cache_hit_rate - 0.5).abs() < 1e-6);
     }
 
     #[test]

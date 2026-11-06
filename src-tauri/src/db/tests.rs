@@ -2,6 +2,60 @@ use crate::agent::{Task, TodoItem};
 use super::*;
 use std::path::PathBuf;
 
+#[tokio::test]
+async fn cache_snapshot_preserves_batch_messages_and_pending_steer() {
+    use crate::llm::{CacheControl, ChatMessage, FunctionCall, ToolCall};
+    let root = PathBuf::from("target").join(format!("cvh_cache_context_{}", uuid::Uuid::new_v4()));
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let initial = ActivityItem {
+        id: uuid::Uuid::new_v4().to_string(), item_type: "user".into(),
+        content: Some("objective".into()), ..Default::default()
+    };
+    append_dialog_items(&root, "CACHE-1", &[initial]).unwrap();
+    let cursor = context_dialog_cursor(&root, "CACHE-1").unwrap();
+    let calls = ["a", "b"].into_iter().map(|id| ToolCall {
+        id: id.into(), call_type: "function".into(),
+        function: FunctionCall { name: "read_file".into(), arguments: "{ \"path\": \"x.rs\" }".into() },
+    }).collect();
+    let messages = vec![
+        ChatMessage::system("rules").with_cache_control(CacheControl::ephemeral()),
+        ChatMessage::user_with_images("objective", vec!["data:image/png;base64,AA==".into()]),
+        ChatMessage::assistant(Some("  inspect both  ".into()), Some(calls)),
+        ChatMessage::tool_response("a", "first\r\n"),
+        ChatMessage::tool_response("b", "second\n"),
+    ];
+    save_conversation_context(&root, "CACHE-1", 7, &messages, cursor, &abort).await.unwrap();
+    assert_eq!(load_dialog_items(&root, "CACHE-1").unwrap().len(), 1);
+    let steer = ActivityItem {
+        id: uuid::Uuid::new_v4().to_string(), item_type: "steer".into(),
+        content: Some("continue with this constraint".into()), ..Default::default()
+    };
+    append_dialog_items(&root, "CACHE-1", &[steer]).unwrap();
+    let mut saved = load_conversation_context(&root, "CACHE-1").unwrap().unwrap();
+    assert_eq!(saved.turn, 7);
+    assert_eq!(saved.messages, messages);
+    let pending = load_dialog_items_after(&root, "CACHE-1", saved.dialog_cursor).unwrap();
+    assert_eq!(pending.len(), 1);
+    crate::agent::append_messages_from_dialog(&mut saved.messages, "objective", &pending);
+    assert_eq!(&saved.messages[..messages.len()], messages.as_slice());
+    assert!(saved.messages.last().unwrap().text_content().unwrap().contains("this constraint"));
+
+    let compacted = ActivityItem {
+        id: uuid::Uuid::new_v4().to_string(), item_type: "compacted".into(),
+        content: Some("summary".into()), ..Default::default()
+    };
+    persist_compacted_dialog(&root, "CACHE-1", &compacted, None, &[]).unwrap();
+    save_conversation_context(&root, "CACHE-1", 7, &messages, cursor, &abort).await.unwrap();
+    assert!(load_conversation_context(&root, "CACHE-1").unwrap().is_none());
+    let cursor = context_dialog_cursor(&root, "CACHE-1").unwrap();
+    save_conversation_context(&root, "CACHE-1", 8, &saved.messages, cursor, &abort).await.unwrap();
+    abort.store(true, std::sync::atomic::Ordering::SeqCst);
+    save_conversation_context(&root, "CACHE-1", 7, &messages, cursor, &abort).await.unwrap();
+    assert_eq!(load_conversation_context(&root, "CACHE-1").unwrap().unwrap().messages, saved.messages);
+    clear_dialog_items(&root, "CACHE-1").unwrap();
+    assert!(load_conversation_context(&root, "CACHE-1").unwrap().is_none());
+}
+
 #[test]
 fn test_sqlite_dialog_roundtrip() {
     let root = PathBuf::from("target").join(format!("cvh_db_test_{}", uuid::Uuid::new_v4()));

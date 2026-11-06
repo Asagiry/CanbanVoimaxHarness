@@ -616,7 +616,7 @@ pub async fn condense_context_with_llm(
         Err(_) => return generate_fallback_compaction_report(task_id, &msgs),
     };
 
-    let mut headers = reqwest::header::HeaderMap::new();
+    let mut headers = crate::llm::cache::opencode_headers(base_url, &format!("{task_id}:compactor"));
     headers.insert(
         reqwest::header::CONTENT_TYPE,
         reqwest::header::HeaderValue::from_static("application/json"),

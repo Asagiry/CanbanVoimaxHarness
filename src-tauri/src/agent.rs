@@ -832,7 +832,7 @@ pub async fn maybe_spill_output(
         tokio::fs::create_dir_all(&spill_dir).await?;
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f");
         let safe_name = tool_name.replace(['/', '\\', ':', '*'], "_");
-        let filename = format!("{}-{}.log", timestamp, safe_name);
+        let filename = format!("{}-{}-{}.log", timestamp, safe_name, uuid::Uuid::new_v4());
         let spill_file = spill_dir.join(&filename);
 
         tokio::fs::write(&spill_file, &output).await?;
@@ -852,12 +852,27 @@ pub async fn maybe_spill_output(
         let all_lines: Vec<&str> = output.lines().collect();
         let head_count = if is_exempt { 50 } else { 20 };
         let tail_count = if is_exempt { 50 } else { 20 };
-        let head = all_lines[..head_count.min(all_lines.len())].join("\n");
-        let tail = if all_lines.len() > head_count + tail_count {
+        let mut head = all_lines[..head_count.min(all_lines.len())].join("\n");
+        let mut tail = if all_lines.len() > head_count + tail_count {
             all_lines[all_lines.len() - tail_count..].join("\n")
         } else {
             String::new()
         };
+        let preview_bytes = if is_exempt { 8192 } else { 4096 };
+        if head.len() > preview_bytes {
+            let mut end = preview_bytes;
+            while !head.is_char_boundary(end) { end -= 1; }
+            head.truncate(end);
+            head.push_str("\n[Head preview truncated]");
+            if tail.is_empty() {
+                tail = output.clone();
+            }
+        }
+        if tail.len() > preview_bytes {
+            let mut start = tail.len() - preview_bytes;
+            while !tail.is_char_boundary(start) { start += 1; }
+            tail = format!("[Tail preview truncated]\n{}", &tail[start..]);
+        }
 
         let rel_spill = format!(".cvh/spill/{}", filename);
         let spilled_msg = format!(
@@ -1576,7 +1591,7 @@ Task Title: {}
     let temperature = ctx.temperature.or(Some(0.2));
     let reasoning_effort = ctx.reasoning_effort.clone();
 
-    let llm_client = LlmClient::new();
+    let llm_client = LlmClient::for_conversation(&ctx.repo_root, &subagent_id);
     let mut sub_turn = 0;
     let mut final_sub_response = String::new();
     let mut sub_error: Option<String> = None;
@@ -1665,7 +1680,6 @@ Messages count: {}
             system_tokens,
             tool_tokens,
             fallback_input_tokens: compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref()) as u64,
-            prefix_hash: None,
             log_prefix: "subagent telemetry",
             subagent_id: Some(&subagent_id),
             emit_thoughts: true,
@@ -2066,7 +2080,6 @@ Messages count: {}
             system_tokens: synth_system_tokens,
             tool_tokens: 0,
             fallback_input_tokens: compactor::estimate_request_tokens(&sub_messages, None) as u64,
-            prefix_hash: None,
             log_prefix: "subagent synthesis telemetry",
             subagent_id: Some(&subagent_id),
             emit_thoughts: false,
@@ -2994,7 +3007,16 @@ where
 
     // 2. Check SQLite history if in-memory context is absent or <= 2 messages
     let sqlite_context = if in_memory_context.is_none() {
-        if let Ok(dialog_items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
+        if let Some(mut saved) = crate::db::load_conversation_context(&config.repo_root, &config.task_id)
+            .map_err(anyhow::Error::msg)? {
+            let pending = crate::db::load_dialog_items_after(&config.repo_root, &config.task_id, saved.dialog_cursor)
+                .map_err(anyhow::Error::msg)?;
+            let pending: Vec<_> = pending.into_iter().filter(|item| {
+                matches!(item.item_type.as_str(), "user" | "steer" | "agent" | "summary")
+            }).collect();
+            append_messages_from_dialog(&mut saved.messages, &initial_user_prompt, &pending);
+            Some((saved.turn, saved.messages))
+        } else if let Ok(dialog_items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
             let reconstructed = reconstruct_messages_from_dialog(&system_prompt, &initial_user_prompt, &dialog_items);
             if reconstructed.len() > 2 {
                 Some((0, reconstructed))
@@ -3188,7 +3210,10 @@ where
         }
     }
 
-    let llm_client = LlmClient::new();
+    let llm_client = LlmClient::for_conversation(&config.repo_root, &config.task_id);
+    let mut context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
+        .map_err(anyhow::Error::msg)?;
+    let mut context_revision = local_compaction_rev;
 
     // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
     // через терминальный ответ модели (текст без тул-коллов), abort_flag
@@ -3294,6 +3319,8 @@ where
                     let ids_to_archive: Vec<String> = existing_items[..archive_count].iter().map(|it| it.id.clone()).collect();
 
                     let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive);
+                    context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
+                        .map_err(anyhow::Error::msg)?;
                     let _ = app.emit(
                         "agent:tool_call",
                         serde_json::json!({
@@ -3344,29 +3371,6 @@ where
         // upstream (no cache effect, only request-byte churn), and unbounded
         // breakpoints exceed the 4-breakpoint budget. New suffix messages stay
         // untagged so already-sent prefix bytes never change.
-
-        // Cache-debug: hash/len of the exact serialized prefix about to be sent.
-        // No prompt content is logged, only lengths + hash.
-        let (prefix_len, prefix_hash) = {
-            let msg_json = serde_json::to_string(&messages).unwrap_or_default();
-            let tools_json = serde_json::to_string(&active_tools).unwrap_or_default();
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            std::hash::Hash::hash(&msg_json, &mut hasher);
-            std::hash::Hash::hash(&tools_json, &mut hasher);
-            (
-                msg_json.len() + tools_json.len(),
-                std::hash::Hasher::finish(&hasher),
-            )
-        };
-        eprintln!(
-            "CVH [cache] turn={} model={} msgs={} tools={} prefix_len={} prefix_hash={:016x}",
-            turn,
-            config.model,
-            messages.len(),
-            active_tools.len(),
-            prefix_len,
-            prefix_hash
-        );
 
         // Safety guard: guarantee request never ends with an Assistant turn (Gemini HTTP 400).
         if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
@@ -3419,6 +3423,13 @@ where
         }
 
         let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
+        if context_revision != local_compaction_rev {
+            context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
+                .map_err(anyhow::Error::msg)?;
+            context_revision = local_compaction_rev;
+        }
+        crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+            .await.map_err(anyhow::Error::msg)?;
         let tool_tokens = compactor::estimate_tools_tokens(&tools) as u64;
 
         let req = OpenAIChatRequest {
@@ -3478,7 +3489,6 @@ Messages count: {}
             system_tokens,
             tool_tokens,
             fallback_input_tokens: compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64,
-            prefix_hash: Some(prefix_hash),
             log_prefix: "telemetry",
             subagent_id: None,
             emit_thoughts: true,
@@ -3551,6 +3561,8 @@ Messages count: {}
             if !turn_content.is_empty() {
                 messages.push(ChatMessage::assistant(Some(turn_content.clone()), None));
             }
+            crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+                .await.map_err(anyhow::Error::msg)?;
             sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
@@ -3791,6 +3803,8 @@ Messages count: {}
             });
 
             messages.push(ChatMessage::tool_response(tc.id.clone(), result_str.clone()));
+            crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+                .await.map_err(anyhow::Error::msg)?;
 
             if should_abort_tool_batch(&tc.function.name, success, &result_str) {
                 batch_aborted_by_error = Some(tc.function.name.clone());

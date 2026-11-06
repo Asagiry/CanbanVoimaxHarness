@@ -257,7 +257,7 @@ export function useContextGaugeMetrics({
   const effectiveTurns = turns !== undefined && !isSubagentTask ? turns : calculatedTurns;
   const stepsCount = tools?.length || 0;
 
-  const totalInputTokens = (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0);
+  const totalInputTokens = telemetry?.inputTokens || 0;
   const safeCacheHitRate = telemetry
     ? typeof telemetry.cacheHitRate === 'number' && Number.isFinite(telemetry.cacheHitRate) && telemetry.cacheHitRate >= 0
       ? telemetry.cacheHitRate
@@ -316,8 +316,9 @@ export function useContextGaugeMetrics({
 
   const ttftMs = telemetry?.ttftMs ?? null;
 
-  const cachedInput = telemetry?.cacheReadTokens || 0;
-  const uncachedInput = (telemetry?.inputTokens && telemetry.inputTokens > 0) ? telemetry.inputTokens : totalUsedTokens;
+  const inputTokens = telemetry?.inputTokens ?? totalUsedTokens;
+  const cachedInput = Math.min(telemetry?.cacheReadTokens || 0, inputTokens);
+  const uncachedInput = Math.max(0, inputTokens - cachedInput);
   const outputTokens = (telemetry?.outputTokens && telemetry.outputTokens > 0) ? telemetry.outputTokens : (streamedTurnTokens > 0 ? streamedTurnTokens : (cumulativeOutputTokens || 0));
   const totalTokens = uncachedInput + cachedInput + outputTokens;
 
