@@ -46,18 +46,18 @@ use std::path::PathBuf;
         total_elapsed: None,
         };
 
-        // 1. When task.model is set, it strictly overrides global model and column model!
+        // task.model and global llm model are intentionally ignored —
+        // per-agent setting is source of truth, otherwise fallback.
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(resolved, "user-custom-model");
+        assert_eq!(resolved, "crouton-alpha-free");
 
-        // 2. When task.model is None or empty, it falls back to global model
         task.model = None;
         let fallback_global = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(fallback_global, "global-default-model");
+        assert_eq!(fallback_global, "crouton-alpha-free");
 
         task.model = Some("   ".to_string());
         let fallback_whitespace = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(fallback_whitespace, "global-default-model");
+        assert_eq!(fallback_whitespace, "crouton-alpha-free");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -140,7 +140,7 @@ use std::path::PathBuf;
             total_elapsed: None,
         };
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(resolved, "beam-free");
+        assert_eq!(resolved, "crouton-alpha-free");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

@@ -1597,7 +1597,7 @@ Task Title: {}
             if !m.is_empty() {
                 m.to_string()
             } else {
-                "gemini-3.8-flash-high".to_string()
+                "crouton-alpha-free".to_string()
             }
         }
     };

@@ -281,7 +281,7 @@ fn default_llm_base_url() -> String {
 }
 
 fn default_llm_model() -> String {
-    "gemini-3.8-flash-high".to_string()
+    "crouton-alpha-free".to_string()
 }
 
 fn default_compactor_model() -> String {

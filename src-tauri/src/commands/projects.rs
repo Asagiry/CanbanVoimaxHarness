@@ -204,7 +204,7 @@ pub async fn set_active_project(
             version: "0.1.0".to_string(),
             description: None,
             active_pipeline: None,
-            default_model: Some("gemini-3.8-flash-high".to_string()),
+            default_model: Some("crouton-alpha-free".to_string()),
             api_base_url: Some("http://127.0.0.1:8045/v1".to_string()),
             tool_permissions: None,
             providers: HashMap::new(),

@@ -29,18 +29,20 @@ pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 /// Resolves the effective active agent model for a task, following the canonical priority hierarchy:
-/// 1. Task-level model override (`task.model`)
-/// 2. Global LLM settings model (`llm_settings.model`)
-/// 3. Stage persona agent settings (`agent_setting.model`)
-/// 4. Column model override (`col.model_override`)
-/// 5. Project default model (`proj_cfg.default_model`)
-/// 6. Hardcoded fallback ("gemini-3.8-flash-high")
+/// 1. Stage persona agent settings (`agent_setting.model`)
+/// 2. Column model override (`col.model_override`)
+/// 3. Project default model (`proj_cfg.default_model`)
+/// 4. Hardcoded fallback ("crouton-alpha-free")
+///
+/// NOTE: `task.model` (SQLite stale) and `llm_settings.model` (global) are
+/// intentionally ignored — per-agent settings is the single source of
+/// truth. Changing planner.model takes effect immediately on Continue,
+/// without clearing SQLite.
 ///
 /// The candidate is then validated against the SELECTED provider's catalog
-/// (when the catalog is non-empty): a stale model persisted in SQLite from a
-/// previous provider (e.g. task.model from Antigravity after switching to
-/// OpenCode Go) is replaced with the first catalog model so the request
-/// never hits "model not found" on the wrong endpoint.
+/// (when the catalog is non-empty): a model not in catalog (e.g. after
+/// switching provider) is replaced with the first catalog model so the
+/// request never hits "model not found" on the wrong endpoint.
 pub async fn resolve_task_active_agent_model(
     root: &Path,
     task: Option<&Task>,
@@ -51,17 +53,6 @@ pub async fn resolve_task_active_agent_model(
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     }
-
-    let task_model = task.and_then(|t| non_empty_opt(&t.model));
-
-    let llm_model = {
-        let m = llm_settings.model.trim();
-        if m.is_empty() {
-            None
-        } else {
-            Some(m.to_string())
-        }
-    };
 
     let (col_override, agent_model) = if let Some(t) = task {
         let pipeline = load_pipeline_config(root)
@@ -92,12 +83,10 @@ pub async fn resolve_task_active_agent_model(
     let proj_cfg = load_project_config(root).await.ok();
     let proj_default = proj_cfg.and_then(|p| non_empty_opt(&p.default_model));
 
-    let candidate = task_model
-        .or(llm_model)
-        .or(agent_model)
+    let candidate = agent_model
         .or(col_override)
         .or(proj_default)
-        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
+        .unwrap_or_else(|| "crouton-alpha-free".to_string());
 
     // Validate against the SELECTED provider's catalog (SQLite-stale models
     // from a previous provider must not be dispatched to the new endpoint).
@@ -365,7 +354,7 @@ async fn run_agent_inner(
             version: "0.1.0".to_string(),
             description: None,
             active_pipeline: None,
-            default_model: Some("gemini-3.8-flash-high".to_string()),
+            default_model: Some("crouton-alpha-free".to_string()),
             api_base_url: Some("http://127.0.0.1:8045/v1".to_string()),
             tool_permissions: None,
             providers: HashMap::new(),
