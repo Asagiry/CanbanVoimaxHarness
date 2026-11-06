@@ -48,7 +48,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 - Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
 - Do NOT update rule files for ordinary feature implementations, routine refactorings, or bugfixes. Code is self-documenting through strict types and tests.
 - Update rules ONLY when universal system architecture, runtime invariants, or public contracts fundamentally change.
-- **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, you MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
+- **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, update the relevant topic map in `.cvh/rules/` in the same diff/commit. Update `backend_map.md` or `frontend_map.md` only when their topic routes change.
 - Never pollute rule files with commit messages, PR summaries, or transient fix details.
 - Always check `load_rule("rules-sync")` for hygiene requirements.
 

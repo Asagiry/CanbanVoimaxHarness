@@ -32,7 +32,7 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
   - `load_rule("frontend_map")`: Flagship frontend navigation map and component router (`src/`).
   - Maintain Universal Rule Specification: mandatory YAML frontmatter `description` across all rule files.
   - **Direct Coordinate Navigation & On-Demand Map Loading**: Direct file access when paths/coordinates are known; invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on-demand when exploring unfamiliar subsystems or decomposing multi-file architecture.
-  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src-tauri/src/` or `src/`, update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same commit.
+  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src-tauri/src/` or `src/`, update the relevant topic map in `.cvh/rules/` in the same commit. Update `backend_map.md` or `frontend_map.md` only when their topic routes change.
   - `load_rule("role-developer")`: Developer behavioral DNA (Uncle Bob Clean Code, eliminating Primitive Obsession, Make Illegal States Unrepresentable, TDD for pure logic via Vitest/cargo test, OpenCode 4 laws, Ponytail, Worktree isolation, Architectural Map synchronization).
   - `load_rule("role-reviewer")`: Reviewer behavioral DNA (Presumption of guilt, Gate 1 Map sync gate, verification evidence, frontend invariants, backend invariants, Claude Code convergence, Read-only).
   - `load_rule("role-retro")`: Retro behavioral DNA (Uncle Bob refactoring lessons, Karpathy LLM-Wiki CLE protocol, mechanical hardening, engine code prohibition).

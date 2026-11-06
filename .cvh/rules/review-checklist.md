@@ -45,7 +45,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
 - Update rules ONLY if universal system architecture or public contracts fundamentally changed.
 - If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
-- **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, inspect whether `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` was updated. If new files/modules were introduced without updating the respective navigation map, REJECT with `CHANGES_REQUESTED`.
+- **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, verify the relevant topic map in `.cvh/rules/` was updated. Update `backend_map.md` or `frontend_map.md` only when their topic routes change. Reject missing or incorrect file routes, not the absence of an unrelated router edit.
 
 ### Gate 2: Verification Evidence for the Changed Scope
 - Require successful verification for affected subsystems. Frontend checks are `pnpm test`, `pnpm exec tsc --noEmit`, and `pnpm exec oxlint --deny-warnings`; backend checks are `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`, with targeted tests when changed behavior needs them. Do not run checks for untouched subsystems without a concrete cross-system risk.

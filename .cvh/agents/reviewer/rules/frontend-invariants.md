@@ -26,7 +26,7 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 ## 3. Vitest Unit Testing Requirement for Pure Utilities & Slices
 - **Rule**: Pure utility functions (formatting, parsing, diffing, data transformations) and Zustand store slices MUST have matching Vitest unit tests located in adjacent `__tests__/*.test.ts` suites.
 - **Audit**:
-  - Run `pnpm test` (Vitest v5.0.5) to ensure 100% test pass rate across all suites.
+  - Verify successful `pnpm test` results using the Gate 2 evidence policy in `review-checklist`: reuse valid logs for the reviewed commit and unchanged environment; run tests only when evidence is missing, failed, stale, unverifiable, or insufficient for a concrete risk.
   - Verify that new utilities in `src/lib/`, `src/types/`, or store slices in `src/stores/` have explicit test coverage.
 - **Anti-Mock Policy**: Tests must verify real deterministic transformations, parsers, and reducers. Never substitute live runtime sensor verification with synthetic mocks for external subprocesses or IPC.
 
