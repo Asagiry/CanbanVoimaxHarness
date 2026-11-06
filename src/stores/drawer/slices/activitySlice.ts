@@ -1087,7 +1087,8 @@ export const createActivitySlice: StateCreator<
         updatedFeed = [...feed];
         updatedFeed[idx] = { ...feed[idx], ...item };
       } else {
-        const duplicateIdx = streamed || item.type === 'user' || item.type === 'steer' ? -1 : feed.findIndex(
+        const isHandoverSteer = item.type === 'steer' && item.content?.includes('[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]');
+        const duplicateIdx = streamed || item.type === 'user' || (item.type === 'steer' && !isHandoverSteer) ? -1 : feed.findIndex(
           (f) =>
             !/:(thought|output)$/.test(f.id) &&
             f.type === item.type &&

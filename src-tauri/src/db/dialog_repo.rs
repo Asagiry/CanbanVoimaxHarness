@@ -97,6 +97,20 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
                 }
             }
 
+            if matches!(item.item_type.as_str(), "steer" | "summary") {
+                if let Some(ref text) = item.content {
+                    let trimmed = text.trim();
+                    let is_handover = trimmed.contains("[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]");
+                    if !trimmed.is_empty() && (item.item_type == "summary" || is_handover) {
+                        let _ = tx.execute(
+                            "DELETE FROM dialog_items WHERE task_id = ?1 AND type = ?2 AND TRIM(content) = ?3 AND id != ?4
+                             AND NOT EXISTS (SELECT 1 FROM dialog_items WHERE id = ?4 AND type = 'deleted')",
+                            params![task_id, item.item_type, trimmed, item.id],
+                        );
+                    }
+                }
+            }
+
             let images_json = match &item.images {
                 Some(imgs) if !imgs.is_empty() => {
                     Some(serde_json::to_string(imgs).map_err(|e| e.to_string())?)

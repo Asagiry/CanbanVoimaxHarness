@@ -193,4 +193,13 @@ describe('Dialog Persistence & Stream Unification (CVH-051)', () => {
     expect(mockInvoke).toHaveBeenCalledWith('clear_task_activity', { taskId });
     expect(useDrawerStore.getState().activityFeed[taskId]).toEqual([]);
   });
+
+  it('dedupes identical handover steer items in feed', () => {
+    const taskId = 'HANDOVER-DEDUP';
+    const store = useDrawerStore.getState();
+    const content = '### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\nSame';
+    store.appendActivityItem(taskId, { id: 'h1', type: 'steer', timestamp: '21:28:52', content });
+    store.appendActivityItem(taskId, { id: 'h2', type: 'steer', timestamp: '21:28:52', content });
+    expect(useDrawerStore.getState().activityFeed[taskId]).toHaveLength(1);
+  });
 });
