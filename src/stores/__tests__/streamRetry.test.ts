@@ -181,4 +181,20 @@ describe('stream attempt rollback', () => {
     buffers.flushTask(taskId);
     expect(useDrawerStore.getState().activityFeed[taskId].map((item) => item.content)).toEqual(['Legacy thought', 'Legacy output']);
   });
+
+  it.each(['user', 'steer'] as const)('keeps intentional repeated %s submissions distinct and upserts their backend confirmation', async (type) => {
+    const store = useDrawerStore.getState();
+    store.appendOutput(taskId, 'Continue', type);
+    store.appendOutput(taskId, 'Continue', type);
+    const optimistic = useDrawerStore.getState().activityFeed[taskId];
+    expect(optimistic).toHaveLength(2);
+    expect(optimistic[0].id).not.toBe(optimistic[1].id);
+    expect(optimistic.map((item) => item.content)).toEqual(['Continue', 'Continue']);
+
+    store.appendActivityItem(taskId, { ...optimistic[1], type: 'steer' });
+    expect(useDrawerStore.getState().activityFeed[taskId]).toHaveLength(2);
+    mockInvoke.mockResolvedValueOnce(optimistic);
+    await store.loadTaskActivity(taskId);
+    expect(useDrawerStore.getState().activityFeed[taskId].map((item) => item.id)).toEqual(optimistic.map((item) => item.id));
+  });
 });

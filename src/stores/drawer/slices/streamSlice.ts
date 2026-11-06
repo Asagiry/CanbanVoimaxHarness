@@ -246,21 +246,8 @@ export const createStreamSlice: StateCreator<
       const activityType: ActivityType =
         type === 'steer' ? 'steer' : type === 'system' ? 'system' : type === 'error' ? 'error' : type === 'user' ? 'user' : 'output';
 
-      // Deduplication guard for consecutive identical steer / user messages
-      if (
-        (activityType === 'steer' || activityType === 'user') &&
-        lastFeedItem &&
-        (lastFeedItem.type === 'steer' || lastFeedItem.type === 'user') &&
-        lastFeedItem.content?.trim() === content.trim()
-      ) {
-        if (images && images.length > 0) {
-          lastFeedItem.images = images;
-        }
-        return state;
-      }
-
-      // Stream coalescing for outputs of same type (output or user) when no images
-      if (!images?.length && last && last.type === type && (type === 'output' || type === 'user')) {
+      // User submissions have their own identity, even when their text repeats.
+      if (!images?.length && last && last.type === type && type === 'output') {
         const updated = [...existing.outputs];
         updated[updated.length - 1] = {
           ...last,

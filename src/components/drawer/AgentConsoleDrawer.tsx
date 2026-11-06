@@ -512,8 +512,14 @@ export default function AgentConsoleDrawer() {
 
     const mainText = trimmed || (images.length > 0 ? 'Изображение прикреплено' : '');
 
-    setActiveAgentTask(task.id, true);
     const isSubagentABoardTask = Boolean(activeSubagentId && useBoardStore.getState().tasks.some((t) => t.id === activeSubagentId));
+    const targetId = isSubagentABoardTask && activeSubagentId ? activeSubagentId : task.id;
+    const targetTask = useBoardStore.getState().tasks.find((item) => item.id === targetId) || task;
+    const targetIsRunning = targetId === task.id
+      ? isRunning
+      : Boolean(useDrawerStore.getState().activeAgentTaskIds[targetId]) ||
+        useAgentSessionStore.getState().isSessionRunning(targetId) || targetTask.status === 'running';
+    setActiveAgentTask(targetId, true);
     if (activeSubagentId && !isSubagentABoardTask) {
       setActiveAgentTask(activeSubagentId, true);
       // Append user steer message into subagent feed
@@ -542,31 +548,35 @@ export default function AgentConsoleDrawer() {
     }
 
     // Append user steer message into feed immediately with attached images
-    const isSteer = isRunning;
-    appendOutput(task.id, mainText, isSteer ? 'steer' : 'user', imageUrls.length > 0 ? imageUrls : undefined);
+    const isSteer = targetIsRunning;
+    appendOutput(targetId, mainText, isSteer ? 'steer' : 'user', imageUrls.length > 0 ? imageUrls : undefined);
+    const optimisticFeed = useDrawerStore.getState().activityFeed[targetId];
+    const messageId = optimisticFeed[optimisticFeed.length - 1].id;
 
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.
-    if (!task.description) {
-      updateTask(task.id, { description: mainText, status: 'running', isTimerRunning: true });
+    if (!targetTask.description) {
+      updateTask(targetId, { description: mainText, status: 'running', isTimerRunning: true });
     } else {
-      updateTask(task.id, { status: 'running', isTimerRunning: true });
+      updateTask(targetId, { status: 'running', isTimerRunning: true });
     }
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await syncTasksBackend(useBoardStore.getState().tasks);
       await invoke('steer_agent', {
-        taskId: task.id,
+        taskId: targetId,
         message: mainText,
+        messageId,
         images: imageUrls.length > 0 ? imageUrls : undefined,
       });
     } catch (err: any) {
       console.info('steer_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');
       setRunError(errMsg);
-      if (!isRunning) {
-        updateTask(task.id, { status: 'idle', isTimerRunning: false });
+      if (!targetIsRunning) {
+        updateTask(targetId, { status: 'idle', isTimerRunning: false });
+        setActiveAgentTask(targetId, false);
       }
     }
   };

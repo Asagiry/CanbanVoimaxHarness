@@ -27,6 +27,30 @@ impl ActivityItem {
     }
 }
 
+pub fn insert_steer_message(root: &Path, task_id: &str, item: &ActivityItem) -> Result<bool, String> {
+    let images = item.images.as_ref().filter(|images| !images.is_empty())
+        .map(serde_json::to_string).transpose().map_err(|e| e.to_string())?;
+    let mut conn = get_db_conn(root).map_err(|e| e.to_string())?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+    let inserted = tx.execute(
+        "INSERT INTO dialog_items (id, task_id, type, content, images_json, timestamp, created_at)
+         VALUES (?1, ?2, 'steer', ?3, ?4, ?5, ?6) ON CONFLICT(id) DO NOTHING",
+        params![item.id, task_id, item.content, images, item.timestamp, chrono::Utc::now().timestamp_millis()],
+    ).map_err(|e| e.to_string())? > 0;
+    if !inserted {
+        let existing: (String, String, Option<String>, Option<String>) = tx.query_row(
+            "SELECT task_id, type, content, images_json FROM dialog_items WHERE id = ?1",
+            params![item.id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        ).map_err(|e| e.to_string())?;
+        if existing.0 != task_id || !matches!(existing.1.as_str(), "user" | "steer")
+            || existing.2 != item.content || existing.3 != images {
+            return Err("Message ID already belongs to a different message".into());
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(inserted)
+}
+
 /// Persists/appends dialog items for a task into SQLite atomically.
 pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -> Result<(), String> {
     if items.is_empty() {

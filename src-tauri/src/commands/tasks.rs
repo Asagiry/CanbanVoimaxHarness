@@ -208,10 +208,11 @@ pub async fn steer_agent(
     task_id: String,
     message: String,
     images: Option<Vec<String>>,
+    message_id: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    runner::steer_agent(task_id, message, images, app_handle, state).await
+    runner::steer_agent(task_id, message, images, message_id, app_handle, state).await
 }
 
 #[tauri::command]

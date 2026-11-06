@@ -2542,27 +2542,15 @@ pub fn persist_steer_message(
     task_id: &str,
     message: &str,
     images: Option<Vec<String>>,
+    message_id: Option<&str>,
 ) -> Result<Option<ActivityItem>, String> {
-    let items = crate::db::load_dialog_items(root, task_id)?;
-    if let Some(existing) = items.iter().rev().take(3).find(|item| {
-        matches!(item.item_type.as_str(), "steer" | "user")
-            && item.content.as_deref().map(str::trim) == Some(message.trim())
-    }) {
-        if existing.images.as_ref().is_none_or(Vec::is_empty) && images.as_ref().is_some_and(|value| !value.is_empty()) {
-            let mut updated = existing.clone();
-            updated.images = images;
-            crate::db::append_dialog_items(root, task_id, std::slice::from_ref(&updated))?;
-            return Ok(Some(updated));
-        }
-        return Ok(None);
-    }
     let item = ActivityItem {
-        id: uuid::Uuid::new_v4().to_string(), item_type: "steer".into(),
+        id: message_id.filter(|id| !id.trim().is_empty()).map(str::to_string)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()), item_type: "steer".into(),
         timestamp: chrono::Utc::now().to_rfc3339(), content: Some(message.to_string()),
         tool: None, duration_ms: None, images,
     };
-    crate::db::append_dialog_items(root, task_id, std::slice::from_ref(&item))?;
-    Ok(Some(item))
+    Ok(crate::db::insert_steer_message(root, task_id, &item)?.then_some(item))
 }
 
 fn drain_pending_steers(
@@ -3046,7 +3034,7 @@ where
     }
 
     if let Some(steer) = config.steer_prompt.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
-        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone()).map_err(anyhow::Error::msg)? {
+        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), None).map_err(anyhow::Error::msg)? {
             if let Some(app) = config.app_handle.as_ref() {
                 let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
                 let _ = app.emit("task:activity", &payload);
@@ -3060,7 +3048,7 @@ where
         .map_err(anyhow::Error::msg)?;
 
     // 1. Check if an existing in-memory context already exists for this task_id
-    let in_memory_context = if saved_context.is_some() || config.steer_prompt.is_some() {
+    let in_memory_context = if saved_context.is_some() || context_cursor > 0 || config.steer_prompt.is_some() {
         None
     } else if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {

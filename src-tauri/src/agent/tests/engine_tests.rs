@@ -1134,7 +1134,7 @@ async fn steer_waits_for_tool_batch_and_survives_closed_gate_resume() {
     tokio::time::timeout(std::time::Duration::from_secs(5), started_rx).await.unwrap().unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     let instruction = "Also inspect the final command output";
-    let (queued, _) = crate::commands::tasks::runner::persist_or_queue_steer(&base, task_id, instruction, None, Some(&active)).unwrap();
+    let (queued, _) = crate::commands::tasks::runner::persist_or_queue_steer(&base, task_id, instruction, None, Some("steer-first"), Some(&active)).unwrap();
     assert!(queued);
     assert!(!abort.load(Ordering::SeqCst));
     tokio::time::timeout(std::time::Duration::from_secs(10), running).await.unwrap().unwrap().unwrap();
@@ -1150,13 +1150,23 @@ async fn steer_waits_for_tool_batch_and_survives_closed_gate_resume() {
     assert!(steer_index > second_result);
     assert_eq!(saved.messages.iter().filter(|message| message.content.as_deref().unwrap_or("").contains(instruction)).count(), 1);
 
-    let late = "Follow up after the completed response";
-    let (queued, _) = crate::commands::tasks::runner::persist_or_queue_steer(&base, task_id, late, None, Some(&active)).unwrap();
+    let images = vec!["data:image/png;base64,new-image".to_string()];
+    let (queued, inserted) = crate::commands::tasks::runner::persist_or_queue_steer(&base, task_id, instruction, Some(images.clone()), Some("steer-repeated"), Some(&active)).unwrap();
     assert!(!queued);
-    run_agent_loop(config_for(Arc::new(Mutex::new(AgentSteering::default())), Some(late.into())), Arc::new(AtomicBool::new(false)), |_| {}).await.unwrap();
+    assert!(inserted.is_some());
+    let (_, duplicate) = crate::commands::tasks::runner::persist_or_queue_steer(&base, task_id, instruction, Some(images.clone()), Some("steer-repeated"), Some(&active)).unwrap();
+    assert!(duplicate.is_none());
+    run_agent_loop(config_for(Arc::new(Mutex::new(AgentSteering::default())), None), Arc::new(AtomicBool::new(false)), |_| {}).await.unwrap();
     let resumed = crate::db::load_conversation_context(&base, task_id).unwrap().unwrap();
-    assert_eq!(resumed.messages.iter().filter(|message| message.content.as_deref().unwrap_or("").contains(late)).count(), 1);
-    assert_eq!(resumed.messages.iter().filter(|message| message.content.as_deref().unwrap_or("").contains(instruction)).count(), 1);
+    assert_eq!(resumed.messages.iter().filter(|message| message.text_content().unwrap_or("").contains(instruction)).count(), 2);
+    assert_eq!(resumed.messages.iter().filter(|message| message.has_images()).count(), 1);
+    assert!(persist_steer_message(&base, task_id, instruction, Some(images.clone()), Some("steer-repeated")).unwrap().is_none());
+    assert!(crate::db::load_dialog_items_after(&base, task_id, resumed.dialog_cursor).unwrap().iter().all(|item| item.id != "steer-repeated"));
+    assert!(persist_steer_message(&base, task_id, instruction, Some(images), Some("steer-first")).is_err());
+    let direct = "A fresh direct run instruction";
+    run_agent_loop(config_for(Arc::new(Mutex::new(AgentSteering::default())), Some(direct.into())), Arc::new(AtomicBool::new(false)), |_| {}).await.unwrap();
+    let direct_context = crate::db::load_conversation_context(&base, task_id).unwrap().unwrap();
+    assert_eq!(direct_context.messages.iter().filter(|message| message.text_content().unwrap_or("").contains(direct)).count(), 1);
     server.abort();
 }
 

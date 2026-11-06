@@ -686,6 +686,7 @@ export const createActivitySlice: StateCreator<
 
                 if (
                   prev &&
+                  item.id === prev.id &&
                   (item.type === 'steer' || item.type === 'user') &&
                   (prev.type === 'steer' || prev.type === 'user') &&
                   item.content?.trim() === prev.content?.trim()
@@ -1086,7 +1087,7 @@ export const createActivitySlice: StateCreator<
         updatedFeed = [...feed];
         updatedFeed[idx] = { ...feed[idx], ...item };
       } else {
-        const duplicateIdx = streamed ? -1 : feed.findIndex(
+        const duplicateIdx = streamed || item.type === 'user' || item.type === 'steer' ? -1 : feed.findIndex(
           (f) =>
             !/:(thought|output)$/.test(f.id) &&
             f.type === item.type &&
