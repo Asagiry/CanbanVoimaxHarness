@@ -23,6 +23,7 @@
   "contextWindow": 256000,
   "icon": "Cpu",
   "maxTokens": 8192,
-  "model": "gemini-3.8-flash-high",
-  "temperature": 0.2
+  "model": "crouton-alpha-free",
+  "temperature": 0.2,
+  "reasoningEffort": "medium"
 }

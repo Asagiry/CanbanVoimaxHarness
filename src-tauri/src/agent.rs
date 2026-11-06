@@ -3336,7 +3336,8 @@ where
 
     let llm_client = LlmClient::for_conversation(&config.repo_root, &config.task_id);
     let mut context_revision = local_compaction_rev;
-    let mut completion_reminder_sent = false;
+    const MAX_COMPLETION_NUDGES: usize = 3;
+    let mut completion_nudges: usize = 0;
 
     // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
     // через терминальный ответ модели (текст без тул-коллов), abort_flag
@@ -3374,7 +3375,7 @@ where
         }
 
         if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
-            completion_reminder_sent = false;
+            completion_nudges = 0;
         }
 
         // State-Preserving Dynamic Context Compactor:
@@ -3447,7 +3448,7 @@ where
 
                     let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive);
                     if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
-                        completion_reminder_sent = false;
+                        completion_nudges = 0;
                     }
                     let _ = app.emit(
                         "agent:tool_call",
@@ -3553,7 +3554,7 @@ where
         let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
         if context_revision != local_compaction_rev {
             if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
-                completion_reminder_sent = false;
+                completion_nudges = 0;
             }
             context_revision = local_compaction_rev;
         }
@@ -3707,32 +3708,71 @@ Endpoint: {}
             crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                 .await.map_err(anyhow::Error::msg)?;
             sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
-            let unfinished = active_tool_names.iter().any(|name| name == "todo_write")
-                && crate::db::db_has_unfinished_todos(&config.repo_root, &config.task_id)
-                    .map_err(anyhow::Error::msg)?;
-            let (steer_appended, user_instruction) = drain_pending_steers(&config, &mut messages, &mut context_cursor, !unfinished || completion_reminder_sent)?;
+            let unfinished_todos = if active_tool_names.iter().any(|name| name == "todo_write") {
+                crate::db::db_get_todos(&config.repo_root, &config.task_id)
+                    .map_err(anyhow::Error::msg)?
+            } else {
+                Vec::new()
+            };
+            let unfinished = !unfinished_todos.is_empty();
+            let (steer_appended, user_instruction) = drain_pending_steers(
+                &config,
+                &mut messages,
+                &mut context_cursor,
+                !unfinished || completion_nudges >= MAX_COMPLETION_NUDGES,
+            )?;
             if steer_appended {
-                if user_instruction { completion_reminder_sent = false; }
+                if user_instruction {
+                    completion_nudges = 0;
+                }
                 sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                 crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                     .await.map_err(anyhow::Error::msg)?;
                 continue;
             }
             if unfinished {
-                if !completion_reminder_sent {
-                    completion_reminder_sent = true;
-                    messages.push(ChatMessage::user(
-                        "[Runtime completion check] Your task checklist still has unfinished items. \
-                         Continue the requested work using tools, then update the checklist and perform any required handoff. \
-                         Do not mark items completed unless the work is done. If blocked, use question when available \
-                         or explain the concrete blocker. This reminder is sent only once until another user instruction arrives.",
-                    ));
+                let items_list = unfinished_todos
+                    .iter()
+                    .map(|t| format!("- [{}] {}", t.status, t.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if completion_nudges < MAX_COMPLETION_NUDGES {
+                    completion_nudges += 1;
+                    let reminder = format!(
+                        "[Runtime completion check] ({}/{})\n\
+                         Your task checklist still has {} unfinished item(s):\n{}\n\
+                         Final plain-text responses without tool calls are prohibited while items remain unfinished. \
+                         Your next step MUST be a tool call: execute the remaining work, update `todo_write`, \
+                         and call `advance_task` once all deliverables are verified. If blocked, use `question` or state the concrete blocker.",
+                        completion_nudges,
+                        MAX_COMPLETION_NUDGES,
+                        unfinished_todos.len(),
+                        items_list
+                    );
+                    messages.push(ChatMessage::user(reminder));
                     sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                     crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                         .await.map_err(anyhow::Error::msg)?;
                     continue;
                 }
-                bail!("Модель завершила ответ без вызова инструментов, но в плане остались незавершённые пункты. Автопродолжение в этом запуске уже использовано. Ответ и изменения сохранены; отправьте уточнение или продолжите задачу.");
+                let warn_banner = format!(
+                    "\n\n> ⚠️ **План не закрыт ({} пункт(ов) осталось незавершёнными):**\n{}",
+                    unfinished_todos.len(),
+                    unfinished_todos
+                        .iter()
+                        .map(|t| format!("> - `[{}]` {}", t.status, t.content))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+                let final_with_warning = if turn_content.trim().is_empty() {
+                    warn_banner.trim_start().to_string()
+                } else {
+                    format!("{}{}", turn_content, warn_banner)
+                };
+                event_sink(AgentEvent::Finished {
+                    final_response: final_with_warning.clone(),
+                });
+                return Ok(final_with_warning);
             }
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),

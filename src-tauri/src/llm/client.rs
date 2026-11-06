@@ -164,12 +164,26 @@ impl LlmClient {
         self.prefix.lock().map_err(|_| anyhow::anyhow!("Prompt cache tracker lock poisoned"))?
             .observe(&request)?;
 
-        let endpoint = if base_url.ends_with("/chat/completions") {
+        let use_responses = super::cache::uses_responses_api(base_url, &request.model);
+        let endpoint = if use_responses {
+            if base_url.ends_with("/responses") {
+                base_url.to_string()
+            } else if base_url.ends_with('/') {
+                format!("{}responses", base_url)
+            } else {
+                format!("{}/responses", base_url)
+            }
+        } else if base_url.ends_with("/chat/completions") {
             base_url.to_string()
         } else if base_url.ends_with('/') {
             format!("{}chat/completions", base_url)
         } else {
             format!("{}/chat/completions", base_url)
+        };
+        let body_json = if use_responses {
+            super::cache::build_responses_payload(&request)
+        } else {
+            serde_json::to_value(&request)?
         };
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -191,7 +205,7 @@ impl LlmClient {
                 .client
                 .post(&endpoint)
                 .headers(headers.clone())
-                .json(&request);
+                .json(&body_json);
 
             let response = tokio::select! {
                 _ = tx.closed() => return Ok(()),
@@ -252,6 +266,7 @@ impl LlmClient {
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
         let mut first_chunk_sent = false;
+        let mut streamed_reasoning_delta = false;
         let mut pending_usage: Option<StreamChunk> = None;
         let mut terminal_marker = false;
         let mut stream_error = None;
@@ -285,6 +300,32 @@ impl LlmClient {
                         .any(|path| payload.pointer(path).and_then(|value| value.as_str()) == Some("max_tokens"))
                     {
                         stream_error.get_or_insert_with(|| "LLM response incomplete: max_tokens".to_string());
+                    }
+
+                    if let Some(ev_type) = payload
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .filter(|t| t.starts_with("response."))
+                    {
+                        if !first_chunk_sent {
+                            first_chunk_sent = true;
+                            let _ = tx.send(StreamChunk::FirstChunk).await;
+                        }
+                        Self::handle_responses_sse_event(
+                            ev_type,
+                            &payload,
+                            tx,
+                            &mut tool_calls_in_progress,
+                            &mut pending_usage,
+                            &mut terminal_marker,
+                            &mut stream_error,
+                            &mut streamed_reasoning_delta,
+                        )
+                        .await;
+                        if stream_error.is_some() {
+                            break;
+                        }
+                        continue;
                     }
 
                     if let Ok(chunk) = serde_json::from_value::<OpenAIChatChunk>(payload) {
@@ -427,6 +468,127 @@ impl LlmClient {
 
         let _ = tx.send(StreamChunk::Done).await;
         Ok(None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn handle_responses_sse_event(
+        ev_type: &str,
+        payload: &serde_json::Value,
+        tx: &Sender<StreamChunk>,
+        tool_calls_in_progress: &mut HashMap<usize, (String, String, String)>,
+        pending_usage: &mut Option<StreamChunk>,
+        terminal_marker: &mut bool,
+        stream_error: &mut Option<String>,
+        streamed_reasoning_delta: &mut bool,
+    ) {
+        match ev_type {
+            "response.output_text.delta" => {
+                if let Some(delta) = payload.get("delta").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                    let _ = tx.send(StreamChunk::Token(delta.to_string())).await;
+                }
+            }
+            "response.reasoning_summary_text.delta" | "response.reasoning_text.delta" => {
+                if let Some(delta) = payload.get("delta").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                    *streamed_reasoning_delta = true;
+                    let _ = tx.send(StreamChunk::Thought(delta.to_string())).await;
+                }
+            }
+            "response.output_item.added" => {
+                if payload.pointer("/item/type").and_then(|v| v.as_str()) == Some("function_call") {
+                    let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    let call_id = payload
+                        .pointer("/item/call_id")
+                        .or_else(|| payload.pointer("/item/id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let name = payload
+                        .pointer("/item/name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let entry = tool_calls_in_progress
+                        .entry(idx)
+                        .or_insert_with(|| (String::new(), String::new(), String::new()));
+                    if !call_id.is_empty() {
+                        entry.0 = call_id;
+                    }
+                    if !name.is_empty() {
+                        entry.1 = name;
+                    }
+                }
+            }
+            "response.function_call_arguments.delta" => {
+                let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                if let Some(delta) = payload.get("delta").and_then(|v| v.as_str()) {
+                    tool_calls_in_progress
+                        .entry(idx)
+                        .or_insert_with(|| (String::new(), String::new(), String::new()))
+                        .2
+                        .push_str(delta);
+                }
+            }
+            "response.output_item.done" => {
+                let item_type = payload.pointer("/item/type").and_then(|v| v.as_str());
+                if item_type == Some("function_call") {
+                    let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    let entry = tool_calls_in_progress
+                        .entry(idx)
+                        .or_insert_with(|| (String::new(), String::new(), String::new()));
+                    if entry.0.is_empty() {
+                        if let Some(cid) = payload
+                            .pointer("/item/call_id")
+                            .or_else(|| payload.pointer("/item/id"))
+                            .and_then(|v| v.as_str())
+                        {
+                            entry.0 = cid.to_string();
+                        }
+                    }
+                    if entry.1.is_empty() {
+                        if let Some(name) = payload.pointer("/item/name").and_then(|v| v.as_str()) {
+                            entry.1 = name.to_string();
+                        }
+                    }
+                    if entry.2.is_empty() {
+                        if let Some(args) = payload.pointer("/item/arguments").and_then(|v| v.as_str()) {
+                            entry.2 = args.to_string();
+                        }
+                    }
+                } else if item_type == Some("reasoning") && !*streamed_reasoning_delta {
+                    if let Some(summary) = payload.pointer("/item/summary").and_then(|v| v.as_array()) {
+                        for part in summary {
+                            if let Some(text) = part.get("text").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                                let _ = tx.send(StreamChunk::Thought(text.to_string())).await;
+                            }
+                        }
+                    }
+                }
+            }
+            "response.completed" => {
+                *terminal_marker = true;
+                if let Some(usage) = payload.pointer("/response/usage") {
+                    let input_tokens = extract_openai_input_tokens(usage);
+                    let output_tokens = extract_openai_output_tokens(usage);
+                    let cache_read = extract_openai_cache_read(usage);
+                    let cache_creation = extract_openai_cache_creation(usage);
+                    *pending_usage = Some(StreamChunk::Usage {
+                        input_tokens,
+                        output_tokens,
+                        cache_read_tokens: cache_read,
+                        cache_creation_tokens: cache_creation,
+                    });
+                }
+            }
+            "response.failed" | "response.incomplete" => {
+                let msg = payload
+                    .pointer("/response/error/message")
+                    .or_else(|| payload.pointer("/response/incomplete_details/reason"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(ev_type);
+                *stream_error = Some(format!("LLM response error: {msg}"));
+            }
+            _ => {}
+        }
     }
 }
 
@@ -704,7 +866,9 @@ mod tests {
         let captured = tokio::time::timeout(std::time::Duration::from_secs(3), server).await.unwrap().unwrap();
         for (headers, body) in &captured[..2] {
             assert!(headers.contains("x-opencode-session:"));
-            assert!(headers.contains("user-agent: canbanvoimaxharness/"));
+            assert!(headers.contains("x-opencode-client: desktop"));
+            assert!(headers.contains("user-agent: opencode/latest/2.2.5/desktop"));
+            assert!(headers.contains("accept: */*"));
             assert!(body["messages"].as_array().unwrap().iter().all(|message| message.get("cache_control").is_none()));
             assert_eq!(body["stream_options"]["include_usage"], true);
             assert_eq!(body["reasoning_effort"], "low");
@@ -833,5 +997,96 @@ mod tests {
         };
         let serialized = serde_json::to_string(&req).unwrap();
         assert!(serialized.contains(r#""stream_options":{"include_usage":true}"#));
+    }
+
+    #[tokio::test]
+    async fn test_opencode_responses_api_for_crouton_streams_tools_and_reasoning() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let (headers, body_start, length) = loop {
+                let count = socket.read(&mut buffer).await.unwrap();
+                assert_ne!(count, 0);
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8(bytes[..end].to_vec()).unwrap().to_lowercase();
+                    let length: usize = headers.lines().find_map(|line| line.strip_prefix("content-length: "))
+                        .unwrap().parse().unwrap();
+                    break (headers, end + 4, length);
+                }
+            };
+            while bytes.len() < body_start + length {
+                let count = socket.read(&mut buffer).await.unwrap();
+                assert_ne!(count, 0);
+                bytes.extend_from_slice(&buffer[..count]);
+            }
+            let body: serde_json::Value = serde_json::from_slice(&bytes[body_start..body_start + length]).unwrap();
+            let sse = concat!(
+                "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Thinking step\"}]}}\n\n",
+                "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Checking file\"}\n\n",
+                "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"call_id\":\"call_99\",\"name\":\"read_file\"}}\n\n",
+                "data: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":1,\"delta\":\"{\\\"path\\\":\\\"src/main.rs\\\"}\"}\n\n",
+                "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":23508,\"output_tokens\":42,\"input_tokens_details\":{\"cached_tokens\":20000}}}}\n\n",
+            );
+            socket.write_all(format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                sse.len(), sse
+            ).as_bytes()).await.unwrap();
+            (headers, body)
+        });
+
+        let client = LlmClient {
+            client: reqwest::Client::builder().no_proxy().resolve("opencode.ai", address).build().unwrap(),
+            ..LlmClient::new()
+        };
+        let request = OpenAIChatRequest {
+            model: "crouton-alpha-free".into(),
+            messages: vec![
+                ChatMessage::system("sys prompt"),
+                ChatMessage::user("hello"),
+                ChatMessage::assistant(Some("Reading".into()), Some(vec![ToolCall {
+                    id: "call_1".into(),
+                    call_type: "function".into(),
+                    function: FunctionCall { name: "read_file".into(), arguments: "{\"path\":\"a.rs\"}".into() },
+                }])),
+                ChatMessage::tool_response("call_1", "file content"),
+            ],
+            temperature: Some(0.2),
+            stream: true,
+            tools: None,
+            reasoning_effort: Some("medium".into()),
+            stream_options: Some(StreamOptions { include_usage: true }),
+        };
+        let endpoint = format!("http://opencode.ai:{}/inference/go/openai/v1", address.port());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        let events_task = tokio::spawn(async move {
+            let mut events = Vec::new();
+            while let Some(event) = rx.recv().await { events.push(event); }
+            events
+        });
+
+        tokio::time::timeout(std::time::Duration::from_secs(3), client.stream_openai(&endpoint, Some("k"), request, tx))
+            .await.unwrap().unwrap();
+        let (headers, body) = tokio::time::timeout(std::time::Duration::from_secs(3), server).await.unwrap().unwrap();
+        let events = tokio::time::timeout(std::time::Duration::from_secs(3), events_task).await.unwrap().unwrap();
+
+        assert!(headers.starts_with("post /inference/go/openai/v1/responses http/1.1"));
+        assert!(headers.contains("x-opencode-client: desktop"));
+        assert!(headers.contains("user-agent: opencode/latest/2.2.5/desktop"));
+        assert_eq!(body["instructions"], "sys prompt");
+        assert_eq!(body["reasoning"]["effort"], "medium");
+        let input = body["input"].as_array().unwrap();
+        assert!(input.iter().any(|item| item["type"] == "function_call" && item["call_id"] == "call_1"));
+        assert!(input.iter().any(|item| item["type"] == "function_call_output" && item["call_id"] == "call_1"));
+
+        assert!(events.iter().any(|e| matches!(e, StreamChunk::Thought(t) if t.contains("Thinking step"))));
+        assert!(events.iter().any(|e| matches!(e, StreamChunk::Token(t) if t == "Checking file")));
+        assert!(events.iter().any(|e| matches!(e, StreamChunk::ToolCall { id, name, arguments, .. } if id == "call_99" && name == "read_file" && arguments == "{\"path\":\"src/main.rs\"}")));
+        assert!(events.iter().any(|e| matches!(e, StreamChunk::Usage { input_tokens: 23508, output_tokens: 42, cache_read_tokens: 20000, .. })));
+        assert!(matches!(events.last(), Some(StreamChunk::Done)));
     }
 }

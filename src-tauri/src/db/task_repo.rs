@@ -705,6 +705,26 @@ pub fn db_complete_all_todos(root: &Path, task_id: &str) -> Result<Option<Vec<To
     }
 }
 
+/// Returns all unfinished todos (`status != 'completed'`) for a task ordered by `order_idx`.
+pub fn db_get_todos(root: &Path, task_id: &str) -> Result<Vec<TodoItem>, String> {
+    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, content, status FROM task_todos WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND status != 'completed' ORDER BY order_idx ASC",
+        )
+        .map_err(|e| format!("Failed to prepare select todos: {}", e))?;
+    let rows = stmt
+        .query_map(params![task_id], |r| {
+            Ok(TodoItem {
+                id: r.get(0)?,
+                content: r.get(1)?,
+                status: r.get(2)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query task_todos: {}", e))?;
+    Ok(rows.flatten().collect())
+}
+
 /// Checks whether a task has any unfinished todos in SQLite.
 pub fn db_has_unfinished_todos(root: &Path, task_id: &str) -> Result<bool, String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;

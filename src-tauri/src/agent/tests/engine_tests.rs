@@ -1236,11 +1236,17 @@ async fn test_unfinished_todos_get_only_one_completion_reminder() {
             config, Arc::new(AtomicBool::new(false)), move |event| captured.lock().unwrap().push(event),
         )).await.unwrap();
         server.abort();
-        assert_eq!(counter.load(Ordering::SeqCst), if pending { 2 } else { 1 });
-        assert_eq!(result.is_err(), pending);
-        assert_eq!(events.lock().unwrap().iter().any(|event| matches!(event, AgentEvent::Finished { .. })), !pending);
+        assert_eq!(counter.load(Ordering::SeqCst), if pending { 4 } else { 1 });
+        assert!(result.is_ok());
+        assert!(events.lock().unwrap().iter().any(|event| matches!(event, AgentEvent::Finished { .. })));
         let saved = crate::db::load_conversation_context(&base, "CVH-069").unwrap().unwrap();
-        assert_eq!(saved.messages.iter().filter(|msg| msg.content.as_deref().unwrap_or("").contains("[Runtime completion check]")).count(), usize::from(pending));
+        let reminders: Vec<_> = saved.messages.iter().filter(|msg| msg.content.as_deref().unwrap_or("").contains("[Runtime completion check]")).collect();
+        assert_eq!(reminders.len(), if pending { 3 } else { 0 });
+        if pending {
+            assert!(reminders[0].content.as_deref().unwrap_or("").contains("Implement the requested feature"));
+            assert!(reminders[0].content.as_deref().unwrap_or("").contains("advance_task"));
+            assert!(result.unwrap().contains("План не закрыт"));
+        }
         assert_eq!(saved.messages.last().unwrap().content.as_deref(), Some("I am inspecting the code."));
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

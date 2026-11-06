@@ -1,6 +1,6 @@
 {
   "apiBaseUrl": "http://127.0.0.1:8045/v1",
-  "defaultModel": "gemini-3.8-flash-high",
+  "defaultModel": "crouton-alpha-free",
   "description": "CanbanVoimaxHarness Workspace for CanbanVoimaxHarness",
   "name": "CanbanVoimaxHarness",
   "version": "0.1.0"
