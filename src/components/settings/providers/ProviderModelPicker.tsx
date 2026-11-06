@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckSquare, Cpu, Search, Square, X } from 'lucide-react';
 import { useTranslation } from '../../../stores/languageStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import type { ProviderModel } from '../../../stores/settings/providers';
 
 interface ProviderModelPickerProps {
@@ -13,8 +15,16 @@ interface ProviderModelPickerProps {
 
 export default function ProviderModelPicker({ open, candidates, existing, onClose, onAdd }: ProviderModelPickerProps) {
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
   const [searchFilter, setSearchFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set(candidates));
+
+  useEffect(() => {
+    if (open) {
+      setSearchFilter('');
+      setSelected(new Set(candidates));
+    }
+  }, [open, candidates]);
 
   const filtered = useMemo(() => {
     if (!searchFilter.trim()) return candidates;
@@ -34,8 +44,8 @@ export default function ProviderModelPicker({ open, candidates, existing, onClos
     });
   };
 
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4">
+  const modal = (
+    <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4">
       <div className="relative flex flex-col w-[520px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5]">
         <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
           <div className="flex items-center space-x-2">
@@ -114,4 +124,6 @@ export default function ProviderModelPicker({ open, candidates, existing, onClos
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

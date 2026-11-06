@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, Check, Cpu, X } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -6,7 +7,7 @@ import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import { showTestNotification } from '../../services/notificationService';
 import ProviderList from './providers/ProviderList';
 import ProviderEditor from './providers/ProviderEditor';
-import { toProviderIdValue, type Provider } from '../../stores/settings/providers';
+import { useProviderEditorState } from './providers/useProviderEditorState';
 
 export function NotificationToggle({
   checked,
@@ -54,10 +55,12 @@ export default function SettingsModal() {
 
   const [activeTab, setActiveTab] = useState<'llm' | 'notifications'>('llm');
   const [testNotifSent, setTestNotifSent] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const { editingProvider, openEditor, openNewProvider, closeEditor } = useProviderEditorState();
   const { t } = useTranslation();
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const testNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const savedScrollRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -65,6 +68,15 @@ export default function SettingsModal() {
       if (testNotifTimerRef.current) clearTimeout(testNotifTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (editingProvider) {
+      savedScrollRef.current = bodyScrollRef.current?.scrollTop ?? 0;
+      if (bodyScrollRef.current) bodyScrollRef.current.scrollTop = 0;
+    } else if (bodyScrollRef.current) {
+      bodyScrollRef.current.scrollTop = savedScrollRef.current;
+    }
+  }, [editingProvider]);
 
   if (!isOpen) return null;
 
@@ -79,16 +91,7 @@ export default function SettingsModal() {
   };
 
   const handleAddProvider = () => {
-    const id = toProviderIdValue(`custom-${providers.length + 1}`);
-    setEditingProvider({
-      id,
-      name: 'custom',
-      isCustom: true,
-      apiKey: '',
-      baseUrl: '',
-      protocol: 'openai',
-      models: [],
-    });
+    openNewProvider(providers);
   };
 
   const handleTestNotification = async () => {
@@ -101,10 +104,10 @@ export default function SettingsModal() {
     }, 2000);
   };
 
-  return (
+  const modal = (
     <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
-      <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
-        <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
+      <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
+        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
           <div className="flex items-center space-x-2">
             <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.title')}</h2>
           </div>
@@ -117,7 +120,7 @@ export default function SettingsModal() {
           </button>
         </div>
 
-        <div className="flex border-b border-[#ebebeb] dark:border-[#212126] mt-2">
+        <div className="flex shrink-0 border-b border-[#ebebeb] dark:border-[#212126] mt-2">
           <button
             type="button"
             onClick={() => setActiveTab('llm')}
@@ -144,16 +147,21 @@ export default function SettingsModal() {
           </button>
         </div>
 
+        <div ref={bodyScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
           {activeTab === 'llm' ? (
             editingProvider ? (
-              <ProviderEditor
-                provider={editingProvider}
-                onCancel={() => setEditingProvider(null)}
-                onSaved={() => setEditingProvider(null)}
-              />
+              <div key="editor" className="animate-in fade-in slide-in-from-bottom-1 duration-150">
+                <ProviderEditor
+                  provider={editingProvider}
+                  onCancel={closeEditor}
+                  onSaved={closeEditor}
+                />
+              </div>
             ) : (
-              <ProviderList onEdit={(provider) => setEditingProvider(provider)} onAdd={handleAddProvider} />
+              <div key="list" className="animate-in fade-in slide-in-from-bottom-1 duration-150">
+                <ProviderList onEdit={openEditor} onAdd={handleAddProvider} />
+              </div>
             )
           ) : (
             <div className="space-y-4 py-1">
@@ -225,7 +233,8 @@ export default function SettingsModal() {
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126]">
+          {!editingProvider && (
+          <div className="flex shrink-0 items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126]">
             <button
               type="button"
               onClick={closeSettings}
@@ -248,8 +257,12 @@ export default function SettingsModal() {
               )}
             </button>
           </div>
+          )}
         </form>
+        </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

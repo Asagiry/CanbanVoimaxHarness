@@ -297,6 +297,7 @@ export const ru = {
   'settings.providers.modelIdRequired': 'ID модели обязателен',
   'settings.providers.deleteConfirm': 'Удалить поставщика «{name}»?',
   'settings.providers.openConfig': 'Открыть файл конфигурации',
+  'settings.providers.noModelsYet': 'Моделей пока нет',
   'settings.title': 'Настройки LLM',
   'settings.provider': 'Провайдер',
   'settings.gatewayUrl': 'API Gateway URL',

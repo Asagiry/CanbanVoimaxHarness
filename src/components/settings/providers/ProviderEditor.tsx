@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
@@ -10,6 +10,16 @@ interface ProviderEditorProps {
   provider: Provider;
   onCancel: () => void;
   onSaved: () => void;
+}
+
+type EditorModel = ProviderModel & { uid: string };
+
+function withUid(model: ProviderModel): EditorModel {
+  return { ...model, uid: crypto.randomUUID() };
+}
+
+function isNewCustomProvider(provider: Provider): boolean {
+  return provider.isCustom && !provider.apiKey && provider.models.length === 0;
 }
 
 const PROTOCOLS: { value: ProviderProtocol; labelKey: string }[] = [
@@ -29,8 +39,8 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl);
   const [protocol, setProtocol] = useState<ProviderProtocol>(provider.protocol);
-  const [models, setModels] = useState<ProviderModel[]>(provider.models);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
+  const [models, setModels] = useState<EditorModel[]>(() => provider.models.map(withUid));
+  const [advancedOpen, setAdvancedOpen] = useState(() => !isNewCustomProvider(provider));
   const [error, setError] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [fetchedCandidates, setFetchedCandidates] = useState<string[]>([]);
@@ -41,12 +51,17 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
   const urlId = useId();
   const protocolId = useId();
 
+  const providerIdRef = useRef(provider.id);
+
   useEffect(() => {
+    if (providerIdRef.current === provider.id) return;
+    providerIdRef.current = provider.id;
     setName(provider.name);
     setApiKey('');
     setBaseUrl(provider.baseUrl);
     setProtocol(provider.protocol);
-    setModels(provider.models);
+    setModels(provider.models.map(withUid));
+    setAdvancedOpen(!isNewCustomProvider(provider));
     setError(null);
   }, [provider]);
 
@@ -69,7 +84,7 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
     setApiKey('');
     setBaseUrl(provider.baseUrl);
     setProtocol(provider.protocol);
-    setModels(provider.models);
+    setModels(provider.models.map(withUid));
     setError(null);
   };
 
@@ -138,6 +153,7 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
         <input
           id="provider-api-key"
           type="password"
+          autoFocus={isNewCustomProvider(provider)}
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder={t('settings.providers.apiKeyPlaceholder')}
@@ -155,8 +171,12 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
         {t('settings.providers.advanced')}
       </button>
 
-      {advancedOpen && (
-        <div className="space-y-3">
+      <div
+        className={`grid transition-all duration-150 ease-out ${advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+        aria-hidden={!advancedOpen}
+      >
+        <div className="overflow-hidden">
+        <div className="space-y-3 pt-1">
           <div className="space-y-1">
             <label htmlFor={nameId} className="block text-xs font-medium text-[#4d4d4d] dark:text-[#71717a] font-sans">
               {t('settings.providers.displayName')}
@@ -226,20 +246,24 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
                 </button>
               </div>
             </div>
+            {models.length === 0 ? (
+              <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-sans">{t('settings.providers.noModelsYet')}</p>
+            ) : (
             <div className="space-y-2">
               {models.map((model, index) => (
                 <ProviderModelRow
-                  key={`${index}-${model.id}`}
+                  key={model.uid}
                   model={model}
                   index={index}
-                  onChange={(i, next) => setModels((prev) => prev.map((m, idx) => (idx === i ? next : m)))}
+                  onChange={(i, next) => setModels((prev) => prev.map((m, idx) => (idx === i ? { ...next, uid: m.uid } : m)))}
                   onDelete={(i) => setModels((prev) => prev.filter((_, idx) => idx !== i))}
                 />
               ))}
             </div>
+            )}
             <button
               type="button"
-              onClick={() => setModels((prev) => [...prev, { id: '' }])}
+              onClick={() => setModels((prev) => [...prev, { id: '', uid: crypto.randomUUID() }])}
               className="flex items-center gap-1.5 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] px-2.5 py-1.5 text-xs text-[#171717] dark:text-[#f4f4f5] font-sans cursor-pointer hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23]"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -247,7 +271,8 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
             </button>
           </div>
         </div>
-      )}
+        </div>
+      </div>
 
       {error && <p className="text-xs text-red-600 dark:text-red-400 font-sans">{error}</p>}
 
@@ -278,7 +303,7 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
           setModels((prev) => {
             const next = [...prev];
             for (const id of selected) {
-              if (!next.some((m) => m.id === id)) next.push({ id });
+              if (!next.some((m) => m.id === id)) next.push({ id, uid: crypto.randomUUID() });
             }
             return next;
           });

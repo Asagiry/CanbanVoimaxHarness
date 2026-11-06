@@ -295,6 +295,7 @@ export const en = {
   'settings.providers.modelIdRequired': 'Model id is required',
   'settings.providers.deleteConfirm': 'Delete provider "{name}"?',
   'settings.providers.openConfig': 'Open configuration file',
+  'settings.providers.noModelsYet': 'No models yet',
   'settings.title': 'LLM Settings',
   'settings.provider': 'Provider',
   'settings.gatewayUrl': 'API Gateway URL',
