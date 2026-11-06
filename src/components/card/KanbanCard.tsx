@@ -23,11 +23,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore(useShallow((s) => s.columns));
-  // Invariant § 2.22 & Defect 10: Targeted selector prevents cascading board re-renders on unrelated question updates
-  const directQuestion = useBoardStore((s) => s.activeQuestions[task.id]);
-  const subtaskQuestion = useBoardStore((s) => (task.waitingForSubtaskId ? s.activeQuestions[task.waitingForSubtaskId] : undefined));
-  const activeQuestion = directQuestion || subtaskQuestion;
-  const activeQuestionTargetId = directQuestion ? task.id : task.waitingForSubtaskId;
+  // Invariant: Badge only on the asking card (exact key match). Never mirror via waitingForSubtaskId.
+  const activeQuestion = useBoardStore((s) => s.activeQuestions[task.id]);
+  const activeQuestionTargetId = task.id;
   const { t } = useTranslation();
 
   const isHighlighted = useBoardStore((s) => {
