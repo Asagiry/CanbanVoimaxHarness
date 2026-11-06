@@ -5,7 +5,6 @@ import { useCortexStore } from '../../stores/cortexStore';
 import {
   Bot,
   Brain,
-  Thermometer,
   Maximize2,
   AlertTriangle,
   Code2,
@@ -15,6 +14,11 @@ import {
 import type { ReasoningEffort } from '../../types';
 import { REASONING_EFFORTS, normalizeReasoningEffort } from '../../types';
 import type { TranslationKey } from '../../i18n/types';
+import {
+  catalogModelOptions,
+  type CatalogModelOption,
+  type Provider,
+} from '../../stores/settings/providers';
 
 const REASONING_EFFORT_LABELS: Record<ReasoningEffort, TranslationKey> = {
   off: 'ruleEditor.reasoningOff',
@@ -41,7 +45,6 @@ export interface AgentSettingVisualEditorProps {
 
 export interface ParsedSetting {
   model: string | null;
-  temperature: number;
   reasoningEffort: ReasoningEffort;
   contextWindow: number;
   maxTokens: number;
@@ -66,6 +69,29 @@ const MAX_TOKENS_CHIPS = [
   { value: 65536, label: '64K' },
 ];
 
+export function buildDynamicModelOptions(
+  providers: Provider[],
+  settingsModel?: string | null,
+): CatalogModelOption[] {
+  const catalog = catalogModelOptions(providers);
+  const seen = new Set(catalog.map((o) => o.id));
+  const extra: CatalogModelOption[] = [];
+  if (settingsModel && typeof settingsModel === 'string') {
+    const trimmed = settingsModel.trim();
+    if (trimmed && trimmed !== 'inherit' && !seen.has(trimmed)) {
+      extra.push({ id: trimmed, label: trimmed });
+    }
+  }
+  const sorted = [...catalog].sort((a, b) => {
+    const byProvider = (a.providerName ?? '').localeCompare(b.providerName ?? '', undefined, {
+      sensitivity: 'base',
+    });
+    if (byProvider !== 0) return byProvider;
+    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+  });
+  return [{ id: 'inherit', label: 'inherit' }, ...sorted, ...extra];
+}
+
 export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string | null } {
   try {
     const trimmed = raw.trim();
@@ -79,11 +105,6 @@ export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: s
       rawModel === undefined || rawModel === null || rawModel === '' || rawModel === 'inherit'
         ? 'inherit'
         : String(rawModel);
-
-    const temperature =
-      typeof obj.temperature === 'number' && !isNaN(obj.temperature)
-        ? Math.max(0, Math.min(1, obj.temperature))
-        : 0.2;
 
     // `"off"` (absent/unknown) = default: omitted from the LLM payload.
     const reasoningEffort: ReasoningEffort =
@@ -131,7 +152,6 @@ export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: s
     return {
       parsed: {
         model,
-        temperature,
         reasoningEffort,
         contextWindow,
         maxTokens,
@@ -148,7 +168,6 @@ export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: s
     return {
       parsed: {
         model: 'inherit',
-        temperature: 0.2,
         reasoningEffort: 'off',
         contextWindow: 200000,
         maxTokens: 8192,
@@ -175,7 +194,6 @@ export function serializeSetting(parsed: ParsedSetting): string {
   output.model =
     !parsed.model || parsed.model === 'inherit' ? 'inherit' : parsed.model.trim();
 
-  output.temperature = Number(parsed.temperature.toFixed(2));
   // `off` stays absent (backwards-compat: default null/off ⇒ no field).
   if (parsed.reasoningEffort && parsed.reasoningEffort !== 'off') {
     output.reasoningEffort = parsed.reasoningEffort;
@@ -233,7 +251,6 @@ export default function AgentSettingVisualEditor({
   const [parseError, setParseError] = useState<string | null>(null);
 
   const [model, setModel] = useState<string>('inherit');
-  const [temperature, setTemperature] = useState<number>(0.2);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('off');
   const [contextWindow, setContextWindow] = useState<number>(200000);
   const [maxTokens, setMaxTokens] = useState<number>(8192);
@@ -264,7 +281,6 @@ export default function AgentSettingVisualEditor({
 
     setParseError(null);
     setModel(parsed.model ?? 'inherit');
-    setTemperature(parsed.temperature);
     setReasoningEffort(parsed.reasoningEffort);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
@@ -289,7 +305,6 @@ export default function AgentSettingVisualEditor({
     }
     setParseError(null);
     setModel(parsed.model ?? 'inherit');
-    setTemperature(parsed.temperature);
     setReasoningEffort(parsed.reasoningEffort);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
@@ -307,7 +322,6 @@ export default function AgentSettingVisualEditor({
   // Функция эмиссии изменений в родительский activeFile.content
   const emitChanges = (
     nextModel: string,
-    nextTemp: number,
     nextReasoning: ReasoningEffort,
     nextCw: number,
     nextMt: number,
@@ -317,7 +331,6 @@ export default function AgentSettingVisualEditor({
   ) => {
     const nextSetting: ParsedSetting = {
       model: nextModel,
-      temperature: nextTemp,
       reasoningEffort: nextReasoning,
       contextWindow: nextCw,
       maxTokens: nextMt,
@@ -335,63 +348,41 @@ export default function AgentSettingVisualEditor({
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
-    emitChanges(newModel, temperature, reasoningEffort, contextWindow, maxTokens, icon, color, rawExtra);
-  };
-
-  const handleTemperatureChange = (newTemp: number) => {
-    const clamped = Math.max(0, Math.min(1, Number(newTemp.toFixed(2))));
-    setTemperature(clamped);
-    emitChanges(model, clamped, reasoningEffort, contextWindow, maxTokens, icon, color, rawExtra);
+    emitChanges(newModel, reasoningEffort, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleReasoningEffortChange = (newEffort: ReasoningEffort) => {
     setReasoningEffort(newEffort);
-    emitChanges(model, temperature, newEffort, contextWindow, maxTokens, icon, color, rawExtra);
+    emitChanges(model, newEffort, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleContextWindowChange = (newCw: number) => {
     const val = Math.max(1000, newCw);
     setContextWindow(val);
-    emitChanges(model, temperature, reasoningEffort, val, maxTokens, icon, color, rawExtra);
+    emitChanges(model, reasoningEffort, val, maxTokens, icon, color, rawExtra);
   };
 
   const handleMaxTokensChange = (newMt: number) => {
     const val = Math.max(256, newMt);
     setMaxTokens(val);
-    emitChanges(model, temperature, reasoningEffort, contextWindow, val, icon, color, rawExtra);
+    emitChanges(model, reasoningEffort, contextWindow, val, icon, color, rawExtra);
   };
 
   const handleIconChange = (newIcon: string) => {
     setIcon(newIcon);
-    emitChanges(model, temperature, reasoningEffort, contextWindow, maxTokens, newIcon, color, rawExtra);
+    emitChanges(model, reasoningEffort, contextWindow, maxTokens, newIcon, color, rawExtra);
   };
 
   const handleColorChange = (newColor: string) => {
     if (!isAllowedAgentColor(newColor)) return;
     setColor(newColor);
-    emitChanges(model, temperature, reasoningEffort, contextWindow, maxTokens, icon, newColor, rawExtra);
+    emitChanges(model, reasoningEffort, contextWindow, maxTokens, icon, newColor, rawExtra);
   };
 
-  // Dynamic model list: 'inherit', then settings.model, then provider catalog (displayName ?? id)
-  const dynamicModelOptions = useMemo(() => {
-    const options: Array<{ id: string; label: string }> = [{ id: 'inherit', label: 'inherit' }];
-    const seen = new Set<string>(['inherit']);
-    const push = (id: string, label: string) => {
-      const trimmed = id.trim();
-      if (!trimmed || seen.has(trimmed)) return;
-      seen.add(trimmed);
-      options.push({ id: trimmed, label: label.trim() || trimmed });
-    };
-    if (settingsModel && typeof settingsModel === 'string') {
-      push(settingsModel, settingsModel);
-    }
-    for (const provider of providers) {
-      for (const catalogModel of provider.models) {
-        push(catalogModel.id, catalogModel.displayName ?? catalogModel.id);
-      }
-    }
-    return options;
-  }, [providers, settingsModel]);
+  const dynamicModelOptions = useMemo(
+    () => buildDynamicModelOptions(providers, settingsModel),
+    [providers, settingsModel],
+  );
   const dynamicModels = useMemo(
     () => dynamicModelOptions.map((option) => option.id),
     [dynamicModelOptions],
@@ -531,7 +522,7 @@ export default function AgentSettingVisualEditor({
         </div>
       </section>
 
-      {/* СЕКЦИЯ 2: МОДЕЛЬ И ТЕМПЕРАТУРА */}
+      {/* СЕКЦИЯ 2: МОДЕЛЬ */}
       <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
         <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
           <Bot className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
@@ -600,76 +591,10 @@ export default function AgentSettingVisualEditor({
                       : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
-                  <span>{option.label}</span>
+                  <span>{option.providerName ? `${option.providerName} / ${option.label}` : option.label}</span>
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        {/* Температура */}
-        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
-              <Thermometer className="h-3.5 w-3.5 text-[#ef4444]" />
-              <span>{t('ruleEditor.temperatureLabel')}</span>
-            </label>
-            <div className="flex items-center space-x-1.5">
-              <span className="font-mono text-xs font-bold tabular-nums px-2 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]">
-                {temperature.toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a]">0.0</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={temperature}
-              onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
-              className="flex-1 h-1.5 bg-[#e4e4e7] dark:bg-[#2c2c33] rounded-lg appearance-none cursor-pointer accent-[#6366f1] dark:accent-[#818cf8]"
-            />
-            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a]">1.0</span>
-          </div>
-
-          {/* Быстрые кнопки температуры */}
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            <button
-              type="button"
-              onClick={() => handleTemperatureChange(0.0)}
-              className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
-                temperature === 0.0
-                  ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
-              }`}
-            >
-              {t('ruleEditor.tempAccurate')}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTemperatureChange(0.2)}
-              className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
-                temperature === 0.2
-                  ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
-              }`}
-            >
-              {t('ruleEditor.tempBalanced')}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTemperatureChange(0.7)}
-              className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
-                temperature === 0.7
-                  ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
-              }`}
-            >
-              {t('ruleEditor.tempCreative')}
-            </button>
           </div>
         </div>
 

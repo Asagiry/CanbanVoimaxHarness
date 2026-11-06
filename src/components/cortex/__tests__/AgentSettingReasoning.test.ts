@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildDynamicModelOptions,
   parseSettingJson,
   serializeSetting,
   type ParsedSetting,
 } from '../AgentSettingVisualEditor';
+import type { Provider } from '../../../stores/settings/providers';
 import { normalizeReasoningEffort } from '../../../types';
 
 describe('AgentSetting reasoning effort', () => {
@@ -28,7 +30,6 @@ describe('AgentSetting reasoning effort', () => {
   it('serializes reasoningEffort only when not off', () => {
     const base: ParsedSetting = {
       model: 'm1',
-      temperature: 0.2,
       reasoningEffort: 'high',
       contextWindow: 200000,
       maxTokens: 8192,
@@ -44,7 +45,6 @@ describe('AgentSetting reasoning effort', () => {
   it('roundtrips: parse(serialize(x)) preserves effort', () => {
     const base: ParsedSetting = {
       model: 'm1',
-      temperature: 0.2,
       reasoningEffort: 'medium',
       contextWindow: 200000,
       maxTokens: 8192,
@@ -53,6 +53,40 @@ describe('AgentSetting reasoning effort', () => {
     };
     const back = parseSettingJson(serializeSetting(base)).parsed.reasoningEffort;
     expect(back).toBe('medium');
+  });
+
+  it('drops legacy temperature on parse/serialize', () => {
+    const { parsed } = parseSettingJson('{"model":"m1","temperature":0.7}');
+    expect(parsed.rawExtra).not.toHaveProperty('temperature');
+    expect(JSON.parse(serializeSetting(parsed))).not.toHaveProperty('temperature');
+  });
+
+  it('buildDynamicModelOptions sorts by provider then label, inherit first', () => {
+    const providers = [
+      {
+        id: 'b',
+        name: 'Beta',
+        isCustom: false,
+        apiKey: '',
+        baseUrl: '',
+        protocol: 'openai',
+        models: [{ id: 'z-model', displayName: 'Zed' }, { id: 'a-model' }],
+      },
+      {
+        id: 'a',
+        name: 'alpha',
+        isCustom: false,
+        apiKey: '',
+        baseUrl: '',
+        protocol: 'openai',
+        models: [{ id: 'm-model', displayName: 'Em' }],
+      },
+    ] as Provider[];
+    const options = buildDynamicModelOptions(providers, 'unknown-model');
+    expect(options[0]).toEqual({ id: 'inherit', label: 'inherit' });
+    expect(options.slice(1, 4).map((o) => o.id)).toEqual(['m-model', 'a-model', 'z-model']);
+    expect(options[1].providerName).toBe('alpha');
+    expect(options.at(-1)).toEqual({ id: 'unknown-model', label: 'unknown-model' });
   });
 
   it('normalizeReasoningEffort matches backend semantics', () => {
