@@ -473,7 +473,7 @@ data: [DONE]
             handover_summary: None,
             task_attachments: None,
             steer_prompt: None,
-            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
             base_url,
             api_key: None,
             model: "test-model".to_string(),
@@ -528,6 +528,41 @@ data: [DONE]
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_agent_loop_advance_with_pending_steer_continues() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_adv_steer_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+        let task = make_test_task("CVH-086", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+        let steer_text = "CORRECTION_BEFORE_HANDOVER";
+        crate::db::save_conversation_context(&base, "CVH-086", 0, &[], 0, &Arc::new(AtomicBool::new(false))).await.expect("seed context");
+        let sse_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_adv_steer\",\"function\":{\"name\":\"advance_task\",\"arguments\":\"{\\\"summary\\\":\\\"done\\\"}\"}}]}}]}\n\ndata: [DONE]\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Steer handled.\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+        let config = AgentSessionConfig {
+            repo_root: base.clone(), worktree_path: base.clone(), role: "developer".to_string(),
+            stage_id: "dev".to_string(), task_id: "CVH-086".to_string(), task_title: "Implement feature".to_string(),
+            task_description: "Do work".to_string(), handover_summary: None, task_attachments: None,
+            steer_prompt: None, steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
+            base_url, api_key: None, model: "test-model".to_string(), temperature: None, reasoning_effort: None,
+            max_turns: 10, app_handle: None, context_window: None,
+        };
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let base_for_steer = base.clone();
+        let result = run_agent_loop(config, abort_flag, move |ev| {
+            if matches!(ev, AgentEvent::ToolResult { .. }) {
+                let _ = crate::agent::persist_steer_message(&base_for_steer, "CVH-086", steer_text, None, Some("steer-pre-advance"));
+            }
+        }).await.expect("run_agent_loop must succeed");
+        server_handle.abort();
+        assert_eq!(request_counter.load(Ordering::SeqCst), 2, "pending steer must cause a second turn");
+        assert!(result.contains("Steer handled"), "got: {}", result);
+        let saved = crate::db::load_conversation_context(&base, "CVH-086").unwrap().unwrap();
+        assert!(saved.messages.iter().any(|m| m.content.as_deref().unwrap_or("").contains(steer_text)));
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
 
     #[tokio::test]
     async fn test_agent_loop_natural_exit_on_move_task() {
@@ -560,7 +595,7 @@ data: [DONE]
             handover_summary: None,
             task_attachments: None,
             steer_prompt: None,
-            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
             base_url,
             api_key: None,
             model: "test-model".to_string(),
@@ -640,7 +675,7 @@ data: [DONE]
             handover_summary: None,
             task_attachments: None,
             steer_prompt: None,
-            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
             base_url,
             api_key: None,
             model: "test-model".to_string(),
@@ -758,7 +793,7 @@ data: [DONE]
             handover_summary: None,
             task_attachments: None,
             steer_prompt: None,
-            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
             base_url,
             api_key: None,
             model: "test-model".to_string(),
@@ -1017,7 +1052,7 @@ data: [DONE]
             handover_summary: None,
             task_attachments: None,
             steer_prompt: None,
-            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+            steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
             base_url,
             api_key: None,
             model: "test-model".to_string(),
@@ -1150,7 +1185,7 @@ async fn steer_waits_for_tool_batch_and_survives_closed_gate_resume() {
         repo_root: base.clone(), worktree_path: base.clone(), role: "developer".into(),
         stage_id: "dev".into(), task_id: task_id.into(), task_title: "Steer a running command".into(),
         task_description: "Finish the command".into(), handover_summary: None, task_attachments: None,
-        steer_prompt, steer_images: None, steering, base_url: base_url.clone(), api_key: None,
+        steer_prompt, steer_images: None, steering, advance_aborted: None, base_url: base_url.clone(), api_key: None,
         model: "test-model".into(), temperature: None, reasoning_effort: None,
         max_turns: 10, app_handle: None, context_window: None,
     };
@@ -1159,6 +1194,7 @@ async fn steer_waits_for_tool_batch_and_survives_closed_gate_resume() {
     let active = crate::commands::ActiveAgentHandle {
         abort_flag: Arc::clone(&abort), join_handle: Arc::new(tokio::sync::Mutex::new(None)),
         steering: Some(Arc::clone(&steering)),
+        advance_aborted: Arc::new(AtomicBool::new(false)),
     };
     let (started_tx, started_rx) = tokio::sync::oneshot::channel();
     let started_tx = Arc::new(Mutex::new(Some(started_tx)));
@@ -1227,7 +1263,7 @@ async fn test_unfinished_todos_get_only_one_completion_reminder() {
             repo_root: base.clone(), worktree_path: base.clone(), role: "developer".into(),
             stage_id: "dev".into(), task_id: "CVH-069".into(), task_title: "Implement feature".into(),
             task_description: "Do work".into(), handover_summary: None, task_attachments: None,
-            steer_prompt: None, steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), base_url, api_key: None, model: "test-model".into(),
+            steer_prompt: None, steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None, base_url, api_key: None, model: "test-model".into(),
             temperature: None, reasoning_effort: None, max_turns: 10, app_handle: None, context_window: None,
         };
         let events = Arc::new(std::sync::Mutex::new(Vec::new()));

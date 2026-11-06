@@ -11,6 +11,7 @@ pub struct ActiveAgentHandle {
     pub abort_flag: Arc<AtomicBool>,
     pub join_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
     pub steering: Option<Arc<Mutex<crate::agent::AgentSteering>>>,
+    pub advance_aborted: Arc<AtomicBool>,
 }
 
 pub type AgentEntry = ActiveAgentHandle;
@@ -362,6 +363,7 @@ mod tests {
             abort_flag: Arc::clone(&flag_a),
             join_handle: slot_a,
             steering: None,
+            advance_aborted: Arc::new(AtomicBool::new(false)),
         });
 
         // CVH-001 is active in root_a

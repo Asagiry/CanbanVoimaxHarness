@@ -569,12 +569,15 @@ export default function AgentConsoleDrawer() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await syncTasksBackend(useBoardStore.getState().tasks);
-      await invoke('steer_agent', {
+      const steerResult = await invoke('steer_agent', {
         taskId: targetId,
         message: mainText,
         messageId,
         images: imageUrls.length > 0 ? imageUrls : undefined,
-      });
+      }) as string;
+      if (typeof steerResult === 'string' && (steerResult.includes('saved for stopped task') || steerResult.includes('Task completed'))) {
+        setRunError('Steer сохранён, агент не запущен — задача завершена');
+      }
     } catch (err: any) {
       console.info('steer_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');

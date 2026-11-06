@@ -131,7 +131,7 @@ async fn run_agent_inner(
     );
 
     // Atomically check and reserve the active agent slot BEFORE any async operations (TOCTOU guard)
-    let (abort_flag, join_slot, steering) = {
+    let (abort_flag, join_slot, steering, advance_aborted) = {
         let state = app_handle.state::<AppState>();
         let mut map = state
             .active_agents
@@ -169,15 +169,17 @@ async fn run_agent_inner(
         let abort_flag = Arc::new(AtomicBool::new(false));
         let join_slot = Arc::new(tokio::sync::Mutex::new(None));
         let steering = Arc::new(std::sync::Mutex::new(crate::agent::AgentSteering::default()));
+        let advance_aborted = Arc::new(AtomicBool::new(false));
         map.insert(
             agent_k,
             ActiveAgentHandle {
                 abort_flag: Arc::clone(&abort_flag),
                 join_handle: Arc::clone(&join_slot),
                 steering: Some(Arc::clone(&steering)),
+                advance_aborted: Arc::clone(&advance_aborted),
             },
         );
-        (abort_flag, join_slot, steering)
+        (abort_flag, join_slot, steering, advance_aborted)
     };
 
     // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
@@ -508,6 +510,7 @@ async fn run_agent_inner(
         steer_prompt: if persist_steer { steer_prompt } else { None },
         steer_images: images.clone(),
         steering,
+        advance_aborted: Some(Arc::clone(&advance_aborted)),
         base_url,
         api_key,
         model,
@@ -1795,8 +1798,25 @@ pub async fn steer_agent(
                 }
             }
         }
-        if !was_aborted && entry.abort_flag.load(Ordering::SeqCst) {
+        if !was_aborted && entry.abort_flag.load(Ordering::SeqCst) && !entry.advance_aborted.load(Ordering::SeqCst) {
             return Ok(format!("Steer saved for stopped task {}", task_id));
+        }
+    }
+
+    let disk_tasks = load_tasks_from_disk(&root).await;
+    let current_task = disk_tasks.iter().find(|t| task_id_matches(&t.id, &task_id)).cloned();
+    if let Some(ref t) = current_task {
+        let is_terminal = t.completed_at.is_some() && (t.status.as_deref() == Some("done") || t.stage_id == "ready");
+        if is_terminal {
+            return Ok(format!("Task completed; steer saved to dialog, reopen to continue {}", task_id));
+        }
+        let waiting_sub = t.waiting_for_subtask_id.as_deref().filter(|s| !s.trim().is_empty()).map(str::to_string);
+        if let Some(sub_id) = waiting_sub {
+            if disk_tasks.iter().any(|c| task_id_matches(&c.id, &sub_id)) {
+                crate::logger::cvh_log(Some(&root), "INFO", "STEER_AGENT", &format!("steer rerouted from waiting parent {} to subtask {}", task_id, sub_id));
+                let _ = app_handle.emit("agent:status", serde_json::json!({ "taskId": sub_id, "status": "running", "projectPath": root.to_string_lossy().to_string() }));
+                return run_agent_inner(sub_id, Some(message), images, Some(root.to_string_lossy().to_string()), app_handle, false).await;
+            }
         }
     }
 
