@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, RwLock};
 pub struct ActiveAgentHandle {
     pub abort_flag: Arc<AtomicBool>,
     pub join_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    pub steering: Option<Arc<Mutex<crate::agent::AgentSteering>>>,
 }
 
 pub type AgentEntry = ActiveAgentHandle;
@@ -360,6 +361,7 @@ mod tests {
         state.register_active_agent(&root_a, "CVH-001", ActiveAgentHandle {
             abort_flag: Arc::clone(&flag_a),
             join_handle: slot_a,
+            steering: None,
         });
 
         // CVH-001 is active in root_a

@@ -334,6 +334,8 @@ impl TokenUsageStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum StreamChunk {
+    AttemptStart { id: String },
+    Retry { id: String, delay_secs: u64 },
     FirstChunk,
     Token(String),
     Thought(String),

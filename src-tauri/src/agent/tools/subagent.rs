@@ -166,6 +166,7 @@ pub async fn execute_subagent(
         retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
         abort_handle: Arc::clone(&sub_abort_handle),
         join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
     };
 
     {
@@ -217,6 +218,7 @@ pub async fn execute_subagent(
                 crate::commands::ActiveAgentHandle {
                     abort_flag: Arc::clone(&sub_abort_handle),
                     join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
                 },
             );
             if let Ok(mut map) = state_ref.active_agents.lock() {
@@ -225,6 +227,7 @@ pub async fn execute_subagent(
                     crate::commands::ActiveAgentHandle {
                         abort_flag: Arc::clone(&sub_abort_handle),
                         join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
                     },
                 );
             }
@@ -353,6 +356,7 @@ pub async fn execute_subagent_bg(
         retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
         abort_handle: Arc::clone(&sub_abort_handle),
         join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
     };
 
     {
@@ -406,6 +410,7 @@ pub async fn execute_subagent_bg(
                 crate::commands::ActiveAgentHandle {
                     abort_flag: Arc::clone(&sub_abort_handle),
                     join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
                 },
             );
             if let Ok(mut map) = state_ref.active_agents.lock() {
@@ -414,6 +419,7 @@ pub async fn execute_subagent_bg(
                     crate::commands::ActiveAgentHandle {
                         abort_flag: Arc::clone(&sub_abort_handle),
                         join_handle: Arc::clone(&sub_join_slot),
+                    steering: None,
                     },
                 );
             }

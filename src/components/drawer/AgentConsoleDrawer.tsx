@@ -544,7 +544,6 @@ export default function AgentConsoleDrawer() {
     // Append user steer message into feed immediately with attached images
     const isSteer = isRunning;
     appendOutput(task.id, mainText, isSteer ? 'steer' : 'user', imageUrls.length > 0 ? imageUrls : undefined);
-    useDrawerStore.getState().saveTaskActivity(task.id);
 
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.

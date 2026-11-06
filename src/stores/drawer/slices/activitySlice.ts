@@ -24,12 +24,16 @@ export const createActivitySlice: StateCreator<
   setActiveAgentTask: (taskId, isActive) => {
     if (!taskId) return;
     set((state) => {
-      if (Boolean(state.activeAgentTaskIds[taskId]) === isActive) return state;
+      if (Boolean(state.activeAgentTaskIds[taskId]) === isActive &&
+          (isActive || !state.connectionWait[taskId])) return state;
       return {
         activeAgentTaskIds: {
           ...state.activeAgentTaskIds,
           [taskId]: isActive,
         },
+        ...(!isActive ? {
+          connectionWait: { ...state.connectionWait, [taskId]: null },
+        } : {}),
       };
     });
   },
@@ -451,6 +455,8 @@ export const createActivitySlice: StateCreator<
     cancelActivitySave(taskId);
     get().clearTaskDraft(taskId);
     set((state) => ({
+      connectionWait: { ...state.connectionWait, [taskId]: null },
+      activeStreamIds: { ...state.activeStreamIds, [taskId]: null },
       activityFeed: {
         ...state.activityFeed,
         [taskId]: [],
@@ -578,7 +584,11 @@ export const createActivitySlice: StateCreator<
     if (!taskId) return;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      const rollbackVersion = get().streamRollbackVersions[taskId];
       const items = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
+      if (rollbackVersion !== get().streamRollbackVersions[taskId]) {
+        return get().loadTaskActivity(taskId);
+      }
       if (items && Array.isArray(items)) {
         let compactedTokens: number | undefined;
         for (let i = items.length - 1; i >= 0; i--) {
@@ -692,6 +702,7 @@ export const createActivitySlice: StateCreator<
                 // Deduplicate adjacent identical output / summary items
                 if (
                   prev &&
+                  !item.id.endsWith(':output') && !prev.id.endsWith(':output') &&
                   (item.type === 'output' || (item.type as string) === 'summary') &&
                   (prev.type === 'output' || (prev.type as string) === 'summary') &&
                   item.content?.trim() &&
@@ -708,7 +719,7 @@ export const createActivitySlice: StateCreator<
                 }
 
                 // Suppress output item if it duplicates a recent stage summary
-                if (item.type === 'output' && item.content?.trim()) {
+                if (item.type === 'output' && !item.id.endsWith(':output') && item.content?.trim()) {
                   const itemContent = item.content.trim();
                   const isDuplicateSummary = dedupedItems
                     .slice(-3)
@@ -1066,6 +1077,8 @@ export const createActivitySlice: StateCreator<
   appendActivityItem: (taskId, item) => {
     if (!taskId || !item) return;
     set((state) => {
+      const streamed = item.id.match(/^(.+):(thought|output)$/);
+      if (streamed && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamed[1]) return state;
       const feed = state.activityFeed[taskId] || [];
       const idx = feed.findIndex((f) => f.id === item.id);
       let updatedFeed: DrawerActivityItem[];
@@ -1073,8 +1086,9 @@ export const createActivitySlice: StateCreator<
         updatedFeed = [...feed];
         updatedFeed[idx] = { ...feed[idx], ...item };
       } else {
-        const duplicateIdx = feed.findIndex(
+        const duplicateIdx = streamed ? -1 : feed.findIndex(
           (f) =>
+            !/:(thought|output)$/.test(f.id) &&
             f.type === item.type &&
             f.content &&
             item.content &&

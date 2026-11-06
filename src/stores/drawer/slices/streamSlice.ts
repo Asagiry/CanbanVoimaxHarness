@@ -7,12 +7,58 @@ import {
 } from '../types';
 import { LiveStreamEntry } from '../../../types';
 
+function appendStreamChunk(
+  state: DrawerState,
+  taskId: string,
+  streamId: string,
+  type: 'thought' | 'output',
+  content: string,
+): Partial<DrawerState> {
+  // Ignore chunks queued before an attempt was discarded or superseded.
+  if (taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return state;
+  const id = `${streamId}:${type}`;
+  const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
+  const key = type === 'thought' ? 'thoughts' : 'outputs';
+  const entries = existing[key];
+  const feed = state.activityFeed[taskId] || [];
+  const entryIndex = entries.findIndex((entry) => entry.id === id);
+  const feedIndex = feed.findIndex((item) => item.id === id);
+  const previous = feed[feedIndex] || entries[entryIndex];
+  const now = Date.now();
+  const createdAt = previous?.createdAt ?? now;
+  const entry: LiveStreamEntry = {
+    id,
+    type,
+    timestamp: previous?.timestamp || new Date(now).toLocaleTimeString('en-US', { hour12: false }),
+    createdAt,
+    content: (previous?.content || '') + content,
+    ...(type === 'thought' ? { durationMs: Math.max(0, now - createdAt) } : {}),
+  };
+  return {
+    connectionWait: { ...state.connectionWait, [taskId]: null },
+    streamEntries: {
+      ...state.streamEntries,
+      [taskId]: {
+        ...existing,
+        [key]: entryIndex < 0 ? [...entries, entry] : entries.map((item, i) => i === entryIndex ? entry : item),
+      },
+    },
+    activityFeed: {
+      ...state.activityFeed,
+      [taskId]: feedIndex < 0 ? [...feed, entry] : feed.map((item, i) => i === feedIndex ? { ...item, ...entry } : item),
+    },
+  };
+}
+
 export const createStreamSlice: StateCreator<
   DrawerState,
   [],
   [],
   StreamSlice
-> = (set, _get) => ({
+> = (set, get) => ({
+  activeStreamIds: {},
+  streamRollbackVersions: {},
+  connectionWait: {},
   streamEntries: {},
   taskTelemetry: {},
   thinkingStartTime: {},
@@ -26,7 +72,50 @@ export const createStreamSlice: StateCreator<
   cumulativeOutputTokens: {},
   cumulativeGenerationSec: {},
 
-  appendThought: (taskId, content) => {
+  startStream: (taskId, streamId) => {
+    get().resetTurnStreamMetrics(taskId);
+    set((state) => ({
+      activeStreamIds: { ...state.activeStreamIds, [taskId]: streamId },
+      connectionWait: { ...state.connectionWait, [taskId]: null },
+      activeAgentTaskIds: { ...state.activeAgentTaskIds, [taskId]: true },
+    }));
+  },
+
+  retryStream: (taskId, streamId, delaySecs) => {
+    set((state) => {
+      if (taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return state;
+      const ids = new Set([`${streamId}:thought`, `${streamId}:output`]);
+      const keys = [taskId, state.subagentIdToToolId[taskId], state.toolIdToSubagentId[taskId]].filter(Boolean);
+      const activityFeed = { ...state.activityFeed };
+      const streamEntries = { ...state.streamEntries };
+      const streamRollbackVersions = { ...state.streamRollbackVersions };
+      for (const key of keys) {
+        streamRollbackVersions[key] = (streamRollbackVersions[key] || 0) + 1;
+        if (activityFeed[key]) activityFeed[key] = activityFeed[key].filter((item) => !ids.has(item.id));
+        const entries = streamEntries[key];
+        if (entries) streamEntries[key] = {
+          thoughts: entries.thoughts.filter((item) => !ids.has(item.id)),
+          outputs: entries.outputs.filter((item) => !ids.has(item.id)),
+        };
+      }
+      return {
+        activityFeed,
+        streamEntries,
+        streamRollbackVersions,
+        activeStreamIds: { ...state.activeStreamIds, [taskId]: null },
+        connectionWait: { ...state.connectionWait, [taskId]: { streamId, delaySecs } },
+        thinkingStartTime: { ...state.thinkingStartTime, [taskId]: null },
+        generationEndTime: { ...state.generationEndTime, [taskId]: Date.now() },
+        streamedTurnTokens: { ...state.streamedTurnTokens, [taskId]: 0 },
+      };
+    });
+  },
+
+  appendThought: (taskId, content, streamId) => {
+    if (streamId) {
+      set((state) => appendStreamChunk(state, taskId, streamId, 'thought', content));
+      return;
+    }
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
     const now = Date.now();
 
@@ -140,7 +229,11 @@ export const createStreamSlice: StateCreator<
     });
   },
 
-  appendOutput: (taskId, content, type = 'output', images) => {
+  appendOutput: (taskId, content, type = 'output', images, streamId) => {
+    if (streamId && type === 'output') {
+      set((state) => appendStreamChunk(state, taskId, streamId, 'output', content));
+      return;
+    }
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
 
     set((state) => {
@@ -309,6 +402,7 @@ export const createStreamSlice: StateCreator<
 
   resetTurnStreamMetrics: (taskId) => {
     set((state) => ({
+      connectionWait: { ...state.connectionWait, [taskId]: null },
       finalTps: {
         ...state.finalTps,
         [taskId]: null,

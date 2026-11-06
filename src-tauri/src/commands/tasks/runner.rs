@@ -120,7 +120,7 @@ pub async fn run_agent(
     );
 
     // Atomically check and reserve the active agent slot BEFORE any async operations (TOCTOU guard)
-    let (abort_flag, join_slot) = {
+    let (abort_flag, join_slot, steering) = {
         let state = app_handle.state::<AppState>();
         let mut map = state
             .active_agents
@@ -157,14 +157,16 @@ pub async fn run_agent(
         let agent_k = AppState::agent_key(&root, &task_id);
         let abort_flag = Arc::new(AtomicBool::new(false));
         let join_slot = Arc::new(tokio::sync::Mutex::new(None));
+        let steering = Arc::new(std::sync::Mutex::new(crate::agent::AgentSteering::default()));
         map.insert(
             agent_k,
             ActiveAgentHandle {
                 abort_flag: Arc::clone(&abort_flag),
                 join_handle: Arc::clone(&join_slot),
+                steering: Some(Arc::clone(&steering)),
             },
         );
-        (abort_flag, join_slot)
+        (abort_flag, join_slot, steering)
     };
 
     // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
@@ -494,6 +496,7 @@ pub async fn run_agent(
         task_attachments: task.attachments.clone(),
         steer_prompt,
         steer_images: images.clone(),
+        steering,
         base_url,
         api_key,
         model,
@@ -516,11 +519,25 @@ pub async fn run_agent(
         let root_inner = root_task.clone();
         let model_inner = agent_cfg.model.clone();
 
+        let active_stream_id = std::sync::Mutex::new(None::<String>);
         let event_sink = move |event: AgentEvent| {
             match event {
+                AgentEvent::StreamStart { id } => {
+                    *active_stream_id.lock().unwrap() = Some(id.clone());
+                    let _ = app_inner.emit("agent:stream_start", serde_json::json!({
+                        "taskId": tid_inner, "streamId": id,
+                    }));
+                }
+                AgentEvent::StreamRetry { id, delay_secs } => {
+                    let _ = app_inner.emit("agent:stream_retry", serde_json::json!({
+                        "taskId": tid_inner, "streamId": id, "delaySecs": delay_secs,
+                    }));
+                    *active_stream_id.lock().unwrap() = None;
+                }
                 AgentEvent::Token(token) => {
                     let payload = serde_json::json!({
                         "taskId": tid_inner,
+                        "streamId": active_stream_id.lock().unwrap().clone(),
                         "output": &token,
                         "content": &token,
                         "token": &token
@@ -530,6 +547,7 @@ pub async fn run_agent(
                 AgentEvent::Output(output) => {
                     let payload = serde_json::json!({
                         "taskId": tid_inner,
+                        "streamId": active_stream_id.lock().unwrap().clone(),
                         "output": &output,
                         "content": &output,
                         "token": &output
@@ -539,7 +557,7 @@ pub async fn run_agent(
                 AgentEvent::Thought(thought) => {
                     let _ = app_inner.emit(
                         "agent:thought",
-                        serde_json::json!({ "taskId": tid_inner, "thought": &thought, "delta": &thought }),
+                        serde_json::json!({ "taskId": tid_inner, "streamId": active_stream_id.lock().unwrap().clone(), "thought": &thought, "delta": &thought }),
                     );
                 }
                 AgentEvent::ToolQueued { id, name, arguments, batch } => {
@@ -1683,6 +1701,26 @@ pub async fn compact_context(
     Ok(report)
 }
 
+pub fn persist_or_queue_steer(
+    root: &Path,
+    task_id: &str,
+    message: &str,
+    images: Option<Vec<String>>,
+    active: Option<&ActiveAgentHandle>,
+) -> Result<(bool, Option<crate::db::ActivityItem>), String> {
+    if let Some(entry) = active {
+        if let Some(steering) = &entry.steering {
+            let gate = steering.lock().map_err(|_| "Steering queue lock poisoned".to_string())?;
+            let finished = entry.join_handle.try_lock().ok()
+                .and_then(|handle| handle.as_ref().map(|handle| handle.is_finished())).unwrap_or(false);
+            let queued = gate.accepting && !entry.abort_flag.load(Ordering::SeqCst) && !finished;
+            let item = crate::agent::persist_steer_message(root, task_id, message, images)?;
+            return Ok((queued, item));
+        }
+    }
+    Ok((false, crate::agent::persist_steer_message(root, task_id, message, images)?))
+}
+
 pub async fn steer_agent(
     task_id: String,
     message: String,
@@ -1707,39 +1745,11 @@ pub async fn steer_agent(
         }
     }
 
-    // Persist steer message into SQLite dialog_items
-    // only if not already persisted (e.g. from optimistic client save)
-    let mut already_in_db = false;
-    if let Ok(mut items) = crate::db::load_dialog_items(&root, &task_id) {
-        if let Some(it) = items.iter_mut().rev().take(3).find(|it| {
-            (it.item_type == "steer" || it.item_type == "user")
-                && it.content.as_deref().map(str::trim) == Some(message.trim())
-        }) {
-            already_in_db = true;
-            if (it.images.is_none() || it.images.as_ref().map(|v| v.is_empty()).unwrap_or(false))
-                && images.as_ref().map(|v| !v.is_empty()).unwrap_or(false)
-            {
-                it.images = images.clone();
-                let _ = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(it));
-            }
-        }
-    }
-
-    if !already_in_db {
-        let new_item = crate::db::ActivityItem {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_type: "steer".to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            content: Some(message.clone()),
-            tool: None,
-            duration_ms: None,
-            images: images.clone(),
-        };
-        let _ = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(&new_item));
-        let payload = serde_json::json!({
-            "taskId": task_id,
-            "item": new_item,
-        });
+    let previous = state.get_active_agent(&root, &task_id);
+    let was_aborted = previous.as_ref().is_some_and(|entry| entry.abort_flag.load(Ordering::SeqCst));
+    let (queued, item) = persist_or_queue_steer(&root, &task_id, &message, images.clone(), previous.as_ref())?;
+    if let Some(item) = item {
+        let payload = serde_json::json!({ "taskId": task_id, "item": item });
         let _ = app_handle.emit("task:activity", &payload);
         let _ = app_handle.emit("task:dialog", &payload);
     }
@@ -1752,26 +1762,20 @@ pub async fn steer_agent(
     });
     let _ = app_handle.emit("agent:steer", steer_payload);
 
-    {
-        let prev_entry = state.remove_active_agent(&root, &task_id);
-
-        if let Some(agent_entry) = prev_entry {
-            agent_entry.abort_flag.store(true, Ordering::SeqCst);
-            let maybe_handle = {
-                let mut guard = agent_entry.join_handle.lock().await;
-                guard.take()
-            };
-            if let Some(handle) = maybe_handle {
-                if tokio::time::timeout(tokio::time::Duration::from_millis(5000), handle)
-                    .await
-                    .is_err()
-                {
-                    eprintln!(
-                        "CVH [steer_agent]: Warning: previous agent task for {} did not finish within 5s timeout, proceeding with steer",
-                        task_id
-                    );
+    if queued {
+        return Ok(format!("Steer queued for task {} until the current tool batch completes", task_id));
+    }
+    if let Some(entry) = previous {
+        let mut handle = entry.join_handle.lock().await;
+        if let Some(handle) = handle.as_mut() {
+            if !handle.is_finished() {
+                if let Err(error) = handle.await {
+                    if !error.is_cancelled() { return Err(format!("Previous agent failed: {error}")); }
                 }
             }
+        }
+        if !was_aborted && entry.abort_flag.load(Ordering::SeqCst) {
+            return Ok(format!("Steer saved for stopped task {}", task_id));
         }
     }
 

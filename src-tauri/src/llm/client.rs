@@ -1,6 +1,6 @@
 use super::models::*;
 use anyhow::{bail, Result};
-use eventsource_stream::Eventsource;
+use eventsource_stream::{Eventsource, EventStreamError};
 use futures_util::StreamExt;
 use reqwest::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::collections::HashMap;
@@ -181,10 +181,12 @@ impl LlmClient {
             }
         }
 
-        let mut attempt = 0;
-        let max_reconnects = if is_opencode { 2 } else { 10 };
-
-        let response = loop {
+        let mut delay_secs = 5_u64;
+        loop {
+            let id = uuid::Uuid::new_v4().to_string();
+            if tx.send(StreamChunk::AttemptStart { id: id.clone() }).await.is_err() {
+                return Ok(());
+            }
             let req = self
                 .client
                 .post(&endpoint)
@@ -195,40 +197,26 @@ impl LlmClient {
                 _ = tx.closed() => return Ok(()),
                 response = req.send() => response,
             };
-            match response {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        break resp;
+            let retry_reason = match response {
+                Ok(resp) if resp.status().is_success() => {
+                    match Self::consume_openai_response(resp, &tx).await? {
+                        Some(reason) => reason,
+                        None => return Ok(()),
                     }
-
+                }
+                Ok(resp) => {
                     let status = resp.status();
-                    let text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Failed to read error body".to_string());
+                    let text = tokio::select! {
+                        _ = tx.closed() => return Ok(()),
+                        text = resp.text() => text.unwrap_or_else(|_| "Failed to read error body".to_string()),
+                    };
                     let err_summary = if text.len() > 120 {
                         format!("{}...", text.chars().take(120).collect::<String>())
                     } else {
                         text.clone()
                     };
-                    let err_msg = format!("HTTP {}: {}", status, err_summary);
-
-                    if status.is_server_error() && attempt < max_reconnects {
-                        attempt += 1;
-                        let delay_secs = attempt * 10;
-                        let notice = format!(
-                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/{} через {}с...]\n",
-                            err_msg, attempt, max_reconnects, delay_secs
-                        );
-                        eprintln!("CVH [llm_client]: {}", notice);
-                        tokio::select! {
-                            _ = tx.closed() => return Ok(()),
-                            _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},
-                        }
-                        if tx.is_closed() {
-                            bail!("Stream channel closed by receiver");
-                        }
-                        continue;
+                    if status.is_server_error() {
+                        format!("HTTP {}: {}", status, err_summary)
                     } else {
                         let final_err = format!("OpenAI API error [{}]: {}", status, text);
                         eprintln!("CVH [llm_client]: {}", final_err);
@@ -237,46 +225,41 @@ impl LlmClient {
                     }
                 }
                 Err(e) => {
-                    let err_msg = e.to_string();
-                    if attempt < max_reconnects && (!is_opencode || e.is_connect()) {
-                        attempt += 1;
-                        let delay_secs = attempt * 10;
-                        let notice = format!(
-                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/{} через {}с...]\n",
-                            err_msg, attempt, max_reconnects, delay_secs
-                        );
-                        eprintln!("CVH [llm_client]: {}", notice);
-                        tokio::select! {
-                            _ = tx.closed() => return Ok(()),
-                            _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},
-                        }
-                        if tx.is_closed() {
-                            bail!("Stream channel closed by receiver");
-                        }
-                        continue;
-                    } else {
-                        let final_err = format!(
-                            "Failed to connect to OpenAI endpoint {} after {} attempts: {}",
-                            endpoint, attempt, err_msg
-                        );
-                        eprintln!("CVH [llm_client]: {}", final_err);
+                    if e.is_builder() || e.is_redirect() {
+                        let final_err = format!("Invalid OpenAI request: {e}");
                         let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
                         bail!(final_err);
                     }
+                    e.to_string()
                 }
+            };
+            eprintln!("CVH [llm_client]: {}. Reconnecting in {}s", retry_reason, delay_secs);
+            if tx.send(StreamChunk::Retry { id, delay_secs }).await.is_err() {
+                return Ok(());
             }
-        };
+            tokio::select! {
+                _ = tx.closed() => return Ok(()),
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)) => {},
+            }
+            delay_secs = delay_secs.saturating_mul(2).min(30);
+        }
+    }
 
+    async fn consume_openai_response(
+        response: reqwest::Response,
+        tx: &Sender<StreamChunk>,
+    ) -> Result<Option<String>> {
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
         let mut first_chunk_sent = false;
         let mut pending_usage: Option<StreamChunk> = None;
         let mut terminal_marker = false;
         let mut stream_error = None;
+        let mut transport_error = None;
 
         loop {
             let item = tokio::select! {
-                _ = tx.closed() => return Ok(()),
+                _ = tx.closed() => return Ok(None),
                 item = stream.next() => match item {
                     Some(item) => item,
                     None => break,
@@ -386,6 +369,10 @@ impl LlmClient {
                         break;
                     }
                 }
+                Err(EventStreamError::Transport(err)) => {
+                    transport_error = Some(format!("SSE transport error: {err}"));
+                    break;
+                }
                 Err(err) => {
                     stream_error = Some(format!("SSE stream decode error: {}", err));
                     break;
@@ -394,7 +381,10 @@ impl LlmClient {
         }
 
         if stream_error.is_none() && !terminal_marker {
-            stream_error = Some("LLM stream ended before a completion marker".to_string());
+            if let Some(usage_chunk) = pending_usage.take() {
+                let _ = tx.send(usage_chunk).await;
+            }
+            return Ok(Some(transport_error.unwrap_or_else(|| "LLM stream ended before a completion marker".to_string())));
         }
         if stream_error.is_none() && tool_calls_in_progress.values().any(|(_, name, args)| {
             name.trim().is_empty() || !serde_json::from_str::<serde_json::Value>(args)
@@ -436,7 +426,7 @@ impl LlmClient {
         }
 
         let _ = tx.send(StreamChunk::Done).await;
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -444,26 +434,34 @@ impl LlmClient {
 mod tests {
     use super::*;
 
-    async fn stream_test_response(response: String) -> (Result<()>, Vec<StreamChunk>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let endpoint = format!("http://{}", listener.local_addr().unwrap());
-        let server = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut request = Vec::new();
-            let mut buffer = [0; 4096];
-            loop {
-                let count = socket.read(&mut buffer).await.unwrap();
-                assert_ne!(count, 0);
-                request.extend_from_slice(&buffer[..count]);
-                if let Some(end) = request.windows(4).position(|part| part == b"\r\n\r\n") {
-                    let headers = String::from_utf8_lossy(&request[..end]).to_lowercase();
-                    let length: usize = headers.lines().find_map(|line| line.strip_prefix("content-length: "))
-                        .unwrap().parse().unwrap();
-                    if request.len() >= end + 4 + length { break; }
+    async fn read_test_request(socket: &mut tokio::net::TcpStream) -> (String, serde_json::Value) {
+        use tokio::io::AsyncReadExt;
+        let mut request = Vec::new();
+        let mut buffer = [0; 4096];
+        loop {
+            let count = socket.read(&mut buffer).await.unwrap();
+            assert_ne!(count, 0);
+            request.extend_from_slice(&buffer[..count]);
+            if let Some(end) = request.windows(4).position(|part| part == b"\r\n\r\n") {
+                let headers = String::from_utf8_lossy(&request[..end]).to_lowercase();
+                let length: usize = headers.lines().find_map(|line| line.strip_prefix("content-length: "))
+                    .unwrap().parse().unwrap();
+                if request.len() >= end + 4 + length {
+                    return (headers, serde_json::from_slice(&request[end + 4..end + 4 + length]).unwrap());
                 }
             }
-            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).as_bytes()).await.unwrap();
+        }
+    }
+
+    async fn stream_test_http_response(status: &str, body: String, missing_bytes: usize) -> (Result<()>, Vec<StreamChunk>) {
+        use tokio::io::AsyncWriteExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len() + missing_bytes);
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            read_test_request(&mut socket).await;
+            socket.write_all(response.as_bytes()).await.unwrap();
         });
         let client = LlmClient {
             client: reqwest::Client::builder().no_proxy().build().unwrap(),
@@ -474,12 +472,24 @@ mod tests {
             model: "test".into(), messages: vec![ChatMessage::user("test")], temperature: None,
             stream: true, tools: None, reasoning_effort: None, stream_options: None,
         };
-        let result = tokio::time::timeout(std::time::Duration::from_secs(3), client.stream_openai(&endpoint, None, request, tx))
-            .await.unwrap();
+        let client_task = tokio::spawn(async move { client.stream_openai(&endpoint, None, request, tx).await });
+        let events = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            let mut events = Vec::new();
+            while let Some(event) = rx.recv().await {
+                let retry = matches!(event, StreamChunk::Retry { .. });
+                events.push(event);
+                if retry { break; }
+            }
+            events
+        }).await.unwrap();
+        drop(rx);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), client_task).await.unwrap().unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(3), server).await.unwrap().unwrap();
-        let mut events = Vec::new();
-        while let Some(event) = rx.recv().await { events.push(event); }
         (result, events)
+    }
+
+    async fn stream_test_response(response: String) -> (Result<()>, Vec<StreamChunk>) {
+        stream_test_http_response("200 OK", response, 0).await
     }
 
     fn tool_stream_frame(arguments: &str) -> String {
@@ -506,7 +516,7 @@ mod tests {
         let cases_with_usage = cases.len();
         cases.push(format!("{tool}data: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"max_tokens\"}}}}\n\n"));
         cases.push(format!("{tool}data: {{\"stop_reason\":\"max_tokens\"}}\n\n"));
-        cases.push(tool.clone());
+        cases.push(format!("{tool}data: invalid json\n\ndata: [DONE]\n\n"));
         cases.push(format!("{}data: [DONE]\n\n", tool_stream_frame("{\"path\":")));
         cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
             "choices": [{"delta": {"tool_calls": [{"index": 1, "function": {"name": "read_file", "arguments": "{"}}]}}]
@@ -531,13 +541,100 @@ mod tests {
             let response = format!("{}data: {}\n\n", tool_stream_frame("{}"), serde_json::json!({
                 "choices": [{"delta": {}, "finish_reason": reason}]
             }));
-            let (result, events) = stream_test_response(response).await;
-            assert!(result.is_ok());
-            assert_eq!(events.iter().filter(|event| matches!(event, StreamChunk::ToolCall { .. })).count(), 1);
-            assert!(matches!(events.last(), Some(StreamChunk::Done)));
+            for missing_bytes in [0, 20] {
+                let (result, events) = stream_test_http_response("200 OK", response.clone(), missing_bytes).await;
+                assert!(result.is_ok());
+                assert_eq!(events.iter().filter(|event| matches!(event, StreamChunk::ToolCall { .. })).count(), 1);
+                assert!(matches!(events.last(), Some(StreamChunk::Done)));
+            }
         }
         let (result, events) = stream_test_response(format!("{}data: [DONE]\n\n", tool_stream_frame("{}"))).await;
         assert!(result.is_ok());
+        assert!(matches!(events.last(), Some(StreamChunk::Done)));
+    }
+
+    #[tokio::test]
+    async fn interrupted_stream_waits_for_retry_until_stopped() {
+        for missing_bytes in [0, 20] {
+            let body = format!("{}data: {}\n\n", tool_stream_frame("{}"), serde_json::json!({
+                "choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+            }));
+            let (result, events) = stream_test_http_response("200 OK", body, missing_bytes).await;
+            assert!(result.is_ok());
+            let Some(StreamChunk::AttemptStart { id }) = events.first() else { panic!("missing attempt ID") };
+            assert!(matches!(events.last(), Some(StreamChunk::Retry { id: retry_id, delay_secs: 5 }) if retry_id == id));
+            assert!(events.iter().any(|event| matches!(event, StreamChunk::Usage { input_tokens: 10, output_tokens: 4, .. })));
+            assert!(events.iter().all(|event| !matches!(event, StreamChunk::ToolCall { .. } | StreamChunk::Done | StreamChunk::Error(_))));
+        }
+        let (result, events) = stream_test_http_response("503 Service Unavailable", "offline".into(), 0).await;
+        assert!(result.is_ok());
+        assert!(matches!(events.last(), Some(StreamChunk::Retry { delay_secs: 5, .. })));
+        for status in ["400 Bad Request", "401 Unauthorized", "403 Forbidden", "429 Too Many Requests"] {
+            let (result, events) = stream_test_http_response(status, "request denied".into(), 0).await;
+            assert!(result.is_err());
+            assert!(matches!(events.last(), Some(StreamChunk::Error(_))));
+            assert!(events.iter().all(|event| !matches!(event, StreamChunk::Retry { .. })));
+        }
+    }
+
+    #[tokio::test]
+    async fn transport_disconnect_retries_same_request_and_discards_partial_tools() {
+        use tokio::io::AsyncWriteExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let endpoint = format!("http://opencode.ai:{}/inference/go/openai/v1", address.port());
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for index in 0..2 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                requests.push(read_test_request(&mut socket).await);
+                let (body, missing_bytes) = if index == 0 {
+                    (format!("{}data: {}\n\n", tool_stream_frame("{\"path\":\"discarded\"}"), serde_json::json!({
+                        "choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+                    })), 20)
+                } else {
+                    (format!("{}data: {}\n\ndata: [DONE]\n\n", tool_stream_frame("{\"path\":\"kept\"}"), serde_json::json!({
+                        "choices": [{"delta": {}, "finish_reason": "tool_calls"}],
+                        "usage": {"prompt_tokens": 20, "completion_tokens": 6}
+                    })), 0)
+                };
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len() + missing_bytes).as_bytes()).await.unwrap();
+            }
+            requests
+        });
+        let client = LlmClient {
+            client: reqwest::Client::builder().no_proxy().resolve("opencode.ai", address).build().unwrap(),
+            ..LlmClient::new()
+        };
+        let request = OpenAIChatRequest {
+            model: "test".into(), messages: vec![ChatMessage::user("test")], temperature: Some(0.2),
+            stream: true, tools: None, reasoning_effort: Some("low".into()),
+            stream_options: Some(StreamOptions { include_usage: true }),
+        };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        let events_task = tokio::spawn(async move {
+            let mut events = Vec::new();
+            while let Some(event) = rx.recv().await { events.push(event); }
+            events
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(10), client.stream_openai(&endpoint, Some("test-key"), request, tx))
+            .await.unwrap().unwrap();
+        let requests = tokio::time::timeout(std::time::Duration::from_secs(2), server).await.unwrap().unwrap();
+        let events = tokio::time::timeout(std::time::Duration::from_secs(2), events_task).await.unwrap().unwrap();
+        assert_eq!(requests[0], requests[1]);
+        assert!(requests[0].0.contains("x-opencode-session:"));
+        let attempts: Vec<_> = events.iter().filter_map(|event| match event {
+            StreamChunk::AttemptStart { id } => Some(id), _ => None,
+        }).collect();
+        assert_eq!(attempts.len(), 2);
+        assert_ne!(attempts[0], attempts[1]);
+        let retry = events.iter().position(|event| matches!(event, StreamChunk::Retry { id, delay_secs: 5 } if id == attempts[0])).unwrap();
+        assert!(events[..retry].iter().any(|event| matches!(event, StreamChunk::Usage { input_tokens: 10, output_tokens: 4, .. })));
+        let calls: Vec<_> = events.iter().filter_map(|event| match event {
+            StreamChunk::ToolCall { arguments, .. } => Some(arguments.as_str()), _ => None,
+        }).collect();
+        assert_eq!(calls, vec!["{\"path\":\"kept\"}"]);
+        assert!(events.iter().all(|event| !matches!(event, StreamChunk::Error(_))));
         assert!(matches!(events.last(), Some(StreamChunk::Done)));
     }
 

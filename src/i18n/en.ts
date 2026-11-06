@@ -1,4 +1,5 @@
 export const en = {
+  'drawer.waitingForConnection': 'Waiting for connection. Retrying automatically; Stop cancels the wait.',
   // Common actions & statuses
   'common.cancel': 'Cancel',
   'common.create': 'Create',

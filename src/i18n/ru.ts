@@ -1,6 +1,7 @@
 import type { TranslationDict } from './types';
 
 export const ru = {
+  'drawer.waitingForConnection': 'Ожидаем соединение. Повторим автоматически; «Стоп» отменит ожидание.',
   // Common actions & statuses
   'common.cancel': 'Отмена',
   'common.create': 'Создать',

@@ -102,6 +102,7 @@ use std::path::PathBuf;
             crate::commands::ActiveAgentHandle {
                 abort_flag,
                 join_handle: join_slot,
+                steering: None,
             },
         );
 
@@ -122,6 +123,7 @@ use std::path::PathBuf;
             crate::commands::ActiveAgentHandle {
                 abort_flag: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 join_handle: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                steering: None,
             },
         );
         let guard2 = active_map.lock().unwrap();

@@ -94,6 +94,7 @@ export function shouldSuppressExplanation(
 ): boolean {
   const explanationText = (activity?.content || '').trim();
   if (!explanationText) return true;
+  if (activity.id.endsWith(':output')) return false;
   const expLower = explanationText.toLowerCase();
 
   // Suppress repeated duplicate Agent Explanation cards if content is identical to previous agent message

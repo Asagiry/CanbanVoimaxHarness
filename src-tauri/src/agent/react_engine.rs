@@ -183,6 +183,22 @@ impl SubagentDriver {
 impl AgentSessionDriver for SubagentDriver {
     fn emit_event(&self, event: AgentEvent) {
         match event {
+            AgentEvent::StreamStart { id } => {
+                self.reset_turn_thoughts(format!("{id}:thought"));
+                if let Some(ref app) = self.app_handle {
+                    let _ = app.emit("agent:stream_start", serde_json::json!({
+                        "taskId": &self.subagent_id, "streamId": id,
+                    }));
+                }
+            }
+            AgentEvent::StreamRetry { id, delay_secs } => {
+                self.reset_turn_thoughts(String::new());
+                if let Some(ref app) = self.app_handle {
+                    let _ = app.emit("agent:stream_retry", serde_json::json!({
+                        "taskId": &self.subagent_id, "streamId": id, "delaySecs": delay_secs,
+                    }));
+                }
+            }
             AgentEvent::Thought(text) => {
                 let mut start_guard = self.thought_start.lock().unwrap();
                 if start_guard.is_none() {
@@ -367,7 +383,7 @@ impl StreamChunkConsumer {
         driver: &D,
         options: &StreamConsumerOptions<'_>,
     ) -> StreamTurnResult {
-        let turn_start_instant = std::time::Instant::now();
+        let mut turn_start_instant = std::time::Instant::now();
         let mut first_token_instant: Option<std::time::Instant> = None;
         let mut last_token_instant: Option<std::time::Instant> = None;
         let mut turn_streamed_chars: usize = 0;
@@ -404,6 +420,46 @@ impl StreamChunkConsumer {
             received_any_chunk = true;
 
             match chunk {
+                StreamChunk::AttemptStart { id } => {
+                    turn_start_instant = std::time::Instant::now();
+                    first_token_instant = None;
+                    last_token_instant = None;
+                    turn_streamed_chars = 0;
+                    received_any_chunk = false;
+                    received_usage = false;
+                    turn_content.clear();
+                    turn_thoughts.clear();
+                    turn_tool_calls.clear();
+                    thinking_parser = ThinkingStreamParser::new();
+                    final_duration_secs = 0.0;
+                    final_duration_ms = 0.0;
+                    final_ttft_ms = 0.0;
+                    final_tps = 0.0;
+                    final_cache_hit_rate = 0.0;
+                    final_input_tokens = 0;
+                    final_output_tokens = 0;
+                    driver.emit_event(AgentEvent::StreamStart { id });
+                }
+                StreamChunk::Retry { id, delay_secs } => {
+                    turn_content.clear();
+                    turn_thoughts.clear();
+                    turn_tool_calls.clear();
+                    thinking_parser = ThinkingStreamParser::new();
+                    let root = driver.repo_root().to_path_buf();
+                    let dialog_key = driver.dialog_key().to_string();
+                    let stream_id = id.clone();
+                    let discarded = tokio::task::spawn_blocking(move || {
+                        crate::db::discard_stream_attempt(&root, &dialog_key, &stream_id)
+                    }).await.unwrap_or_else(|e| Err(e.to_string()));
+                    if let Err(err) = discarded {
+                        let err = format!("Failed to discard interrupted response: {err}");
+                        driver.emit_event(AgentEvent::Error(err.clone()));
+                        turn_error = Some(err);
+                        rx.close();
+                        break;
+                    }
+                    driver.emit_event(AgentEvent::StreamRetry { id, delay_secs });
+                }
                 StreamChunk::FirstChunk => {
                     if first_token_instant.is_none() {
                         first_token_instant = Some(std::time::Instant::now());
@@ -735,6 +791,39 @@ mod tests {
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Thought(_))));
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Token(_))));
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Telemetry { .. })));
+    }
+
+    #[tokio::test]
+    async fn retry_resets_partial_response_and_keeps_attempt_usage() {
+        let driver = TestDriver {
+            worktree_root: PathBuf::from("target").join(format!("cvh_consumer_retry_{}", uuid::Uuid::new_v4())),
+            ..TestDriver::new()
+        };
+        let (tx, mut rx) = mpsc::channel(20);
+        for chunk in [
+            StreamChunk::AttemptStart { id: "failed".into() },
+            StreamChunk::Token("discard this<think".into()),
+            StreamChunk::Thought("discard reasoning".into()),
+            StreamChunk::Usage { input_tokens: 100, output_tokens: 10, cache_read_tokens: 80, cache_creation_tokens: 0 },
+            StreamChunk::Retry { id: "failed".into(), delay_secs: 5 },
+            StreamChunk::AttemptStart { id: "success".into() },
+            StreamChunk::Token("answer".into()),
+            StreamChunk::ToolCall { id: "tool".into(), name: "read_file".into(), arguments: "{}".into() },
+            StreamChunk::Usage { input_tokens: 100, output_tokens: 5, cache_read_tokens: 90, cache_creation_tokens: 0 },
+            StreamChunk::Done,
+        ] {
+            tx.send(chunk).await.unwrap();
+        }
+        let result = StreamChunkConsumer::consume(&mut rx, &AtomicBool::new(false), &driver, &StreamConsumerOptions::new("test", 1, 100)).await;
+        assert_eq!(result.content, "answer");
+        assert!(result.thoughts.is_empty());
+        assert_eq!(result.tool_calls.len(), 1);
+        assert_eq!(result.output_tokens, 5);
+        assert!(result.error.is_none());
+        let events = driver.events.lock().unwrap();
+        assert_eq!(events.iter().filter(|event| matches!(event, AgentEvent::Telemetry { .. })).count(), 2);
+        assert!(events.iter().any(|event| matches!(event, AgentEvent::StreamRetry { id, .. } if id == "failed")));
+        assert!(!events.iter().any(|event| matches!(event, AgentEvent::Error(_))));
     }
 
     #[tokio::test]

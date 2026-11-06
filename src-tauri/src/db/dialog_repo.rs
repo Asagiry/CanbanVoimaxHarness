@@ -60,7 +60,7 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
 
         for (idx, item) in items.iter().enumerate() {
             // Deduplicate matching output items to eliminate duplicate final response cards
-            if item.item_type == "output" {
+            if item.item_type == "output" && !item.id.ends_with(":output") {
                 if let Some(ref text) = item.content {
                     let trimmed = text.trim();
                     if !trimmed.is_empty() {
@@ -108,6 +108,23 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
     Ok(())
 }
 
+pub fn discard_stream_attempt(root: &Path, task_id: &str, stream_id: &str) -> Result<(), String> {
+    let mut conn = get_db_conn(root).map_err(|e| e.to_string())?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now();
+    for kind in ["output", "thought"] {
+        tx.execute(
+            "INSERT INTO dialog_items (id, task_id, type, timestamp, created_at)
+             VALUES (?1, ?2, 'deleted', ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET type = 'deleted', content = NULL,
+                 images_json = NULL, tool_json = NULL, duration_ms = NULL
+             WHERE dialog_items.task_id = excluded.task_id",
+            params![format!("{stream_id}:{kind}"), task_id, now.to_rfc3339(), now.timestamp_millis()],
+        ).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
 /// Loads all dialog items for a task ordered chronologically by created_at,
 /// excluding compacted archived intermediate messages.
 pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>, String> {
@@ -115,19 +132,23 @@ pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>
 }
 
 pub fn load_dialog_items_after(root: &Path, task_id: &str, cursor: i64) -> Result<Vec<ActivityItem>, String> {
+    load_dialog_items_between(root, task_id, cursor, i64::MAX)
+}
+
+pub fn load_dialog_items_between(root: &Path, task_id: &str, cursor: i64, end: i64) -> Result<Vec<ActivityItem>, String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
             "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
              FROM dialog_items
-             WHERE task_id = ?1 AND type NOT IN ('compacted_archived', 'context_snapshot', 'deleted') AND rowid > ?2
+             WHERE task_id = ?1 AND type NOT IN ('compacted_archived', 'context_snapshot', 'deleted') AND rowid > ?2 AND rowid <= ?3
              ORDER BY created_at ASC, rowid ASC",
         )
         .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
 
     let rows = stmt
-        .query_map(params![task_id, cursor], |row| {
+        .query_map(params![task_id, cursor, end], |row| {
             let id: String = row.get(0)?;
             let item_type: String = row.get(1)?;
             let content: Option<String> = row.get(2)?;

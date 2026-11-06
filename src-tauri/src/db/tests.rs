@@ -3,6 +3,30 @@ use super::*;
 use std::path::PathBuf;
 
 #[tokio::test]
+async fn retry_discards_only_partial_attempt_and_preserves_cached_context() {
+    let root = PathBuf::from("target").join(format!("cvh_retry_{}", uuid::Uuid::new_v4()));
+    let task = "RETRY-1";
+    let previous = ActivityItem { id: "previous".into(), item_type: "output".into(), content: Some("same text".into()), ..Default::default() };
+    append_dialog_items(&root, task, std::slice::from_ref(&previous)).unwrap();
+    let messages = vec![crate::llm::ChatMessage::user("preserve prefix")];
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    save_conversation_context(&root, task, 4, &messages, context_dialog_cursor(&root, task).unwrap(), &abort).await.unwrap();
+    let partial = ActivityItem { id: "attempt:output".into(), ..previous.clone() };
+    append_dialog_items(&root, task, std::slice::from_ref(&partial)).unwrap();
+    assert_eq!(load_dialog_items(&root, task).unwrap().len(), 2);
+    discard_stream_attempt(&root, task, "attempt").unwrap();
+    append_dialog_items(&root, task, &[partial, ActivityItem {
+        id: "attempt:thought".into(), item_type: "thought".into(), content: Some("late thought".into()), ..Default::default()
+    }]).unwrap();
+    let remaining = load_dialog_items(&root, task).unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].id, previous.id);
+    let restored = load_conversation_context(&root, task).unwrap().unwrap();
+    assert_eq!(restored.turn, 4);
+    assert_eq!(restored.messages, messages);
+}
+
+#[tokio::test]
 async fn deleted_dialog_items_stay_out_of_rebuilt_context_after_stale_save() {
     let root = PathBuf::from("target").join(format!("cvh_delete_dialog_{}", uuid::Uuid::new_v4()));
     let task = "DELETE-1";

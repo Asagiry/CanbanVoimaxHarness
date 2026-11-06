@@ -61,6 +61,8 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 
 Choose checks for the changed behavior; use the active role's `sensors` rule for execution policy.
 
+- `src/stores/__tests__/streamRetry.test.ts` — Stream attempt rollback, buffered chunk ordering and subagent isolation.
+
 - `src/components/drawer/__tests__/columnRoundings.test.tsx` — Vitest suite for drawer and CortexExplorer column roundings and full borders.
 - `src/stores/__tests__/toolTimeTracking.test.ts` — Vitest suite for tool execution duration, fallback, and metric tracking.
 - `src/components/drawer/stream/__tests__/streamScrollContainment.test.ts` — Vitest suite for drawer feed overflow containment, token wrapping, and card bounds.

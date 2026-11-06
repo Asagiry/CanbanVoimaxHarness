@@ -9,7 +9,7 @@ import ActivityItemActions from './stream/ActivityItemActions';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { ArrowDown, AlertTriangle, Info } from 'lucide-react';
+import { ArrowDown, AlertTriangle, Info, WifiOff } from 'lucide-react';
 import { useActivityScroll } from './useActivityScroll';
 import {
   ThoughtStreamCard,
@@ -58,6 +58,10 @@ export default function DrawerActivityStream({
     activeSubagentPrompt,
   } = useDrawerStore();
   const { t } = useTranslation();
+  const connectionWait = useDrawerStore((state) => {
+    const taskId = activeSubagentId || task.id;
+    return state.connectionWait[state.toolIdToSubagentId[taskId] || taskId];
+  });
 
   const effectiveAttachments =
     task.attachments && task.attachments.length > 0
@@ -110,6 +114,12 @@ export default function DrawerActivityStream({
   return (
     <LightboxContext.Provider value={handleOpenLightbox}>
       <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#0b0b0e] overflow-hidden transition-colors">
+        {connectionWait && (
+          <div role="status" className="flex items-center gap-2 px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+            <WifiOff size={14} aria-hidden="true" className="shrink-0" />
+            <span>{t('drawer.waitingForConnection')}</span>
+          </div>
+        )}
         {/* Warning Banner on agent run error */}
         {runError && (
           <ExecutionErrorBanner

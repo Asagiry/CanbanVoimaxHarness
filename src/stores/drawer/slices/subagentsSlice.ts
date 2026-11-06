@@ -96,10 +96,14 @@ export const createSubagentsSlice: StateCreator<
     if (!parentTaskId || !subagentId) return;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      const rollbackVersion = get().streamRollbackVersions[subagentId];
       const items = await invoke<DrawerActivityItem[]>('load_subagent_dialog', {
         parentTaskId,
         subagentId,
       });
+      if (rollbackVersion !== get().streamRollbackVersions[subagentId]) {
+        return get().loadSubagentDialog(parentTaskId, subagentId);
+      }
       if (items && Array.isArray(items) && items.length > 0) {
         set((state) => {
           const nextFeed = {

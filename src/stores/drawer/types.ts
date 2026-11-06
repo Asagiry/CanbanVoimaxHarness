@@ -40,6 +40,9 @@ export interface DrawerMetaActions {
 export type DrawerMetaSlice = DrawerMetaState & DrawerMetaActions;
 
 export interface StreamState {
+  activeStreamIds: Record<string, string | null>;
+  streamRollbackVersions: Record<string, number>;
+  connectionWait: Record<string, { streamId: string; delaySecs: number } | null>;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   taskTelemetry: Record<string, TaskTelemetry>;
   thinkingStartTime: Record<string, number | null>;
@@ -55,12 +58,15 @@ export interface StreamState {
 }
 
 export interface StreamActions {
-  appendThought: (taskId: string, content: string) => void;
+  startStream: (taskId: string, streamId: string) => void;
+  retryStream: (taskId: string, streamId: string, delaySecs: number) => void;
+  appendThought: (taskId: string, content: string, streamId?: string) => void;
   appendOutput: (
     taskId: string,
     content: string,
     type?: 'output' | 'error' | 'system' | 'steer' | 'user',
-    images?: string[]
+    images?: string[],
+    streamId?: string
   ) => void;
   updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
   setThinkingStartTime: (taskId: string, time: number | null) => void;

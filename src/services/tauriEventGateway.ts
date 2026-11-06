@@ -28,12 +28,14 @@ export const TEXT_FLUSH_MS = 150;
 
 export interface AgentThoughtPayload {
   taskId?: string;
+  streamId?: string;
   thought?: string;
   delta?: string;
 }
 
 export interface AgentOutputPayload {
   taskId?: string;
+  streamId?: string;
   output?: string;
   content?: string;
   token?: string;
@@ -83,6 +85,15 @@ export interface AgentTelemetryPayload {
   ttftMs?: number;
   systemTokens?: number;
   toolTokens?: number;
+}
+
+export interface AgentStreamStartPayload {
+  taskId: string;
+  streamId: string;
+}
+
+export interface AgentStreamRetryPayload extends AgentStreamStartPayload {
+  delaySecs: number;
 }
 
 export interface AgentTurnStartPayload {
@@ -224,6 +235,8 @@ export interface AgentEventMap {
   'agent:question': AgentQuestionPayload;
   'agent:telemetry': AgentTelemetryPayload;
   'agent:turn_start': AgentTurnStartPayload;
+  'agent:stream_start': AgentStreamStartPayload;
+  'agent:stream_retry': AgentStreamRetryPayload;
   'agent:finished': AgentFinishedPayload;
   'agent:error': AgentErrorPayload;
   'agent:status': AgentStatusPayload;
@@ -254,123 +267,82 @@ export interface AgentEventMap {
 }
 
 export interface TextBuffer {
-  thought: string;
-  output: string;
-  thoughtTimer?: ReturnType<typeof setTimeout>;
-  outputTimer?: ReturnType<typeof setTimeout>;
+  chunks: Array<{ type: 'thought' | 'output'; text: string; streamId?: string }>;
+  timer?: ReturnType<typeof setTimeout>;
 }
 
-/**
- * Manages streaming text buffers per task to avoid high-frequency React re-renders.
- * Coalesces consecutive chunks of thought/output channels within TEXT_FLUSH_MS.
- */
+/** Keeps channel/attempt ordering while batching frequent stream updates. */
 export class TextBufferManager {
   private readonly buffers = new Map<string, TextBuffer>();
 
   public getBuffer(taskId: string): TextBuffer {
-    let b = this.buffers.get(taskId);
-    if (!b) {
-      b = { thought: '', output: '' };
-      this.buffers.set(taskId, b);
+    let buffer = this.buffers.get(taskId);
+    if (!buffer) {
+      buffer = { chunks: [] };
+      this.buffers.set(taskId, buffer);
     }
-    return b;
-  }
-
-  public flushThought(taskId: string): void {
-    const b = this.buffers.get(taskId);
-    if (!b) return;
-    if (b.thoughtTimer) {
-      clearTimeout(b.thoughtTimer);
-      b.thoughtTimer = undefined;
-    }
-    if (b.thought) {
-      const chunk = b.thought;
-      b.thought = '';
-      try {
-        useDrawerStore.getState().appendThought(taskId, chunk);
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  public flushOutput(taskId: string): void {
-    const b = this.buffers.get(taskId);
-    if (!b) return;
-    if (b.outputTimer) {
-      clearTimeout(b.outputTimer);
-      b.outputTimer = undefined;
-    }
-    if (b.output) {
-      const chunk = b.output;
-      b.output = '';
-      try {
-        useDrawerStore.getState().appendOutput(taskId, chunk, 'output');
-      } catch {
-        // ignore
-      }
-    }
+    return buffer;
   }
 
   public flushTask(taskId: string): void {
-    this.flushThought(taskId);
-    this.flushOutput(taskId);
+    const buffer = this.buffers.get(taskId);
+    if (!buffer) return;
+    if (buffer.timer) clearTimeout(buffer.timer);
+    this.buffers.delete(taskId);
+    for (const chunk of buffer.chunks) {
+      const state = useDrawerStore.getState();
+      if (chunk.type === 'thought') state.appendThought(taskId, chunk.text, chunk.streamId);
+      else state.appendOutput(taskId, chunk.text, 'output', undefined, chunk.streamId);
+    }
   }
 
   public flushAll(): void {
-    for (const id of Array.from(this.buffers.keys())) {
-      this.flushTask(id);
-    }
+    for (const taskId of Array.from(this.buffers.keys())) this.flushTask(taskId);
   }
 
-  public queueThought(taskId: string, text: string): void {
-    const ds = useDrawerStore.getState();
-    ds.setActiveAgentTask(taskId, true);
-    if (ds.generationStartTime[taskId] == null) {
-      ds.setGenerationStartTime(taskId, Date.now());
-    }
-    ds.recordStreamedChars(taskId, text.length);
-    const b = this.getBuffer(taskId);
-    b.thought += text;
-    if (!b.thoughtTimer) {
-      b.thoughtTimer = setTimeout(() => {
-        this.flushThought(taskId);
-      }, TEXT_FLUSH_MS);
-    }
+  private queue(taskId: string, type: 'thought' | 'output', text: string, streamId?: string): void {
+    const state = useDrawerStore.getState();
+    if (streamId && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return;
+    state.setActiveAgentTask(taskId, true);
+    if (state.generationStartTime[taskId] == null) state.setGenerationStartTime(taskId, Date.now());
+    state.recordStreamedChars(taskId, text.length);
+    const buffer = this.getBuffer(taskId);
+    const last = buffer.chunks[buffer.chunks.length - 1];
+    if (last && last.type === type && last.streamId === streamId) last.text += text;
+    else buffer.chunks.push({ type, text, streamId });
+    if (!buffer.timer) buffer.timer = setTimeout(() => this.flushTask(taskId), TEXT_FLUSH_MS);
   }
 
-  public queueOutput(taskId: string, text: string): void {
-    const ds = useDrawerStore.getState();
-    ds.setActiveAgentTask(taskId, true);
-    if (ds.generationStartTime[taskId] == null) {
-      ds.setGenerationStartTime(taskId, Date.now());
+  public queueThought(taskId: string, text: string, streamId?: string): void {
+    this.queue(taskId, 'thought', text, streamId);
+  }
+
+  public queueOutput(taskId: string, text: string, streamId?: string): void {
+    this.queue(taskId, 'output', text, streamId);
+  }
+
+  public startStream(taskId: string, streamId: string): void {
+    this.flushTask(taskId);
+    useDrawerStore.getState().startStream(taskId, streamId);
+  }
+
+  public retryStream(taskId: string, streamId: string, delaySecs: number): void {
+    const buffer = this.buffers.get(taskId);
+    if (buffer) {
+      buffer.chunks = buffer.chunks.filter((chunk) => chunk.streamId !== streamId);
+      if (!buffer.chunks.length) this.clearTask(taskId);
     }
-    ds.recordStreamedChars(taskId, text.length);
-    const b = this.getBuffer(taskId);
-    b.output += text;
-    if (!b.outputTimer) {
-      b.outputTimer = setTimeout(() => {
-        this.flushOutput(taskId);
-      }, TEXT_FLUSH_MS);
-    }
+    useDrawerStore.getState().retryStream(taskId, streamId, delaySecs);
   }
 
   public clearTask(taskId: string): void {
-    const b = this.buffers.get(taskId);
-    if (b) {
-      if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
-      if (b.outputTimer) clearTimeout(b.outputTimer);
-      this.buffers.delete(taskId);
-    }
+    const buffer = this.buffers.get(taskId);
+    if (buffer?.timer) clearTimeout(buffer.timer);
+    this.buffers.delete(taskId);
   }
 
   public dispose(): void {
     this.flushAll();
-    for (const b of this.buffers.values()) {
-      if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
-      if (b.outputTimer) clearTimeout(b.outputTimer);
-    }
-    this.buffers.clear();
   }
 }
 
@@ -463,9 +435,20 @@ export function setupTauriEventGateway(): () => void {
         }
       };
 
+      await addListener('agent:stream_start', ({ taskId, streamId }) => {
+        if (!taskId || !streamId) return;
+        ensureTaskRunningOnBoard(taskId);
+        bufferManager.startStream(taskId, streamId);
+      });
+
+      await addListener('agent:stream_retry', ({ taskId, streamId, delaySecs }) => {
+        if (!taskId || !streamId) return;
+        bufferManager.retryStream(taskId, streamId, delaySecs);
+      });
+
       // 1. agent:thought
       await addListener('agent:thought', (payload) => {
-        const { taskId, thought, delta } = payload || {};
+        const { taskId, thought, delta, streamId } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
         if (!isTaskActiveInDrawer(taskId)) {
@@ -473,13 +456,13 @@ export function setupTauriEventGateway(): () => void {
         }
         const text = thought || delta;
         if (text) {
-          bufferManager.queueThought(taskId, text);
+          bufferManager.queueThought(taskId, text, streamId);
         }
       });
 
       // 2. agent:output
       await addListener('agent:output', (payload) => {
-        const { taskId, output, content, token } = payload || {};
+        const { taskId, output, content, token, streamId } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
         if (!isTaskActiveInDrawer(taskId)) {
@@ -487,7 +470,7 @@ export function setupTauriEventGateway(): () => void {
         }
         const text = output || content || token;
         if (text) {
-          bufferManager.queueOutput(taskId, text);
+          bufferManager.queueOutput(taskId, text, streamId);
         }
       });
 

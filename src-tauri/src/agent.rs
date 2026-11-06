@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
@@ -226,6 +226,8 @@ pub type KanbanTask = Task;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum AgentEvent {
+    StreamStart { id: String },
+    StreamRetry { id: String, delay_secs: u64 },
     Token(String),
     Output(String),
     Thought(String),
@@ -2519,6 +2521,71 @@ pub async fn run_scoped_command(
 // Agent Loop Execution
 // ============================================================================
 
+pub struct AgentSteering {
+    pub accepting: bool,
+}
+
+impl Default for AgentSteering {
+    fn default() -> Self { Self { accepting: true } }
+}
+
+struct SteeringLifetime(Arc<Mutex<AgentSteering>>);
+
+impl Drop for SteeringLifetime {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.0.lock() { state.accepting = false; }
+    }
+}
+
+pub fn persist_steer_message(
+    root: &Path,
+    task_id: &str,
+    message: &str,
+    images: Option<Vec<String>>,
+) -> Result<Option<ActivityItem>, String> {
+    let items = crate::db::load_dialog_items(root, task_id)?;
+    if let Some(existing) = items.iter().rev().take(3).find(|item| {
+        matches!(item.item_type.as_str(), "steer" | "user")
+            && item.content.as_deref().map(str::trim) == Some(message.trim())
+    }) {
+        if existing.images.as_ref().is_none_or(Vec::is_empty) && images.as_ref().is_some_and(|value| !value.is_empty()) {
+            let mut updated = existing.clone();
+            updated.images = images;
+            crate::db::append_dialog_items(root, task_id, std::slice::from_ref(&updated))?;
+            return Ok(Some(updated));
+        }
+        return Ok(None);
+    }
+    let item = ActivityItem {
+        id: uuid::Uuid::new_v4().to_string(), item_type: "steer".into(),
+        timestamp: chrono::Utc::now().to_rfc3339(), content: Some(message.to_string()),
+        tool: None, duration_ms: None, images,
+    };
+    crate::db::append_dialog_items(root, task_id, std::slice::from_ref(&item))?;
+    Ok(Some(item))
+}
+
+fn drain_pending_steers(
+    config: &AgentSessionConfig,
+    messages: &mut Vec<ChatMessage>,
+    cursor: &mut i64,
+    close_if_empty: bool,
+) -> Result<(bool, bool)> {
+    let mut gate = config.steering.lock().map_err(|_| anyhow::anyhow!("Steering queue lock poisoned"))?;
+    let end = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id).map_err(anyhow::Error::msg)?;
+    let pending: Vec<_> = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, *cursor, end)
+        .map_err(anyhow::Error::msg)?.into_iter()
+        .filter(|item| matches!(item.item_type.as_str(), "user" | "steer" | "agent" | "summary"))
+        .collect();
+    let user_instruction = pending.iter().any(|item| matches!(item.item_type.as_str(), "user" | "steer"));
+    let before = messages.len();
+    append_messages_from_dialog(messages, "", &pending);
+    *cursor = end;
+    let appended = messages.len() > before;
+    if close_if_empty && !appended { gate.accepting = false; }
+    Ok((appended, user_instruction))
+}
+
 pub struct AgentSessionConfig {
     pub repo_root: PathBuf,
     pub worktree_path: PathBuf,
@@ -2531,6 +2598,7 @@ pub struct AgentSessionConfig {
     pub task_attachments: Option<Vec<String>>,
     pub steer_prompt: Option<String>,
     pub steer_images: Option<Vec<String>>,
+    pub steering: Arc<Mutex<AgentSteering>>,
     pub base_url: String,
     pub api_key: Option<String>,
     pub model: String,
@@ -2902,6 +2970,7 @@ pub async fn run_agent_loop<F>(
 where
     F: Fn(AgentEvent) + Send + Sync + 'static,
 {
+    let _steering_lifetime = SteeringLifetime(Arc::clone(&config.steering));
     let driver = MainAgentDriver::new(
         config.task_id.clone(),
         config.worktree_path.clone(),
@@ -2976,8 +3045,24 @@ where
         }
     }
 
+    if let Some(steer) = config.steer_prompt.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
+        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone()).map_err(anyhow::Error::msg)? {
+            if let Some(app) = config.app_handle.as_ref() {
+                let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
+                let _ = app.emit("task:activity", &payload);
+                let _ = app.emit("task:dialog", &payload);
+            }
+        }
+    }
+    let mut context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
+        .map_err(anyhow::Error::msg)?;
+    let saved_context = crate::db::load_conversation_context(&config.repo_root, &config.task_id)
+        .map_err(anyhow::Error::msg)?;
+
     // 1. Check if an existing in-memory context already exists for this task_id
-    let in_memory_context = if let Some(ref app) = config.app_handle {
+    let in_memory_context = if saved_context.is_some() || config.steer_prompt.is_some() {
+        None
+    } else if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             state.agent_contexts.lock().ok().and_then(|map| {
                 map.get(&config.task_id).and_then(|cs| {
@@ -3011,16 +3096,15 @@ where
 
     // 2. Check SQLite history if in-memory context is absent or <= 2 messages
     let sqlite_context = if in_memory_context.is_none() {
-        if let Some(mut saved) = crate::db::load_conversation_context(&config.repo_root, &config.task_id)
-            .map_err(anyhow::Error::msg)? {
-            let pending = crate::db::load_dialog_items_after(&config.repo_root, &config.task_id, saved.dialog_cursor)
+        if let Some(mut saved) = saved_context {
+            let pending = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, saved.dialog_cursor, context_cursor)
                 .map_err(anyhow::Error::msg)?;
             let pending: Vec<_> = pending.into_iter().filter(|item| {
                 matches!(item.item_type.as_str(), "user" | "steer" | "agent" | "summary")
             }).collect();
             append_messages_from_dialog(&mut saved.messages, &initial_user_prompt, &pending);
             Some((saved.turn, saved.messages))
-        } else if let Ok(dialog_items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
+        } else if let Ok(dialog_items) = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, 0, context_cursor) {
             let reconstructed = reconstruct_messages_from_dialog(&system_prompt, &initial_user_prompt, &dialog_items);
             if reconstructed.len() > 2 {
                 Some((0, reconstructed))
@@ -3105,74 +3189,6 @@ where
     // 4. Sanitize any unclosed tool calls (e.g. from an aborted turn mid-tool execution)
     sanitize_unclosed_tool_calls(&mut messages);
 
-    // 5. Inject steer message if present
-    if let Some(ref steer) = config.steer_prompt {
-        let steer_trimmed = steer.trim();
-        if !steer_trimmed.is_empty() {
-            let formatted_steer = format!(
-                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}",
-                steer_trimmed
-            );
-
-            // Avoid duplicate identical steer if already at the very end of messages
-            let already_appended = messages.last().map(|m| {
-                m.role == Role::User && m.content.as_deref().unwrap_or("").contains(steer_trimmed)
-            }).unwrap_or(false);
-
-            if !already_appended {
-                if let Some(ref imgs) = config.steer_images {
-                    if !imgs.is_empty() {
-                        messages.push(ChatMessage::user_with_images(formatted_steer, imgs.clone()));
-                    } else {
-                        messages.push(ChatMessage::user(formatted_steer));
-                    }
-                } else {
-                    messages.push(ChatMessage::user(formatted_steer));
-                }
-            } else if let Some(ref imgs) = config.steer_images {
-                if !imgs.is_empty() {
-                    if let Some(last_msg) = messages.last_mut() {
-                        if last_msg.role == Role::User {
-                            let text = last_msg.text_content().unwrap_or(&formatted_steer).to_string();
-                            *last_msg = ChatMessage::user_with_images(text, imgs.clone());
-                        }
-                    }
-                }
-            }
-
-            // Persist steer message to SQLite dialog_items ("type": "steer") so load_task_dialog also retains it
-            let already_in_db = if let Ok(items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
-                items.iter().rev().take(3).any(|it| {
-                    (it.item_type == "steer" || it.item_type == "user")
-                        && it.content.as_deref().map(str::trim) == Some(steer_trimmed)
-                })
-            } else {
-                false
-            };
-
-            if !already_in_db {
-                let new_item = crate::db::ActivityItem {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    item_type: "steer".to_string(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    content: Some(steer_trimmed.to_string()),
-                    tool: None,
-                    duration_ms: None,
-                    images: config.steer_images.clone(),
-                };
-                let _ = crate::db::append_dialog_items(&config.repo_root, &config.task_id, std::slice::from_ref(&new_item));
-                if let Some(app) = config.app_handle.as_ref() {
-                    let payload = serde_json::json!({
-                        "taskId": config.task_id,
-                        "item": new_item,
-                    });
-                    let _ = app.emit("task:activity", &payload);
-                    let _ = app.emit("task:dialog", &payload);
-                }
-            }
-        }
-    }
-
     // 5b. Guard against Gemini HTTP 400 "Requests ending with a model turn are not supported"
     // when resuming a task without a steer prompt.
     if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
@@ -3215,8 +3231,6 @@ where
     }
 
     let llm_client = LlmClient::for_conversation(&config.repo_root, &config.task_id);
-    let mut context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
-        .map_err(anyhow::Error::msg)?;
     let mut context_revision = local_compaction_rev;
     let mut completion_reminder_sent = false;
 
@@ -3230,6 +3244,10 @@ where
             sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
+        }
+
+        if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+            completion_reminder_sent = false;
         }
 
         event_sink(AgentEvent::TurnStart { turn });
@@ -3324,8 +3342,9 @@ where
                     let ids_to_archive: Vec<String> = existing_items[..archive_count].iter().map(|it| it.id.clone()).collect();
 
                     let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive);
-                    context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
-                        .map_err(anyhow::Error::msg)?;
+                    if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+                        completion_reminder_sent = false;
+                    }
                     let _ = app.emit(
                         "agent:tool_call",
                         serde_json::json!({
@@ -3429,8 +3448,9 @@ where
 
         let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
         if context_revision != local_compaction_rev {
-            context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
-                .map_err(anyhow::Error::msg)?;
+            if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+                completion_reminder_sent = false;
+            }
             context_revision = local_compaction_rev;
         }
         crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
@@ -3572,6 +3592,14 @@ Messages count: {}
             let unfinished = active_tool_names.iter().any(|name| name == "todo_write")
                 && crate::db::db_has_unfinished_todos(&config.repo_root, &config.task_id)
                     .map_err(anyhow::Error::msg)?;
+            let (steer_appended, user_instruction) = drain_pending_steers(&config, &mut messages, &mut context_cursor, !unfinished || completion_reminder_sent)?;
+            if steer_appended {
+                if user_instruction { completion_reminder_sent = false; }
+                sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+                crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
+                    .await.map_err(anyhow::Error::msg)?;
+                continue;
+            }
             if unfinished {
                 if !completion_reminder_sent {
                     completion_reminder_sent = true;
@@ -3579,14 +3607,14 @@ Messages count: {}
                         "[Runtime completion check] Your task checklist still has unfinished items. \
                          Continue the requested work using tools, then update the checklist and perform any required handoff. \
                          Do not mark items completed unless the work is done. If blocked, use question when available \
-                         or explain the concrete blocker. This reminder is sent only once per run.",
+                         or explain the concrete blocker. This reminder is sent only once until another user instruction arrives.",
                     ));
                     sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                     crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                         .await.map_err(anyhow::Error::msg)?;
                     continue;
                 }
-                bail!("Агент остановился с незавершённым планом после одного напоминания. Ответ сохранён. Проверьте блокер в диалоге и продолжите задачу, когда он устранён.");
+                bail!("Модель завершила ответ без вызова инструментов, но в плане остались незавершённые пункты. Автопродолжение в этом запуске уже использовано. Ответ и изменения сохранены; отправьте уточнение или продолжите задачу.");
             }
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
