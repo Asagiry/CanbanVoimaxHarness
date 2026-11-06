@@ -42,6 +42,14 @@ export function useCardHooks(
       ? rawEnterHookState
       : undefined;
 
+  // While an on_enter hook is still running, the card is usually still in
+  // the source column (stageId not yet updated) — show the pulse on the
+  // left (transition) node too, instead of hiding it behind the strict
+  // stageId filter.
+  const isEnterRunningPending =
+    Boolean(rawEnterHookState?.status === 'running' && rawEnterHookState.stageId && rawEnterHookState.stageId !== task.stageId);
+  const enterRunningState = isEnterRunningPending ? rawEnterHookState : undefined;
+
   const leaveHookDef =
     taskColumn?.hooks?.['on_leave'] ||
     taskColumn?.hooks?.['on_exit'] ||
@@ -74,12 +82,12 @@ export function useCardHooks(
     (isRecentHook || !stageEntryTime)
   );
 
-  const effectiveLeftState = enterHookState || (isTransitionHookFromResult ? leaveHookState : undefined);
+  const effectiveLeftState = enterHookState || enterRunningState || (isTransitionHookFromResult ? leaveHookState : undefined);
   const effectiveLeftHookName =
     enterHookName ||
     effectiveLeftState?.hookName ||
     (isTransitionHookFromResult ? leaveHookState?.hookName : undefined);
-  const hasLeftHook = Boolean(enterHookName || effectiveLeftState);
+  const hasLeftHook = Boolean(enterHookName || effectiveLeftState || enterRunningState);
 
   const sourceStageCol = effectiveLeftState?.stageId
     ? columns.find((c) => c.id === effectiveLeftState.stageId)
