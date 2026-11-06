@@ -294,10 +294,14 @@ impl LlmClient {
                         stream_error = Some("Invalid JSON in LLM stream".to_string());
                         break;
                     };
+                    if let Some(error) = payload.get("error").filter(|error| !error.is_null()) {
+                        stream_error = Some(format!("LLM stream error: {error}"));
+                        break;
+                    }
                     if ["/stop_reason", "/delta/stop_reason", "/message/stop_reason"].iter()
                         .any(|path| payload.pointer(path).and_then(|value| value.as_str()) == Some("max_tokens"))
                     {
-                        stream_error = Some("LLM response incomplete: max_tokens".to_string());
+                        stream_error.get_or_insert_with(|| "LLM response incomplete: max_tokens".to_string());
                     }
 
                     if let Ok(chunk) = serde_json::from_value::<OpenAIChatChunk>(payload) {
@@ -332,7 +336,7 @@ impl LlmClient {
                                     if matches!(reason, "stop" | "tool_calls" | "function_call") {
                                         terminal_marker = true;
                                     } else {
-                                        stream_error = Some(format!("LLM response incomplete: {reason}"));
+                                        stream_error.get_or_insert_with(|| format!("LLM response incomplete: {reason}"));
                                     }
                                 }
                                 // Content delta
@@ -379,8 +383,6 @@ impl LlmClient {
                         }
                     } else {
                         stream_error = Some("Invalid response shape in LLM stream".to_string());
-                    }
-                    if stream_error.is_some() {
                         break;
                     }
                 }
@@ -494,7 +496,14 @@ mod tests {
             cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
                 "choices": [{"delta": {}, "finish_reason": reason}], "usage": {"prompt_tokens": 10, "completion_tokens": 4}
             })));
+            for ending in ["data: [DONE]\n\n", ""] {
+                cases.push(format!("{tool}data: {}\n\ndata: {}\n\n{ending}",
+                    serde_json::json!({"choices": [{"delta": {}, "finish_reason": reason}]}),
+                    serde_json::json!({"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 4}}),
+                ));
+            }
         }
+        let cases_with_usage = cases.len();
         cases.push(format!("{tool}data: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"max_tokens\"}}}}\n\n"));
         cases.push(format!("{tool}data: {{\"stop_reason\":\"max_tokens\"}}\n\n"));
         cases.push(tool.clone());
@@ -502,12 +511,15 @@ mod tests {
         cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
             "choices": [{"delta": {"tool_calls": [{"index": 1, "function": {"name": "read_file", "arguments": "{"}}]}}]
         })));
+        cases.push(format!("{tool}data: {}\n\ndata: [DONE]\n\n", serde_json::json!({
+            "error": {"message": "upstream generation failed", "type": "server_error"}
+        })));
         for (index, response) in cases.into_iter().enumerate() {
             let (result, events) = stream_test_response(response).await;
             assert!(result.is_err());
             assert!(events.iter().any(|event| matches!(event, StreamChunk::Error(_))));
             assert!(events.iter().all(|event| !matches!(event, StreamChunk::ToolCall { .. } | StreamChunk::Done)));
-            if index < 3 {
+            if index < cases_with_usage {
                 assert!(events.iter().any(|event| matches!(event, StreamChunk::Usage { input_tokens: 10, output_tokens: 4, .. })));
             }
         }
