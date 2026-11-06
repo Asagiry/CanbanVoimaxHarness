@@ -45,7 +45,7 @@ All standard tools are defined in Rust backend (`src-tauri/src/agent.rs` and `sr
 - `write_file`: Writes complete UTF-8 file content (`file_path`, `content`).
 - `edit_file` (alias: `str_replace`): Precise text replacement with progressive line-ending normalization and whitespace tolerance.
 - `glob`: Finds files by pattern within active worktree.
-- `grep`: Searches file contents for a literal substring within the active worktree. Regex syntax is not supported; batch separate calls for alternative terms.
+- `grep`: Searches file contents line by line with Rust regex within the active worktree, returning at most 200 matching lines. Supports alternatives (`a|b`), anchors, character classes and inline flags (`(?i)`); look-around and backreferences are unsupported. Invalid expressions return an error.
 
 ### 2.6 Shell Execution & Sensor Verification Tools
 - **`execute_command` (alias: `bash`)**: Runs shell commands inside the worktree with timeout bounds and output spilling (>500 lines / 64 KB).
