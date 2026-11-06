@@ -157,6 +157,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_durations TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN provider_id TEXT", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN reasoning_effort TEXT", []);
         let _ = conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 

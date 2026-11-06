@@ -197,6 +197,7 @@ export const ru = {
   'drawer.attachImage': 'Прикрепить изображение или файл',
   'drawer.removeImage': 'Удалить прикрепленное изображение',
   'drawer.selectModel': 'Выбор модели',
+  'drawer.selectEffort': 'Выбор усилия',
   'drawer.taskModel': 'Модель задачи: {model}',
   'drawer.stopExecution': 'Остановить выполнение',
   'drawer.sendMessage': 'Отправить сообщение агенту',

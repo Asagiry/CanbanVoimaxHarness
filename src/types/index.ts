@@ -64,6 +64,7 @@ export interface KanbanTask {
   verdictNote?: string;
   model?: string;
   providerId?: string | null;
+  reasoningEffort?: string | null;
   parentId?: string;
   subtaskIndex?: number;
   waitingForSubtaskId?: string;
@@ -106,6 +107,8 @@ export interface BackendTaskDTO {
   model?: string;
   providerId?: string | null;
   provider_id?: string | null;
+  reasoningEffort?: string | null;
+  reasoning_effort?: string | null;
   parentId?: string;
   parent_id?: string;
   subtaskIndex?: number;

@@ -112,6 +112,7 @@ use std::sync::Arc;
             status: Some("running".to_string()),
             model: None,
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,

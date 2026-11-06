@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { KanbanTask } from '../../types';
+import type { KanbanTask, ReasoningEffort } from '../../types';
 import ContextGauge from './ContextGauge';
+import EffortSelector from './EffortSelector';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
@@ -29,6 +30,7 @@ export interface DrawerSteerBarProps {
   effectiveModel: string;
   selectableModels: string[];
   onSelectPair: (providerId: string, model: string) => void;
+  onSelectEffort: (effort: ReasoningEffort) => void;
 }
 
 export default function DrawerSteerBar({
@@ -41,6 +43,7 @@ export default function DrawerSteerBar({
   effectiveModel,
   selectableModels,
   onSelectPair,
+  onSelectEffort,
 }: DrawerSteerBarProps) {
   const [interactiveInput, setInteractiveInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
@@ -118,11 +121,7 @@ export default function DrawerSteerBar({
   const providerModelLabel = pairProvider
     ? `${pairProvider.name} / ${modelDisplay}`
     : modelDisplay;
-  const reasoningRaw = matchedPersona?.reasoningEffort || null;
-  const reasoningLabel = reasoningRaw
-    ? reasoningRaw.charAt(0).toUpperCase() + reasoningRaw.slice(1).toLowerCase()
-    : 'Off';
-  const reasoningChip = reasoningLabel === 'High' ? 'Max' : reasoningLabel;
+  const personaEffort = matchedPersona?.reasoningEffort || null;
 
   const groupedModels = React.useMemo(() => {
     const flat = providers.flatMap((p) => p.models.map((m) => ({
@@ -427,10 +426,12 @@ export default function DrawerSteerBar({
                   <span className="truncate">{providerModelLabel}</span>
                   <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
                 </button>
-                <span className="px-2.5 py-1.5 rounded-full bg-[#f4f4f5] dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] text-[13px] border border-[#ebebeb] dark:border-[#2c2c33] flex items-center gap-1.5 font-sans select-none" title={`Effort: ${reasoningLabel}`}>
-                  <span className="truncate">{reasoningChip}</span>
-                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
-                </span>
+                <EffortSelector
+                  taskEffort={task.reasoningEffort}
+                  personaEffort={personaEffort}
+                  onSelectEffort={onSelectEffort}
+                  onOpen={() => setIsModelMenuOpen(false)}
+                />
                 {isModelMenuOpen && (
                   <div className="absolute bottom-full right-0 mb-2 w-64 rounded-xl bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shadow-lg p-1.5 z-30 text-xs max-h-60 overflow-y-auto">
                     <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#71717a] text-[10px] uppercase font-sans">{t('drawer.selectModel')}</div>
