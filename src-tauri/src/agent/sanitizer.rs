@@ -63,11 +63,34 @@ pub fn reconstruct_messages_from_dialog(
     messages
 }
 
+/// Whether a persisted dialog item should be replayed into the LLM transcript
+/// when a snapshot is resumed or steers are drained. Tool results, assistant
+/// outputs and compacted summaries must survive restarts — otherwise the
+/// conversation restarts from ~2 messages and the prompt stops growing
+/// (Req chars plateau), which mimics a provider-side cache cap.
+pub fn is_dialog_item_replayable(item: &ActivityItem) -> bool {
+    matches!(
+        item.item_type.as_str(),
+        "user" | "steer" | "agent" | "summary" | "tool" | "output" | "assistant" | "compacted"
+    )
+}
+
 pub fn append_messages_from_dialog(
     messages: &mut Vec<ChatMessage>,
     initial_user_prompt: &str,
     items: &[ActivityItem],
 ) {
+    // Deduplicate tool pairs reconstructed from SQLite: a "tool" ActivityItem
+    // already encodes both the assistant tool_call and the tool_response
+    // (see the "tool" arm below). When a snapshot resume replays items that
+    // are already present in saved.messages (e.g. after a crash between
+    // save_conversation_context and the dialog_cursor advance), skipping an
+    // exact (tool_call_id, result) pair that was just appended keeps the
+    // transcript strictly valid for the LLM API.
+    let mut appended_tool_ids: std::collections::HashSet<String> = messages
+        .iter()
+        .filter_map(|m| m.tool_call_id.clone())
+        .collect();
 
     for item in items {
         if item.is_runtime_error() { continue; }
@@ -143,6 +166,27 @@ pub fn append_messages_from_dialog(
                 if let Some(ref tool_val) = item.tool {
                     let call_id = tool_val.get("id").and_then(|v| v.as_str()).unwrap_or(&item.id);
 
+                    // Interest-only / optimistic cards carry no real result yet
+                    // ("queued"/"running" without a result payload). Replaying
+                    // them would fabricate an assistant tool_call that the model
+                    // never made. Only reconstruct pairs that carry non-empty
+                    // result content (or an explicit stdout/output/result).
+                    let has_result = tool_val
+                        .get("result")
+                        .or_else(|| tool_val.get("stdout"))
+                        .or_else(|| tool_val.get("output"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| !s.trim().is_empty())
+                        .unwrap_or(false)
+                        || item.content.as_deref().is_some_and(|c| !c.trim().is_empty());
+                    let status = tool_val.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                    if !has_result && matches!(status, "queued" | "running") {
+                        continue;
+                    }
+                    if appended_tool_ids.contains(call_id) {
+                        continue;
+                    }
+
                     // 1. Имя инструмента: проверяем 'name', затем 'toolName', затем алиасы
                     let name = tool_val
                         .get("name")
@@ -182,6 +226,7 @@ pub fn append_messages_from_dialog(
                     };
                     messages.push(ChatMessage::assistant(None, Some(vec![tc])));
                     messages.push(ChatMessage::tool_response(call_id, result));
+                    appended_tool_ids.insert(call_id.to_string());
                 }
             }
             "compacted" => {

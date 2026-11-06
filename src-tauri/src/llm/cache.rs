@@ -7,13 +7,22 @@ pub fn opencode_headers(base_url: &str, session: &str) -> HeaderMap {
     if !reqwest::Url::parse(base_url).is_ok_and(|url| url.host_str() == Some("opencode.ai")) {
         return headers;
     }
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    session.hash(&mut hasher);
-    if let Ok(value) = HeaderValue::from_str(&format!("cvh-{:016x}", hasher.finish())) {
-        headers.insert("x-opencode-session", value);
+    if let Some(value) = opencode_session_header(base_url, session) {
+        if let Ok(header_value) = HeaderValue::from_str(&value) {
+            headers.insert("x-opencode-session", header_value);
+        }
     }
     headers.insert(USER_AGENT, HeaderValue::from_static(concat!("CanbanVoimaxHarness/", env!("CARGO_PKG_VERSION"))));
     headers
+}
+
+pub fn opencode_session_header(base_url: &str, session: &str) -> Option<String> {
+    if !reqwest::Url::parse(base_url).is_ok_and(|url| url.host_str() == Some("opencode.ai")) {
+        return None;
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    session.hash(&mut hasher);
+    Some(format!("cvh-{:016x}", hasher.finish()))
 }
 
 #[derive(Debug, Default)]

@@ -2642,11 +2642,12 @@ fn drain_pending_steers(
     cursor: &mut i64,
     close_if_empty: bool,
 ) -> Result<(bool, bool)> {
+    use crate::agent::sanitizer::is_dialog_item_replayable;
     let mut gate = config.steering.lock().map_err(|_| anyhow::anyhow!("Steering queue lock poisoned"))?;
     let end = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id).map_err(anyhow::Error::msg)?;
     let pending: Vec<_> = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, *cursor, end)
         .map_err(anyhow::Error::msg)?.into_iter()
-        .filter(|item| matches!(item.item_type.as_str(), "user" | "steer" | "agent" | "summary"))
+        .filter(is_dialog_item_replayable)
         .collect();
     let user_instruction = pending.iter().any(|item| matches!(item.item_type.as_str(), "user" | "steer"));
     let before = messages.len();
@@ -3203,7 +3204,7 @@ where
             let pending = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, saved.dialog_cursor, context_cursor)
                 .map_err(anyhow::Error::msg)?;
             let pending: Vec<_> = pending.into_iter().filter(|item| {
-                matches!(item.item_type.as_str(), "user" | "steer" | "agent" | "summary")
+                crate::agent::sanitizer::is_dialog_item_replayable(item)
             }).collect();
             append_messages_from_dialog(&mut saved.messages, &initial_user_prompt, &pending);
             Some((saved.turn, saved.messages))
@@ -3591,8 +3592,12 @@ Model: {}
 Messages count: {}
 Req tokens (est): {}
 Req chars: {}
+Session: {}
+Endpoint: {}
 ",
-                ts, config.task_id, turn, config.model, messages.len(), req_tokens_est, req_chars
+                ts, config.task_id, turn, config.model, messages.len(), req_tokens_est, req_chars,
+                crate::llm::cache::opencode_session_header(&config.base_url, &format!("{}:{}", config.repo_root.display(), config.task_id)).unwrap_or_else(|| "n/a".to_string()),
+                config.base_url
             );
             if let Some(first) = messages.first() {
                 if first.role == Role::System {
