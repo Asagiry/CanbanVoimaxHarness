@@ -195,6 +195,7 @@ export const en = {
   'drawer.attachImage': 'Attach image or file',
   'drawer.removeImage': 'Remove attached image',
   'drawer.selectModel': 'Select Model',
+  'drawer.selectEffort': 'Select Effort',
   'drawer.taskModel': 'Task Model: {model}',
   'drawer.stopExecution': 'Stop execution',
   'drawer.sendMessage': 'Send message to agent',

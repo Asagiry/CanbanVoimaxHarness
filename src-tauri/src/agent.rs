@@ -79,6 +79,8 @@ pub struct Task {
     pub model: Option<String>,
     #[serde(rename = "providerId", alias = "provider_id", default)]
     pub provider_id: Option<String>,
+    #[serde(rename = "reasoningEffort", alias = "reasoning_effort", default)]
+    pub reasoning_effort: Option<String>,
     #[serde(rename = "parentId", alias = "parent_id", default)]
     pub parent_id: Option<String>,
     #[serde(rename = "subtaskIndex", alias = "subtask_index", default)]

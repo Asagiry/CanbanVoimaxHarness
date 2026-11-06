@@ -665,6 +665,13 @@ export default function AgentConsoleDrawer() {
                 isToolAllowed={isToolAllowed}
                 effectiveModel={effectiveModel}
                 selectableModels={selectableModels}
+                onSelectEffort={(effort) => {
+                  updateTask(task.id, { reasoningEffort: effort });
+                  syncTasksBackend(
+                    tasks.map((t) => (t.id === task.id ? { ...t, reasoningEffort: effort } : t)),
+                  );
+                  useDrawerStore.getState().appendOutput(task.id, `Effort изменён на ${effort}`, 'system');
+                }}
                 onSelectPair={(providerId, m) => {
                   const prevModel = task.model || effectiveModel;
                   updateTask(task.id, { model: m, providerId });

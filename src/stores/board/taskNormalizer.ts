@@ -258,6 +258,7 @@ export function normalizeKanbanTask(
     verdictNote: raw.verdictNote,
     model: raw.model || undefined,
     providerId: raw.providerId ?? raw.provider_id ?? undefined,
+    reasoningEffort: raw.reasoningEffort ?? raw.reasoning_effort ?? undefined,
     parentId: raw.parentId ?? raw.parent_id ?? undefined,
     subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
     waitingForSubtaskId: effectiveWaitingForSubtaskId,

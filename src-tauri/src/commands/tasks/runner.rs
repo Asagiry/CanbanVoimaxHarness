@@ -536,8 +536,11 @@ async fn run_agent_inner(
         // Per-agent setting wins over the stage default; both normalized
         // (`"off"`/empty/unknown → `None` → omitted from the payload).
         reasoning_effort: crate::config::normalize_reasoning_effort(
-            agent_setting.reasoning_effort.as_deref(),
+            task.reasoning_effort.as_deref(),
         )
+        .or_else(|| {
+            crate::config::normalize_reasoning_effort(agent_setting.reasoning_effort.as_deref())
+        })
         .or_else(|| {
             crate::config::normalize_reasoning_effort(col.reasoning_effort.as_deref())
         }),

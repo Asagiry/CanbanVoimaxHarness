@@ -402,6 +402,7 @@ pub fn propagate_parent_subtask_advance(
                 status: Some(subtask_status.to_string()),
                 model: parent_model.clone(),
                 provider_id: tasks[parent_idx].provider_id.clone(),
+                reasoning_effort: tasks[parent_idx].reasoning_effort.clone(),
                 parent_id: Some(parent_id.clone()),
                 subtask_index: Some(next_subtask_idx),
                 waiting_for_subtask_id: None,

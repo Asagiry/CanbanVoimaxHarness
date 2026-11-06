@@ -25,6 +25,7 @@ use std::path::PathBuf;
             status: None,
             model: Some("user-custom-model".to_string()),
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -117,6 +118,7 @@ use std::path::PathBuf;
             status: None,
             model: Some("gemini-3.8-flash-high".to_string()),
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -159,6 +161,22 @@ use std::path::PathBuf;
         assert_eq!(resolved, "crouton-alpha-free");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_task_reasoning_effort_precedence() {
+        use crate::config::normalize_reasoning_effort;
+        let resolved = normalize_reasoning_effort(Some("high"))
+            .or_else(|| normalize_reasoning_effort(Some("low")))
+            .or_else(|| normalize_reasoning_effort(Some("medium")));
+        assert_eq!(resolved.as_deref(), Some("high"));
+        let resolved = normalize_reasoning_effort(None)
+            .or_else(|| normalize_reasoning_effort(Some("low")))
+            .or_else(|| normalize_reasoning_effort(Some("medium")));
+        assert_eq!(resolved.as_deref(), Some("low"));
+        let resolved = normalize_reasoning_effort(Some("off"))
+            .or_else(|| normalize_reasoning_effort(Some("low")));
+        assert_eq!(resolved.as_deref(), Some("low"));
     }
 
     #[test]
@@ -271,6 +289,7 @@ use std::path::PathBuf;
             status: Some("idle".to_string()),
             model: None,
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -357,6 +376,7 @@ use std::path::PathBuf;
             status: Some("idle".to_string()),
             model: None,
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -392,6 +412,7 @@ use std::path::PathBuf;
             status: Some("running".to_string()),
             model: None,
             provider_id: None,
+            reasoning_effort: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,

@@ -268,6 +268,7 @@ fn test_tasks_crud_and_todos() {
         status: Some("idle".to_string()),
         model: Some("gemini-3.8-flash-high".to_string()),
         provider_id: None,
+        reasoning_effort: Some("high".to_string()),
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,
@@ -325,6 +326,7 @@ fn test_tasks_crud_and_todos() {
     assert_eq!(loaded.stage_entered_at, Some(1000));
     assert_eq!(loaded.tags, Some(vec!["backend".to_string(), "sqlite".to_string()]));
     assert_eq!(loaded.current_tokens, Some(1500));
+    assert_eq!(loaded.reasoning_effort.as_deref(), Some("high"));
     assert_eq!(loaded.total_elapsed, Some(1017));
     assert_eq!(
         loaded.stage_durations.as_ref().unwrap()["dev"],
@@ -375,6 +377,7 @@ fn test_tasks_crud_and_todos() {
         status: Some("idle".to_string()),
         model: None,
         provider_id: None,
+            reasoning_effort: None,
         parent_id: Some("CVH-010".to_string()),
         subtask_index: Some(1),
         waiting_for_subtask_id: None,
@@ -437,6 +440,7 @@ fn test_sequence_allocation() {
         status: None,
         model: None,
         provider_id: None,
+            reasoning_effort: None,
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,

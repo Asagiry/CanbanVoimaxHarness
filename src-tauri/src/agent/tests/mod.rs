@@ -111,6 +111,7 @@ pub(crate) fn make_test_task(id: &str, stage_id: &str, board_id: &str) -> Task {
         status: Some("running".to_string()),
         model: None,
         provider_id: None,
+            reasoning_effort: None,
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,
