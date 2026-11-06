@@ -666,7 +666,7 @@ fn test_db_connection_pool_concurrent_access() {
     let root_path = root.as_path();
 
     let pool = get_db_pool(root_path).expect("get_db_pool");
-    assert_eq!(pool.max_size(), 16);
+    assert_eq!(pool.max_size(), 4);
 
     // Verify multiple pooled connections can be checked out and execute queries concurrently
     let conn1 = get_db_conn(root_path).expect("conn 1");
@@ -682,4 +682,244 @@ fn test_db_connection_pool_concurrent_access() {
     drop(conn2);
 
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn test_isolated_context_snapshot_persistence_and_marker() {
+    let root = PathBuf::from("target").join(format!("cvh_iso_ctx_{}", uuid::Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&root);
+    let task_id = "CTX-TEST-1";
+
+    let messages = vec![
+        crate::llm::ChatMessage::user("Test prompt"),
+        crate::llm::ChatMessage::assistant(Some("Test response".into()), None),
+    ];
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    // 1. Save context snapshot
+    save_conversation_context(&root, task_id, 1, &messages, 0, &abort).await.expect("save context");
+
+    // 2. Verify dedicated context file exists on disk
+    let file_path = context_file_path(&root, task_id);
+    assert!(file_path.is_file(), "Context file must exist at {:?}", file_path);
+    let disk_content = std::fs::read_to_string(&file_path).expect("read context file");
+    assert!(disk_content.contains("Test prompt"));
+    assert!(disk_content.contains("Test response"));
+
+    // 3. Verify dialog_items in SQLite stores only the lightweight marker 'file'
+    let conn = get_db_conn(&root).expect("db conn");
+    let marker: String = conn.query_row(
+        "SELECT content FROM dialog_items WHERE task_id = ?1 AND type = 'context_snapshot'",
+        rusqlite::params![task_id],
+        |r| r.get(0),
+    ).expect("query marker");
+    assert_eq!(marker, "file", "dialog_items.content must be 'file', not multi-megabyte JSON");
+    drop(conn);
+
+    // 4. Verify load_conversation_context restores from the file
+    let loaded = load_conversation_context(&root, task_id).expect("load context").expect("context present");
+    assert_eq!(loaded.turn, 1);
+    assert_eq!(loaded.messages.len(), 2);
+    assert_eq!(loaded.messages[0].content, messages[0].content);
+
+    // 5. Test backward compatibility: legacy snapshot stored in dialog_items.content
+    let legacy_task_id = "CTX-LEGACY-2";
+    let legacy_ctx = ConversationContext {
+        turn: 5,
+        messages: vec![crate::llm::ChatMessage::user("Legacy context in SQLite")],
+        dialog_cursor: 10,
+    };
+    let legacy_json = serde_json::to_string(&legacy_ctx).expect("serialize legacy");
+    let conn = get_db_conn(&root).expect("db conn");
+    conn.execute(
+        "INSERT INTO dialog_items (id, task_id, type, content, created_at) VALUES (?1, ?2, 'context_snapshot', ?3, ?4)",
+        rusqlite::params![format!("context:{legacy_task_id}"), legacy_task_id, legacy_json, chrono::Utc::now().timestamp_millis()],
+    ).expect("insert legacy snapshot");
+    drop(conn);
+
+    let loaded_legacy = load_conversation_context(&root, legacy_task_id)
+        .expect("load legacy context")
+        .expect("legacy context present");
+    assert_eq!(loaded_legacy.turn, 5);
+    assert_eq!(loaded_legacy.messages[0].content, legacy_ctx.messages[0].content);
+
+    // 6. Test clear_dialog_items also purges context file
+    clear_dialog_items(&root, task_id).expect("clear dialog items");
+    assert!(!file_path.exists(), "Context file must be deleted when dialog items are cleared");
+    assert!(load_conversation_context(&root, task_id).expect("load after clear").is_none());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_todo_preservation_when_todos_none_or_empty() {
+    let root = PathBuf::from("target").join(format!("cvh_todo_pres_{}", uuid::Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&root);
+    let task_id = "TODO-TEST-1";
+
+    let mut task = Task {
+        id: task_id.to_string(),
+        title: "Test Todo Preservation".to_string(),
+        description: "Testing todo safety".to_string(),
+        stage_id: "backlog".to_string(),
+        board_id: Some("development".to_string()),
+        worktree_path: None,
+        branch: None,
+        verdict: None,
+        custom_flow: None,
+        status: Some("idle".to_string()),
+        model: None,
+        provider_id: None,
+        reasoning_effort: None,
+        parent_id: None,
+        subtask_index: None,
+        waiting_for_subtask_id: None,
+        handover_summary: None,
+        cover_image: None,
+        priority: None,
+        current_tokens: None,
+        skip_worktree: Some(false),
+        created_at: 100,
+        updated_at: 100,
+        stage_entered_at: Some(100),
+        completed_at: None,
+        position: None,
+        hook_states: None,
+        stage_durations: None,
+        total_elapsed: None,
+        project_path: None,
+        attachments: None,
+        tags: None,
+        todos: Some(vec![
+            TodoItem { id: "td-1".to_string(), content: "Todo item 1".to_string(), status: "pending".to_string() },
+            TodoItem { id: "td-2".to_string(), content: "Todo item 2".to_string(), status: "completed".to_string() },
+        ]),
+    };
+
+    // 1. Initial upsert with 2 todos
+    db_upsert_task(&root, &task).expect("initial upsert");
+    let loaded = db_get_task(&root, task_id).expect("get task").expect("task exists");
+    assert_eq!(loaded.todos.as_ref().map(|t| t.len()), Some(2));
+
+    // 2. Upsert with todos: None -> MUST NOT wipe out existing todos
+    task.todos = None;
+    task.title = "Updated Title with None Todos".to_string();
+    db_upsert_task(&root, &task).expect("upsert with None todos");
+
+    let loaded_after_none = db_get_task(&root, task_id).expect("get task").expect("task exists");
+    assert_eq!(loaded_after_none.title, "Updated Title with None Todos");
+    assert_eq!(loaded_after_none.todos.as_ref().map(|t| t.len()), Some(2), "Existing todos must be preserved when todos is None");
+
+    // 3. Upsert with todos: Some(vec![]) -> MUST NOT wipe out existing todos
+    task.todos = Some(vec![]);
+    task.title = "Updated Title with Empty Todos".to_string();
+    db_upsert_task(&root, &task).expect("upsert with empty todos");
+
+    let loaded_after_empty = db_get_task(&root, task_id).expect("get task").expect("task exists");
+    assert_eq!(loaded_after_empty.title, "Updated Title with Empty Todos");
+    assert_eq!(loaded_after_empty.todos.as_ref().map(|t| t.len()), Some(2), "Existing todos must be preserved when todos is empty");
+
+    // 4. Upsert with explicit new todos -> replaces todos
+    task.todos = Some(vec![
+        TodoItem { id: "td-3".to_string(), content: "New single todo".to_string(), status: "pending".to_string() },
+    ]);
+    db_upsert_task(&root, &task).expect("upsert with explicit todos");
+
+    let loaded_after_explicit = db_get_task(&root, task_id).expect("get task").expect("task exists");
+    assert_eq!(loaded_after_explicit.todos.as_ref().map(|t| t.len()), Some(1));
+    assert_eq!(loaded_after_explicit.todos.as_ref().unwrap()[0].id, "td-3");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_wal_checkpoint_db_and_all_dbs() {
+    let root = PathBuf::from("target").join(format!("cvh_wal_chk_{}", uuid::Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&root);
+
+    // Open connection and write data
+    let conn = get_db_conn(&root).expect("db conn");
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS chk_test (id INTEGER PRIMARY KEY); INSERT INTO chk_test DEFAULT VALUES;").expect("write data");
+    drop(conn);
+
+    // Passive checkpoint
+    checkpoint_db(&root, false).expect("passive checkpoint");
+
+    // Truncate checkpoint
+    checkpoint_db(&root, true).expect("truncate checkpoint");
+
+    // Checkpoint all active DBs
+    checkpoint_all_dbs(true);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn test_tasks_json_not_written_and_no_zombie_resurrection() {
+    let root = PathBuf::from("target").join(format!("cvh_no_zombie_{}", uuid::Uuid::new_v4()));
+    let _ = tokio::fs::create_dir_all(root.join(".cvh")).await;
+
+    let task = Task {
+        id: "LIVE-001".to_string(),
+        title: "Live Task".to_string(),
+        description: "Testing sole SSOT".to_string(),
+        stage_id: "backlog".to_string(),
+        board_id: Some("development".to_string()),
+        worktree_path: None,
+        branch: None,
+        verdict: None,
+        custom_flow: None,
+        status: Some("idle".to_string()),
+        model: None,
+        provider_id: None,
+        reasoning_effort: None,
+        parent_id: None,
+        subtask_index: None,
+        waiting_for_subtask_id: None,
+        handover_summary: None,
+        cover_image: None,
+        priority: None,
+        current_tokens: None,
+        skip_worktree: Some(false),
+        created_at: 100,
+        updated_at: 100,
+        stage_entered_at: Some(100),
+        completed_at: None,
+        position: None,
+        hook_states: None,
+        stage_durations: None,
+        total_elapsed: None,
+        project_path: None,
+        attachments: None,
+        tags: None,
+        todos: None,
+    };
+
+    // 1. save_tasks_to_disk must NOT write .cvh/tasks.json
+    crate::commands::tasks::storage::save_tasks_to_disk(&root, &[task]).await.expect("save tasks");
+    let tasks_json = root.join(".cvh").join("tasks.json");
+    assert!(!tasks_json.exists(), ".cvh/tasks.json must not be written to disk on save");
+
+    // 2. Verify task is in SQLite
+    let loaded = crate::commands::tasks::storage::load_tasks_from_disk(&root).await;
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].id, "LIVE-001");
+
+    // 3. Delete task from SQLite
+    db_delete_task(&root, "LIVE-001").expect("delete task");
+    assert!(db_get_all_tasks(&root).expect("db tasks").is_empty());
+
+    // 4. Plant a legacy tasks.json containing a zombie task
+    let zombie = serde_json::json!([{
+        "id": "ZOMBIE-999",
+        "title": "Zombie Task",
+        "stageId": "backlog"
+    }]);
+    tokio::fs::write(&tasks_json, zombie.to_string()).await.expect("write zombie file");
+
+    // 5. load_tasks_from_disk must NOT resurrect the zombie task!
+    let empty_board = crate::commands::tasks::storage::load_tasks_from_disk(&root).await;
+    assert_eq!(empty_board.len(), 0, "Empty board in SQLite must NOT resurrect zombie tasks from tasks.json");
+
+    let _ = tokio::fs::remove_dir_all(&root).await;
 }

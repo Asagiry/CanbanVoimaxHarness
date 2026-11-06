@@ -128,7 +128,7 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         .await
         .unwrap_or_else(|_| crate::config::default_boards_config());
 
-    // 1. Primary Source of Truth: SQLite Database (.cvh/harness.db)
+    // 1. Sole Source of Truth: High-speed SQLite Database (.cvh/harness.db)
     let mut tasks = match crate::db::db_get_all_tasks(&actual_root) {
         Ok(t) => t,
         Err(e) => {
@@ -136,59 +136,13 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                 Some(&actual_root),
                 "WARN",
                 "LOAD_TASKS",
-                &format!("db_get_all_tasks warning: {}. Checking JSON fallbacks...", e),
+                &format!("db_get_all_tasks warning: {}", e),
             );
             Vec::new()
         }
     };
 
-    // 2. One-time migration: if SQLite returned 0 tasks, but legacy .cvh/tasks.json exists
-    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
-    if tasks.is_empty() {
-        if local_tasks_file.exists() {
-            if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
-                let trimmed = content.trim();
-                if !trimmed.is_empty() {
-                    if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                        if !parsed.is_empty() {
-                            tasks = parsed;
-                            let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
-                            crate::logger::cvh_log(
-                                Some(&actual_root),
-                                "INFO",
-                                "MIGRATION",
-                                &format!("Migrated {} tasks from legacy tasks.json to SQLite", tasks.len()),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        if tasks.is_empty() {
-            let backup_file = get_project_tasks_backup_file(&actual_root);
-            if backup_file.exists() {
-                if let Ok(content) = tokio::fs::read_to_string(&backup_file).await {
-                    let trimmed = content.trim();
-                    if !trimmed.is_empty() {
-                        if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                            if !parsed.is_empty() {
-                                eprintln!(
-                                    "CVH [load_tasks_from_disk]: Restored {} tasks from project backup {:?}",
-                                    parsed.len(),
-                                    backup_file
-                                );
-                                tasks = parsed;
-                                let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Purge foreign tasks that were contaminated into this SQLite database
+    // 2. Purge foreign tasks that were contaminated into this SQLite database
     let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
     if !foreign_ids.is_empty() {
         crate::logger::cvh_log(
@@ -291,10 +245,6 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
 
     let backup_file = get_project_tasks_backup_file(&actual_root);
     let backup_res = atomic_write_file(&backup_file, &serialized).await;
-
-    // 3. Atomically persist tasks.json inside repo root .cvh as single atomic authority
-    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
-    let _ = atomic_write_file(&local_tasks_file, &serialized).await;
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     if db_res.is_err() && backup_res.is_err() {

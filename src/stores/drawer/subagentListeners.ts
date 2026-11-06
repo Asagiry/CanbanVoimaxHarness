@@ -1,14 +1,15 @@
 import type { DrawerActivityItem } from './types';
-import type { useDrawerStore } from '../drawerStore';
+import { useDrawerStore } from '../drawerStore';
 import { listenToEvent } from '../../services/tauriEventGateway';
 
 let subagentListenersInitialized = false;
 
-export async function initSubagentListeners(store: typeof useDrawerStore) {
-  if (subagentListenersInitialized) return;
+export async function initSubagentListeners(store: typeof useDrawerStore = useDrawerStore): Promise<() => void> {
+  if (subagentListenersInitialized) return () => {};
   subagentListenersInitialized = true;
+  const unlisteners: (() => void)[] = [];
   try {
-    await listenToEvent('subagent:spawned', (payload) => {
+    unlisteners.push(await listenToEvent('subagent:spawned', (payload) => {
       const { parentTaskId, subagentId, prompt, title, createdAt, role } = payload || {};
       if (!subagentId) return;
       const state = store.getState();
@@ -62,9 +63,9 @@ export async function initSubagentListeners(store: typeof useDrawerStore) {
           stepsCount: 1,
         });
       }
-    });
+    }));
 
-    await listenToEvent('subagent:activity', (payload) => {
+    unlisteners.push(await listenToEvent('subagent:activity', (payload) => {
       const { subagentId, activity } = payload || {};
       if (!subagentId || !activity) return;
       const state = store.getState();
@@ -90,9 +91,9 @@ export async function initSubagentListeners(store: typeof useDrawerStore) {
       store.setState({ activityFeed: nextFeeds });
       // Streaming snapshots and retries are not additional agent steps.
       if (existingIdx < 0 && !streamed) state.recordSubagentStep(subagentId, activity);
-    });
+    }));
 
-    await listenToEvent('subagent:finished', (payload) => {
+    unlisteners.push(await listenToEvent('subagent:finished', (payload) => {
       const { subagentId, response } = payload || {};
       if (!subagentId) return;
       const state = store.getState();
@@ -117,30 +118,77 @@ export async function initSubagentListeners(store: typeof useDrawerStore) {
         store.setState({ activityFeed: nextFeeds });
       }
       state.updateSubagentStatus(subagentId, 'finished');
-    });
+    }));
 
-    await listenToEvent('subagent:error', (payload) => {
+    unlisteners.push(await listenToEvent('subagent:error', (payload) => {
       const { subagentId, error } = payload || {};
       if (!subagentId) return;
       store.getState().setActiveAgentTask(subagentId, false);
       store.getState().updateSubagentStatus(subagentId, 'error', error);
-    });
+    }));
 
-    await listenToEvent('subagent:status', ({ subagentId, status }) => {
-      if (subagentId && (status === 'finished' || status === 'aborted' || status === 'stopped' || status === 'error')) {
-        store.getState().setActiveAgentTask(subagentId, false);
+    unlisteners.push(await listenToEvent('subagent:status', ({ subagentId, status }) => {
+      if (!subagentId) return;
+      const state = store.getState();
+      if (status === 'running') {
+        state.updateSubagentStatus(subagentId, 'running');
+        state.setActiveAgentTask(subagentId, true);
+        return;
       }
-    });
-
-    await listenToEvent('subagent:aborted', ({ subagentId, parentTaskId }) => {
-      if (subagentId) store.getState().setActiveAgentTask(subagentId, false);
-      else if (parentTaskId) {
-        for (const subagent of store.getState().subagents[parentTaskId] || []) {
-          store.getState().setActiveAgentTask(subagent.id, false);
+      if (status === 'finished' || status === 'aborted' || status === 'stopped' || status === 'error') {
+        const nextStatus = status === 'finished' ? 'finished' : (status === 'aborted' || status === 'stopped') ? 'stopped' : 'error';
+        state.updateSubagentStatus(subagentId, nextStatus as any);
+        state.setActiveAgentTask(subagentId, false);
+        const tools = state.toolExecutions[subagentId] || [];
+        for (const t of tools) {
+          if (t.status === 'running') {
+            state.updateToolExecution(subagentId, t.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
+          }
         }
       }
-    });
+    }));
+
+    unlisteners.push(await listenToEvent('subagent:aborted', ({ subagentId, parentTaskId }) => {
+      const state = store.getState();
+      if (subagentId) {
+        state.updateSubagentStatus(subagentId, 'stopped', 'Прервано пользователем');
+        state.setActiveAgentTask(subagentId, false);
+        const tools = state.toolExecutions[subagentId] || [];
+        for (const t of tools) {
+          if (t.status === 'running') {
+            state.updateToolExecution(subagentId, t.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
+          }
+        }
+      } else if (parentTaskId) {
+        for (const subagent of state.subagents[parentTaskId] || []) {
+          state.updateSubagentStatus(subagent.id, 'stopped', 'Прервано пользователем');
+          state.setActiveAgentTask(subagent.id, false);
+          const tools = state.toolExecutions[subagent.id] || [];
+          for (const t of tools) {
+            if (t.status === 'running') {
+              state.updateToolExecution(subagent.id, t.id, {
+                status: 'failed',
+                stderr: 'Прервано пользователем',
+              });
+            }
+          }
+        }
+      }
+    }));
   } catch (err) {
     console.info('initSubagentListeners: web or test mode', err);
   }
+
+  return () => {
+    subagentListenersInitialized = false;
+    for (const u of unlisteners) {
+      u();
+    }
+  };
 }

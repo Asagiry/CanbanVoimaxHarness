@@ -80,6 +80,16 @@ export const CardTimerBadge = memo(function CardTimerBadge({
 
   const status: TaskStatus = task.status;
   const isRunning = status === 'running';
+
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      setTick((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
   const currentStageDuration = calculateStageDuration(task, isRunning);
 
   if (status === 'running') {

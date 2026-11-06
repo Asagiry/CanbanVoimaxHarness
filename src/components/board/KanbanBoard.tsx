@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore, isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
+import { useShallow } from 'zustand/react/shallow';
 import KanbanColumn from './KanbanColumn';
 import { PipelineColumn, KanbanTask } from '../../types';
 import { X } from 'lucide-react';
@@ -11,33 +12,21 @@ import CreateBoardModal from './CreateBoardModal';
 import { useTranslation } from '../../stores/languageStore';
 
 export default function KanbanBoard() {
-  const {
-    columns,
-    tasks,
-    searchQuery,
-    setTasks,
-    reorderTask,
-    tickTimers,
-    setColumns,
-    boards,
-    activeBoardId,
-    saveCurrentBoard,
-  } = useBoardStore();
+  const columns = useBoardStore(useShallow((s) => s.columns));
+  const tasks = useBoardStore(useShallow((s) => s.tasks));
+  const searchQuery = useBoardStore((s) => s.searchQuery);
+  const boards = useBoardStore(useShallow((s) => s.boards));
+  const activeBoardId = useBoardStore((s) => s.activeBoardId);
+  const setTasks = useBoardStore((s) => s.setTasks);
+  const reorderTask = useBoardStore((s) => s.reorderTask);
+  const setColumns = useBoardStore((s) => s.setColumns);
+  const saveCurrentBoard = useBoardStore((s) => s.saveCurrentBoard);
   const { t } = useTranslation();
 
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [columnsError, setColumnsError] = useState<string | null>(null);
-
-  // 1-second timer ticker interval for live cards
-  useEffect(() => {
-    const timer = setInterval(() => {
-      tickTimers();
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [tickTimers]);
 
   const savePipelineConfig = useCallback(async (next: PipelineColumn[]): Promise<boolean> => {
     try {

@@ -122,6 +122,16 @@ pub fn run() {
             open_project,
             init_project_harness,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running CanbanVoimaxHarness desktop application");
+        .build(tauri::generate_context!())
+        .expect("error while building CanbanVoimaxHarness desktop application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                crate::db::checkpoint_all_dbs(true);
+                let state = app_handle.state::<AppState>();
+                let root = state.get_root();
+                if !root.as_os_str().is_empty() {
+                    let _ = crate::db::checkpoint_db(&root, true);
+                }
+            }
+        });
 }

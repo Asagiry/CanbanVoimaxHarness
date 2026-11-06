@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { BoardDef, PipelineStage, PipelineColumn, PipelineConfig } from '../../types';
+import { BoardDef, PipelineStage, PipelineConfig } from '../../types';
 import { CANONICAL_BOARD_STAGES, DEFAULT_BOARD } from '../board/boardConstants';
 import { BoardMetaSlice, BoardState } from './types';
 
@@ -286,16 +286,8 @@ export const createBoardMetaSlice: StateCreator<
     }
   },
 
-  updateColumn: async (columnId: string, partial: Partial<PipelineColumn>) => {
-    await get().updateStage(columnId, partial);
-  },
-
   loadStages: async () => {
     await get().loadBoards();
-  },
-
-  loadColumns: async () => {
-    await get().loadStages();
   },
 
   addStage: async (stage: PipelineStage) => {
@@ -304,25 +296,13 @@ export const createBoardMetaSlice: StateCreator<
     await get().saveCurrentBoard(nextStages);
   },
 
-  addColumn: async (column: PipelineColumn) => {
-    await get().addStage(column);
-  },
-
   deleteStage: async (stageId: string) => {
     const { stages } = get();
     const nextStages = stages.filter((c) => c.id !== stageId);
     await get().saveCurrentBoard(nextStages);
   },
 
-  deleteColumn: async (columnId: string) => {
-    await get().deleteStage(columnId);
-  },
-
   reorderStages: async (stages: PipelineStage[]) => {
     await get().saveCurrentBoard(stages);
-  },
-
-  reorderColumns: async (columns: PipelineColumn[]) => {
-    await get().reorderStages(columns);
   },
 });

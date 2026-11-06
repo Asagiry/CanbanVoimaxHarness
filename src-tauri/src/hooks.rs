@@ -121,6 +121,58 @@ pub async fn kill_process_tree(pid: u32) {
     }
 }
 
+/// Synchronous, detached process tree killer for RAII and drop guards.
+pub fn kill_process_tree_sync(pid: u32) {
+    if pid == 0 {
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let taskkill_bin = std::env::var("SystemRoot")
+            .map(|sr| std::path::PathBuf::from(sr).join("System32").join("taskkill.exe"))
+            .ok()
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| std::path::PathBuf::from("taskkill.exe"));
+
+        let mut cmd = std::process::Command::new(taskkill_bin);
+        let pid_str = pid.to_string();
+        cmd.args(["/F", "/T", "/PID", &pid_str]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let _ = cmd.spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let pid_str = pid.to_string();
+        let _ = std::process::Command::new("kill")
+            .args(["-9", &pid_str])
+            .spawn();
+    }
+}
+
+/// RAII Guard that guarantees `kill_process_tree_sync` is invoked if dropped while armed.
+pub struct ProcessTreeGuard {
+    pub pid: Option<u32>,
+}
+
+impl ProcessTreeGuard {
+    pub fn new(pid: Option<u32>) -> Self {
+        Self { pid }
+    }
+
+    pub fn disarm(&mut self) {
+        self.pid = None;
+    }
+}
+
+impl Drop for ProcessTreeGuard {
+    fn drop(&mut self) {
+        if let Some(pid) = self.pid {
+            kill_process_tree_sync(pid);
+        }
+    }
+}
+
 /// Checks if `pwsh` (PowerShell Core / 7+) is available on PATH.
 pub fn is_pwsh_available() -> bool {
     if let Some(path_var) = std::env::var_os("PATH") {
@@ -292,9 +344,11 @@ pub async fn execute_hook(
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn hook script {:?}", script))?;
     let pid = child.id();
+    let mut tree_guard = ProcessTreeGuard::new(pid);
 
     let mut stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
     let mut stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
@@ -316,6 +370,7 @@ pub async fn execute_hook(
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
         let status = child.wait().await?;
+        tree_guard.disarm();
         Ok::<HookExecutionResult, anyhow::Error>(HookExecutionResult {
             success: status.success(),
             exit_code: status.code(),
@@ -438,9 +493,11 @@ pub async fn execute_sensor_command(
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn sensor command: {}", command_str))?;
     let pid = child.id();
+    let mut tree_guard = ProcessTreeGuard::new(pid);
 
     let mut stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
     let mut stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
@@ -462,6 +519,7 @@ pub async fn execute_sensor_command(
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
         let status = child.wait().await?;
+        tree_guard.disarm();
         Ok::<HookExecutionResult, anyhow::Error>(HookExecutionResult {
             success: status.success(),
             exit_code: status.code(),

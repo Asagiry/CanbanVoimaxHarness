@@ -2030,12 +2030,10 @@ pub async fn internal_advance_task_to_stage(
                     }
                 }
             }
-            let _ = save_tasks_to_disk(root, &tasks).await;
             if let Some(app) = app_handle {
                 let project_path_str = root.to_string_lossy().to_string();
                 if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
                     let _ = app.emit("task:updated", serde_json::json!({ "task": sub, "projectPath": &project_path_str }));
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                 }
             }
 
@@ -2257,12 +2255,10 @@ pub async fn internal_advance_task_to_stage(
                         }
                     }
                 }
-                let _ = save_tasks_to_disk(root, &tasks).await;
                 if let Some(app) = app_handle {
                     let project_path_str = root.to_string_lossy().to_string();
                     if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
                         let _ = app.emit("task:updated", serde_json::json!({ "task": sub, "projectPath": &project_path_str }));
-                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     }
                 }
 

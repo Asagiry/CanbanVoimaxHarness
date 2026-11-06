@@ -569,9 +569,12 @@ export const createTasksCrudSlice: StateCreator<
               const preservedStageDurations = mapped.stageDurations && Object.keys(mapped.stageDurations).length > 0
                 ? mapped.stageDurations
                 : t.stageDurations;
+              const preservedStatus = (t.status === 'running' && mapped.status === 'idle') ? 'running' : mapped.status;
               return {
                 ...t,
                 ...mapped,
+                status: preservedStatus,
+                isTimerRunning: preservedStatus === 'running' ? true : mapped.isTimerRunning,
                 stageEnteredAt: preservedStageEnteredAt,
                 stageDurations: preservedStageDurations,
                 todos: preservedTodos,
@@ -641,6 +644,10 @@ export const createTasksCrudSlice: StateCreator<
       if (task) {
         if (prev?.todos && (task.todos === undefined || task.todos.length === 0)) {
           task.todos = prev.todos;
+        }
+        if (prev?.status === 'running' && task.status === 'idle') {
+          task.status = 'running';
+          task.isTimerRunning = true;
         }
         mapped.push(task);
       }
@@ -957,10 +964,6 @@ export const createTasksCrudSlice: StateCreator<
       JSON.stringify({ stageId: task.stageId, boardId: task.boardId, status: task.status })
     );
 
-    if (!options?.skipSync) {
-      await syncTasksBackend(get().tasks);
-    }
-
     const effectiveBoardId = task.boardId || activeBoardId;
     const taskBoard = boards.find((b) => b.id === effectiveBoardId);
     const targetColumns = (taskBoard?.stages && taskBoard.stages.length > 0)
@@ -983,9 +986,6 @@ export const createTasksCrudSlice: StateCreator<
           : t
       );
       set({ tasks: updatedTasks });
-      if (!options?.skipSync) {
-        await syncTasksBackend(updatedTasks);
-      }
       await triggerRunAgent(resolvedTaskId, prompt, options);
     } else if (taskCol?.isIntake || taskCol?.id === 'backlog') {
       const firstAgentCol = targetColumns.find((c) => c.persona || c.autoRun);

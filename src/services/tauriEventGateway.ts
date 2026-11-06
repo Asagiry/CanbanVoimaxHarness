@@ -1,5 +1,6 @@
 import { useBoardStore } from '../stores/boardStore';
 import { useDrawerStore } from '../stores/drawerStore';
+import { initSubagentListeners } from '../stores/drawer/subagentListeners';
 import { useCortexStore } from '../stores/cortexStore';
 import { useAgentSessionStore, type AgentSessionSummary } from '../stores/agentSessionStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -686,7 +687,6 @@ export function setupTauriEventGateway(): () => void {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
         }
-        void useBoardStore.getState().loadTasks();
       });
 
       // 9. agent:error
@@ -711,7 +711,6 @@ export function setupTauriEventGateway(): () => void {
         } else {
           bufferManager.flushAll();
         }
-        void useBoardStore.getState().loadTasks();
       });
 
       // 10. agent:status
@@ -739,7 +738,6 @@ export function setupTauriEventGateway(): () => void {
         } else if (taskId && status === 'running') {
           ensureTaskRunningOnBoard(taskId);
         }
-        void useBoardStore.getState().loadTasks();
       });
 
       // 10b. agent:session_status
@@ -758,7 +756,6 @@ export function setupTauriEventGateway(): () => void {
         if (payload?.task) {
           useBoardStore.getState().upsertBackendTask(payload.task);
         }
-        void useBoardStore.getState().loadTasks();
       });
 
       // 12. task:moved
@@ -782,7 +779,6 @@ export function setupTauriEventGateway(): () => void {
             });
           }
         }
-        void useBoardStore.getState().loadTasks();
       });
 
       // 13. task:advanced
@@ -942,6 +938,10 @@ export function setupTauriEventGateway(): () => void {
       await addListener('cortex:rules_updated', async () => {
         await useCortexStore.getState().loadGlobalRules();
       });
+
+      // 23. Unified subagent listeners
+      const cleanupSubagents = await initSubagentListeners(useDrawerStore);
+      unlisteners.push(cleanupSubagents);
     } catch (e) {
       console.info('Tauri event listeners not active in web mode:', e);
     }

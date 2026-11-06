@@ -2132,6 +2132,7 @@ Req chars: {}
 
         if let Some(ref app) = ctx.app_handle {
             if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.remove_active_agent(&ctx.repo_root, &subagent_id);
                 state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
                 if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
                     let _ = app.emit("agent:session_status", &summary);
@@ -2260,6 +2261,7 @@ Subagent [{}] '{}' report:
         }
         if let Some(ref app) = ctx.app_handle {
             if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.remove_active_agent(&ctx.repo_root, &subagent_id);
                 state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
                 if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
                     let _ = app.emit("agent:session_status", &summary);
@@ -2294,6 +2296,7 @@ Subagent [{}] '{}' report:
 
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            state_ref.remove_active_agent(&ctx.repo_root, &subagent_id);
             state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
             if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
                 let _ = app.emit("agent:session_status", &summary);
@@ -2554,9 +2557,11 @@ pub async fn run_scoped_command(
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn command: {}", cmd_str))?;
     let pid = child.id();
+    let mut tree_guard = crate::hooks::ProcessTreeGuard::new(pid);
 
     let mut stdout_pipe = child.stdout.take().context("Failed to take stdout")?;
     let mut stderr_pipe = child.stderr.take().context("Failed to take stderr")?;
@@ -2575,6 +2580,7 @@ pub async fn run_scoped_command(
         };
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
         let status = child.wait().await?;
+        tree_guard.disarm();
         Ok::<crate::hooks::HookExecutionResult, anyhow::Error>(crate::hooks::HookExecutionResult {
             success: status.success(),
             exit_code: status.code(),
@@ -3160,19 +3166,31 @@ where
     }
 
     if let Some(steer) = config.steer_prompt.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
-        let steer_message_id = if steer.contains("[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]") {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            use std::hash::{Hash, Hasher};
-            steer.hash(&mut hasher);
-            Some(format!("handover:{}:{:x}", config.task_id, hasher.finish()))
+        let already_persisted_id = crate::db::load_dialog_items(&config.repo_root, &config.task_id)
+            .ok()
+            .and_then(|items| {
+                items.into_iter().rev().find(|it| {
+                    it.item_type == "steer" && it.content.as_deref() == Some(steer)
+                }).map(|it| it.id)
+            });
+
+        if let Some(existing_id) = already_persisted_id {
+            eprintln!("CVH [agent]: Steer message already persisted as '{}', reusing.", existing_id);
         } else {
-            None
-        };
-        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), steer_message_id.as_deref()).map_err(anyhow::Error::msg)? {
-            if let Some(app) = config.app_handle.as_ref() {
-                let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
-                let _ = app.emit("task:activity", &payload);
-                let _ = app.emit("task:dialog", &payload);
+            let steer_message_id = if steer.contains("[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]") {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                use std::hash::{Hash, Hasher};
+                steer.hash(&mut hasher);
+                Some(format!("handover:{}:{:x}", config.task_id, hasher.finish()))
+            } else {
+                None
+            };
+            if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), steer_message_id.as_deref()).map_err(anyhow::Error::msg)? {
+                if let Some(app) = config.app_handle.as_ref() {
+                    let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
+                    let _ = app.emit("task:activity", &payload);
+                    let _ = app.emit("task:dialog", &payload);
+                }
             }
         }
     }
@@ -3632,31 +3650,59 @@ Endpoint: {}
             append_llm_debug_log(&config.repo_root, &req_log).await;
         }
 
-        let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
-        let client = llm_client.clone();
-        let base_url = config.base_url.clone();
-        let api_key = config.api_key.clone();
+        let mut final_stream_res = None;
+        let mut turn_stream_retry = 0;
+        const MAX_TURN_STREAM_RETRIES: usize = 2;
 
-        tokio::spawn(async move {
-            if let Err(e) = client.stream_openai(&base_url, api_key.as_deref(), req, tx.clone()).await {
-                let err_msg = format!("Failed to dispatch LLM request to {}: {}", base_url, e);
-                eprintln!("CVH [agent]: {}", err_msg);
-                let _ = tx.send(StreamChunk::Error(err_msg)).await;
+        while turn_stream_retry <= MAX_TURN_STREAM_RETRIES {
+            let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
+            let client = llm_client.clone();
+            let base_url = config.base_url.clone();
+            let api_key = config.api_key.clone();
+            let req_attempt = req.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = client.stream_openai(&base_url, api_key.as_deref(), req_attempt, tx.clone()).await {
+                    let err_msg = format!("Failed to dispatch LLM request to {}: {}", base_url, e);
+                    eprintln!("CVH [agent]: {}", err_msg);
+                    let _ = tx.send(StreamChunk::Error(err_msg)).await;
+                }
+            });
+
+            let stream_opts = StreamConsumerOptions {
+                model: &config.model,
+                turn,
+                system_tokens,
+                tool_tokens,
+                fallback_input_tokens: compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64,
+                log_prefix: "telemetry",
+                subagent_id: None,
+                emit_thoughts: true,
+            };
+
+            let stream_res = engine.consume_turn_stream(&mut rx, &abort_flag, &stream_opts).await;
+
+            if stream_res.aborted {
+                final_stream_res = Some(stream_res);
+                break;
             }
-        });
 
-        let stream_opts = StreamConsumerOptions {
-            model: &config.model,
-            turn,
-            system_tokens,
-            tool_tokens,
-            fallback_input_tokens: compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64,
-            log_prefix: "telemetry",
-            subagent_id: None,
-            emit_thoughts: true,
-        };
+            let is_failure = stream_res.error.is_some() || (!stream_res.received_any_chunk && !abort_flag.load(Ordering::SeqCst));
+            if is_failure && turn_stream_retry < MAX_TURN_STREAM_RETRIES && !abort_flag.load(Ordering::SeqCst) {
+                turn_stream_retry += 1;
+                eprintln!(
+                    "CVH [agent]: Turn {} stream transient drop/error (retry {}/{}): {:?}. Retrying turn stream...",
+                    turn, turn_stream_retry, MAX_TURN_STREAM_RETRIES, stream_res.error
+                );
+                tokio::time::sleep(tokio::time::Duration::from_millis(500 * turn_stream_retry as u64)).await;
+                continue;
+            }
 
-        let stream_res = engine.consume_turn_stream(&mut rx, &abort_flag, &stream_opts).await;
+            final_stream_res = Some(stream_res);
+            break;
+        }
+
+        let stream_res = final_stream_res.expect("stream_res must be set");
 
         if stream_res.aborted {
             sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);

@@ -427,6 +427,11 @@ impl LlmClient {
             }
             return Ok(Some(transport_error.unwrap_or_else(|| "LLM stream ended before a completion marker".to_string())));
         }
+        for (_, _, args) in tool_calls_in_progress.values_mut() {
+            if args.trim().is_empty() {
+                *args = "{}".to_string();
+            }
+        }
         if stream_error.is_none() && tool_calls_in_progress.values().any(|(_, name, args)| {
             name.trim().is_empty() || !serde_json::from_str::<serde_json::Value>(args)
                 .is_ok_and(|value| value.is_object())

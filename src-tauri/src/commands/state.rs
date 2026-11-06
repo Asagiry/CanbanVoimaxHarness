@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(state.get_root(), temp_dir);
 
         let pool = state.get_db_pool().expect("get_db_pool must succeed");
-        assert_eq!(pool.max_size(), 16);
+        assert_eq!(pool.max_size(), 4);
 
         let conn = state.get_db_connection().expect("get_db_connection must succeed");
         let val: i64 = conn.query_row("SELECT 42", [], |r| r.get(0)).unwrap();

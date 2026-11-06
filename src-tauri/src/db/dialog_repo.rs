@@ -401,6 +401,7 @@ pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
         params![task_id, sub_colon, sub_dot],
     )
     .map_err(|e| format!("Failed to delete dialog items: {}", e))?;
+    let _ = std::fs::remove_file(super::context_file_path(root, task_id));
     Ok(())
 }
 

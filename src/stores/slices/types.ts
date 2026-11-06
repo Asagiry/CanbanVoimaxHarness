@@ -38,20 +38,10 @@ export interface BoardMetaSlice {
   /** @deprecated Use setStages instead */
   setColumns: (columns: PipelineColumn[]) => void;
   updateStage: (stageId: string, partial: Partial<PipelineStage>) => Promise<void>;
-  /** @deprecated Use updateStage instead */
-  updateColumn: (columnId: string, partial: Partial<PipelineColumn>) => Promise<void>;
   loadStages: () => Promise<void>;
-  /** @deprecated Use loadStages instead */
-  loadColumns: () => Promise<void>;
   addStage: (stage: PipelineStage) => Promise<void>;
-  /** @deprecated Use addStage instead */
-  addColumn: (column: PipelineColumn) => Promise<void>;
   deleteStage: (stageId: string) => Promise<void>;
-  /** @deprecated Use deleteStage instead */
-  deleteColumn: (columnId: string) => Promise<void>;
   reorderStages: (stages: PipelineStage[]) => Promise<void>;
-  /** @deprecated Use reorderStages instead */
-  reorderColumns: (columns: PipelineColumn[]) => Promise<void>;
 }
 
 export interface TaskTimersSlice {

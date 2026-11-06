@@ -1256,11 +1256,13 @@ use std::path::PathBuf;
         assert_eq!(moved.todos.as_ref().map(|t| t.len()), Some(1));
         assert_eq!(moved.todos.as_ref().unwrap()[0].content, "Authoritative Todo");
 
-        // 3. Verify .cvh/tasks.json was atomically written and updated
-        let tasks_json_path = base.join(".cvh").join("tasks.json");
-        assert!(tasks_json_path.exists(), ".cvh/tasks.json must be written atomically");
-        let content = tokio::fs::read_to_string(&tasks_json_path).await.expect("read tasks.json");
-        assert!(content.contains("\"stageId\": \"dev\""));
+        // 3. Verify SQLite DB was updated as authoritative SSOT
+        let db_task = crate::db::db_get_task(&base, "CVH-500")
+            .expect("read db")
+            .expect("task exists in db");
+        assert_eq!(db_task.stage_id, "dev");
+        assert_eq!(db_task.todos.as_ref().map(|t| t.len()), Some(1));
+        assert_eq!(db_task.todos.as_ref().unwrap()[0].content, "Authoritative Todo");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

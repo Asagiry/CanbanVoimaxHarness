@@ -50,11 +50,3 @@ export const useBoardStore = create<BoardState>()((...a) => ({
   ...createTaskTimersSlice(...a),
   ...createTasksCrudSlice(...a),
 }));
-
-/**
- * @deprecated Consolidated into setupTauriEventGateway in src/services/tauriEventGateway.ts.
- * Retained as a no-op for backward compatibility.
- */
-export async function initBoardEventListeners(): Promise<() => void> {
-  return () => {};
-}

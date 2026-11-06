@@ -1821,13 +1821,11 @@ pub async fn steer_agent(
         return Ok(format!("Steer queued for task {} until the current tool batch completes", task_id));
     }
     if let Some(entry) = previous {
-        let mut handle = entry.join_handle.lock().await;
-        if let Some(handle) = handle.as_mut() {
-            if !handle.is_finished() {
-                if let Err(error) = handle.await {
-                    if !error.is_cancelled() { return Err(format!("Previous agent failed: {error}")); }
-                }
-            }
+        let is_running = entry.join_handle.try_lock().ok()
+            .and_then(|h| h.as_ref().map(|h| !h.is_finished()))
+            .unwrap_or(false);
+        if is_running && !entry.abort_flag.load(Ordering::SeqCst) {
+            return Ok(format!("Steer queued for active task {}", task_id));
         }
         if !was_aborted && entry.abort_flag.load(Ordering::SeqCst) && !entry.advance_aborted.load(Ordering::SeqCst) {
             return Ok(format!("Steer saved for stopped task {}", task_id));

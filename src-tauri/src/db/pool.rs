@@ -12,19 +12,50 @@ pub type DbConnection = r2d2::PooledConnection<SqliteConnectionManager>;
 static INITIALIZED_DBS: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 static DB_POOLS: LazyLock<Mutex<HashMap<PathBuf, DbPool>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Normalizes and canonicalizes a project repository root path.
+/// Resolves git worktrees to parent workspace and strips Windows UNC verbatim prefix.
+pub fn normalize_db_root(root: &Path) -> PathBuf {
+    let resolved = crate::config::resolve_actual_repo_root(root);
+    let target = if resolved.as_os_str().is_empty() {
+        root.to_path_buf()
+    } else {
+        // In tests, ensure we didn't escape out of isolated `target/` temp dir into the live project root
+        if cfg!(test)
+            && root.components().any(|c| c.as_os_str() == "target")
+            && !resolved.components().any(|c| c.as_os_str() == "target")
+        {
+            root.to_path_buf()
+        } else {
+            resolved
+        }
+    };
+    if let Ok(canonical) = target.canonicalize() {
+        let s = canonical.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(r"\\?\") {
+            PathBuf::from(stripped)
+        } else {
+            canonical
+        }
+    } else {
+        target
+    }
+}
+
 /// Initializes SQLite database at <root>/.cvh/harness.db and creates tables and indexes.
 pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
     if root.as_os_str().is_empty() {
         return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
     }
-    if !cfg!(test) && (crate::config::is_binary_or_target_dir(root) || crate::config::is_app_own_directory(root)) {
-        return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
+    let normalized = normalize_db_root(root);
+    if !cfg!(test) && (crate::config::is_binary_or_target_dir(&normalized) || crate::config::is_app_own_directory(&normalized)) {
+        return Err(rusqlite::Error::InvalidPath(normalized));
     }
-    let db_dir = root.join(".cvh");
+    let db_dir = normalized.join(".cvh");
     if !db_dir.exists() {
         let _ = std::fs::create_dir_all(&db_dir);
     }
-    let db_path = db_dir.join("harness.db");
+    let normalized = normalize_db_root(&normalized);
+    let db_path = normalized.join(".cvh").join("harness.db");
     let mut conn = Connection::open(&db_path)?;
 
     // Set busy timeout to 5000ms to eliminate instant SQLITE_BUSY under WAL concurrent access
@@ -185,14 +216,16 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
     if root.as_os_str().is_empty() {
         return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
     }
-    if !cfg!(test) && (crate::config::is_binary_or_target_dir(root) || crate::config::is_app_own_directory(root)) {
-        return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
+    let normalized = normalize_db_root(root);
+    if !cfg!(test) && (crate::config::is_binary_or_target_dir(&normalized) || crate::config::is_app_own_directory(&normalized)) {
+        return Err(rusqlite::Error::InvalidPath(normalized));
     }
-    let db_dir = root.join(".cvh");
+    let db_dir = normalized.join(".cvh");
     if !db_dir.exists() {
         let _ = std::fs::create_dir_all(&db_dir);
     }
-    let db_path = db_dir.join("harness.db");
+    let normalized = normalize_db_root(&normalized);
+    let db_path = normalized.join(".cvh").join("harness.db");
 
     let mut pools = DB_POOLS.lock().unwrap();
     if let Some(pool) = pools.get(&db_path) {
@@ -200,7 +233,7 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
     }
 
     // Ensure database tables and schema are initialized first
-    let _ = init_db(root)?;
+    let _ = init_db(&normalized)?;
 
     let manager = SqliteConnectionManager::file(&db_path).with_init(|conn| {
         conn.busy_timeout(std::time::Duration::from_millis(5000))?;
@@ -213,7 +246,7 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
     });
 
     let pool = Pool::builder()
-        .max_size(16)
+        .max_size(4)
         .build(manager)
         .map_err(|e| rusqlite::Error::InvalidPath(PathBuf::from(e.to_string())))?;
 
@@ -226,6 +259,41 @@ pub fn get_db_conn(root: &Path) -> Result<DbConnection, rusqlite::Error> {
     let pool = get_db_pool(root)?;
     pool.get()
         .map_err(|e| rusqlite::Error::InvalidPath(PathBuf::from(e.to_string())))
+}
+
+/// Checkpoints the SQLite WAL file into the main database file.
+/// If `truncate` is true, runs `PRAGMA wal_checkpoint(TRUNCATE)` to checkpoint and truncate the WAL file.
+/// If `truncate` is false, runs `PRAGMA wal_checkpoint(PASSIVE)`.
+pub fn checkpoint_db(root: &Path, truncate: bool) -> Result<(), rusqlite::Error> {
+    if root.as_os_str().is_empty() {
+        return Ok(());
+    }
+    let conn = match get_db_conn(root) {
+        Ok(c) => c,
+        Err(_) => return Ok(()),
+    };
+    let sql = if truncate {
+        "PRAGMA wal_checkpoint(TRUNCATE);"
+    } else {
+        "PRAGMA wal_checkpoint(PASSIVE);"
+    };
+    conn.execute_batch(sql)?;
+    Ok(())
+}
+
+/// Checkpoints all active SQLite pools in `DB_POOLS`.
+pub fn checkpoint_all_dbs(truncate: bool) {
+    let pools = DB_POOLS.lock().unwrap();
+    let sql = if truncate {
+        "PRAGMA wal_checkpoint(TRUNCATE);"
+    } else {
+        "PRAGMA wal_checkpoint(PASSIVE);"
+    };
+    for pool in pools.values() {
+        if let Ok(conn) = pool.get() {
+            let _ = conn.execute_batch(sql);
+        }
+    }
 }
 
 /// Seamless automatic data migration from legacy JSON files into SQLite tables.
@@ -267,8 +335,8 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         }
 
         if let Some(tasks) = loaded_tasks {
-            let _ = conn.execute_batch("PRAGMA foreign_keys = OFF;");
             if let Ok(tx) = conn.transaction_with_behavior(TransactionBehavior::Immediate) {
+                let _ = tx.execute_batch("PRAGMA defer_foreign_keys = ON;");
                 for t in &tasks {
                     let custom_flow_json = t.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
                     let attachments_json = t.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -329,8 +397,10 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                     }
                 }
                 let _ = tx.commit();
+                if tasks_file.exists() {
+                    let _ = std::fs::rename(&tasks_file, root.join(".cvh").join("tasks.json.migrated"));
+                }
             }
-            let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
         }
     }
 

@@ -264,6 +264,9 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
+    tx.execute_batch("PRAGMA defer_foreign_keys = ON;")
+        .map_err(|e| format!("Failed to defer foreign keys: {}", e))?;
+
     let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let attachments_json = task.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let tags_json = task.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -349,14 +352,16 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
 
     if let Some(ref todos) = task.todos {
-        let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
-        for (idx, td) in todos.iter().enumerate() {
-            tx.execute(
-                "INSERT INTO task_todos (id, task_id, content, status, order_idx)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![td.id, task.id, td.content, td.status, idx as i64],
-            )
-            .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
+        if !todos.is_empty() {
+            let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
+            for (idx, td) in todos.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO task_todos (id, task_id, content, status, order_idx)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![td.id, task.id, td.content, td.status, idx as i64],
+                )
+                .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
+            }
         }
     }
 
@@ -368,14 +373,12 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
 /// Atomically upserts a batch of tasks into SQLite in a single transaction.
 pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
     let mut conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
-    // Disable foreign keys strictly BEFORE starting transaction to allow unordered cascades
-    let _ = conn.execute_batch("PRAGMA foreign_keys = OFF;");
-
-    let res = (|| -> Result<(), String> {
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(|e| format!("Failed to start transaction: {}", e))?;
+    tx.execute_batch("PRAGMA defer_foreign_keys = ON;")
+        .map_err(|e| format!("Failed to defer foreign keys: {}", e))?;
 
     for task in tasks {
         let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -463,14 +466,16 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
 
         if let Some(ref todos) = task.todos {
-            let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
-            for (idx, td) in todos.iter().enumerate() {
-                tx.execute(
-                    "INSERT INTO task_todos (id, task_id, content, status, order_idx)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![td.id, task.id, td.content, td.status, idx as i64],
-                )
-                .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
+            if !todos.is_empty() {
+                let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
+                for (idx, td) in todos.iter().enumerate() {
+                    tx.execute(
+                        "INSERT INTO task_todos (id, task_id, content, status, order_idx)
+                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![td.id, task.id, td.content, td.status, idx as i64],
+                    )
+                    .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
+                }
             }
         }
     }
@@ -478,11 +483,6 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
     tx.commit()
         .map_err(|e| format!("Failed to commit batch task upsert: {}", e))?;
     Ok(())
-    })();
-
-    // Always restore foreign keys on connection after transaction commits or drops
-    let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
-    res
 }
 
 /// Deletes a task and all associated cascaded subtasks and todos from SQLite.

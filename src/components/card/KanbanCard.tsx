@@ -28,19 +28,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const activeQuestionTargetId = task.id;
   const { t } = useTranslation();
 
-  const isHighlighted = useBoardStore((s) => {
-    const hId = s.hoveredTaskId;
-    if (!hId) return false;
-    if (hId === task.id) return true;
-    if (task.parentId && hId === task.parentId) return true;
-    if (task.waitingForSubtaskId && hId === task.waitingForSubtaskId) return true;
-    const hoveredTask = s.tasks.find((t) => t.id === hId);
-    if (!hoveredTask) return false;
-    if (hoveredTask.parentId === task.id) return true;
-    if (task.parentId && hoveredTask.parentId && task.parentId === hoveredTask.parentId) return true;
-    if (hoveredTask.waitingForSubtaskId === task.id) return true;
-    return false;
-  });
+  const hoveredTaskId = useBoardStore((s) => s.hoveredTaskId);
+  const isHighlighted = Boolean(
+    hoveredTaskId &&
+      (hoveredTaskId === task.id ||
+        (task.parentId && hoveredTaskId === task.parentId) ||
+        (task.waitingForSubtaskId && hoveredTaskId === task.waitingForSubtaskId))
+  );
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 

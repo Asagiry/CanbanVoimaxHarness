@@ -5,7 +5,6 @@ import {
   createCortexFilesSlice,
   createPersonasSlice,
   createRulesSlice,
-  registerCortexStore,
 } from './cortex';
 
 // Ub-mode Re-exports for zero breaking changes across codebase
@@ -36,11 +35,6 @@ export {
   buildPersonaTemplate,
 } from './cortex/cortexHelpers';
 
-export {
-  initCortexEventListeners,
-  registerCortexStore,
-} from './cortex/cortexListeners';
-
 export type {
   CortexHookMoment,
   CortexHookExt,
@@ -61,5 +55,3 @@ export type {
 export const useCortexStore = create<CortexState>()((...a) => ({
   ...createCortexSlice(...a),
 }));
-
-registerCortexStore(useCortexStore);

@@ -99,7 +99,8 @@ export function useContextGaugeMetrics({
   const cumulativeGenerationSec = useDrawerStore((s) => s.cumulativeGenerationSec[taskId] ?? 0);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
-  const isAgentRunning = useDrawerStore((s) => Boolean(s.activeAgentTaskIds[taskId] || (s.toolIdToSubagentId[taskId] && s.activeAgentTaskIds[s.toolIdToSubagentId[taskId]])));
+  const isTaskRunning = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.status === 'running');
+  const isAgentRunning = isTaskRunning || useDrawerStore((s) => Boolean(s.activeAgentTaskIds[taskId] || (s.toolIdToSubagentId[taskId] && s.activeAgentTaskIds[s.toolIdToSubagentId[taskId]])));
 
   const { latestCompactedTokens, postCompactionTokens } = useMemo(() => parseCompactedFromFeed(feed), [feed]);
   const baseCompacted = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;

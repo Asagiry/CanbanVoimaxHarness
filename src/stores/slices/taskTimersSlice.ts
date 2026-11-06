@@ -1,6 +1,10 @@
 import { StateCreator } from 'zustand';
 import { BoardState, TaskTimersSlice } from './types';
 
+/**
+ * @deprecated Task timers are computed locally on demand in UI components (CardTimerBadge).
+ * Retained for backwards compatibility and offline duration calculation.
+ */
 export const createTaskTimersSlice: StateCreator<
   BoardState,
   [],
@@ -15,6 +19,9 @@ export const createTaskTimersSlice: StateCreator<
     }));
   },
 
+  /**
+   * @deprecated Global 1-second timer ticker. Local UI components now calculate elapsed time from stageEnteredAt.
+   */
   tickTimers: () => {
     set((state) => {
       const hasRunningTask = state.tasks.some(

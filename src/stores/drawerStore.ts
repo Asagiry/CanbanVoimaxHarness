@@ -11,7 +11,6 @@ import {
   createSubagentsSlice,
   createDraftsSlice,
   registerActivityFlushCallback,
-  initSubagentListeners,
 } from './drawer';
 
 export type { ActivityType };
@@ -31,7 +30,3 @@ export const useDrawerStore = create<DrawerState>()((...a) => {
     ...createDraftsSlice(...a),
   };
 });
-
-if (typeof window !== 'undefined') {
-  void initSubagentListeners(useDrawerStore);
-}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { KanbanTask } from '../../types';
 import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
-import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import { useAgentSessionStore } from '../../stores/agentSessionStore';
@@ -12,26 +12,61 @@ import DrawerSteerBar from './DrawerSteerBar';
 import GitDiffSidebar from './GitDiffSidebar';
 import SubagentsSidebar from './SubagentsSidebar';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
-import { listenToEvent, type AgentEventMap } from '../../services/tauriEventGateway';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function AgentConsoleDrawer() {
   const { zoom } = useUiZoom();
-  const {
-    isOpen,
-    activeTaskId,
-    activityFeed,
-    streamEntries,
-    toolExecutions,
-    closeDrawer,
-    goBackDrawer,
-    openDrawer,
-    appendOutput,
-    activeSubagentId,
-    activeAgentTaskIds,
-    setActiveAgentTask,
-  } = useDrawerStore();
+  const isOpen = useDrawerStore((s) => s.isOpen);
+  const activeTaskId = useDrawerStore((s) => s.activeTaskId);
+  const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
+  const closeDrawer = useDrawerStore((s) => s.closeDrawer);
+  const goBackDrawer = useDrawerStore((s) => s.goBackDrawer);
+  const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const appendOutput = useDrawerStore((s) => s.appendOutput);
+  const setActiveAgentTask = useDrawerStore((s) => s.setActiveAgentTask);
 
-  const { tasks, updateTask, columns } = useBoardStore();
+  const activeFeed = useDrawerStore(useShallow((s) => {
+    if (activeSubagentId) {
+      let subFeed = s.activityFeed[activeSubagentId] || [];
+      if (subFeed.length === 0) {
+        const mappedId = s.toolIdToSubagentId[activeSubagentId];
+        if (mappedId && s.activityFeed[mappedId]?.length) {
+          subFeed = s.activityFeed[mappedId];
+        } else {
+          for (const [toolId, subId] of Object.entries(s.toolIdToSubagentId)) {
+            if (subId === activeSubagentId && s.activityFeed[toolId]?.length) {
+              subFeed = s.activityFeed[toolId];
+              break;
+            }
+          }
+        }
+      }
+      return subFeed.filter((item) => item.type !== 'prompt');
+    }
+    return activeTaskId ? (s.activityFeed[activeTaskId] || []) : [];
+  }));
+
+  const activeStream = useDrawerStore(useShallow((s) =>
+    activeTaskId ? s.streamEntries[activeTaskId] : undefined
+  ));
+
+  const activeTaskTools = useDrawerStore(useShallow((s) =>
+    activeTaskId ? s.toolExecutions[activeTaskId] : undefined
+  ));
+
+  const activeSubagentTools = useDrawerStore(useShallow((s) =>
+    activeSubagentId ? s.toolExecutions[activeSubagentId] : undefined
+  ));
+
+  const isAgentActive = useDrawerStore((s) => Boolean(
+    (activeTaskId && s.activeAgentTaskIds[activeTaskId]) ||
+    (activeSubagentId && s.activeAgentTaskIds[activeSubagentId])
+  ));
+
+  const rawTask = useBoardStore((s) => (activeTaskId ? s.tasks.find((t) => t.id === activeTaskId) : undefined));
+  const updateTask = useBoardStore((s) => s.updateTask);
+  const columns = useBoardStore(useShallow((s) => s.columns));
+
   const settings = useSettingsStore((s) => s.settings);
   const providers = useSettingsStore((s) => s.providers);
   const openSettings = useSettingsStore((s) => s.openSettings);
@@ -49,12 +84,11 @@ export default function AgentConsoleDrawer() {
   const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
   const [isSubagentsCollapsed, setIsSubagentsCollapsed] = useState(false);
 
-  const rawTask = tasks.find((t) => t.id === activeTaskId);
   const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
   const fallbackColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
   const fallbackPersona = columns.find((c) => !c.isIntake && c.id !== 'backlog' && !c.terminal)?.persona || 'general';
   const parentIdFromId = activeTaskId?.includes('.') ? activeTaskId.split('.')[0] : undefined;
-  const parentTaskForFallback = parentIdFromId ? tasks.find((t) => t.id === parentIdFromId) : undefined;
+  const parentTaskForFallback = useBoardStore((s) => (parentIdFromId ? s.tasks.find((t) => t.id === parentIdFromId) : undefined));
 
   // Resilient fallback: ensure task is never undefined if drawer is active
   const baseTask: KanbanTask = rawTask ?? {
@@ -79,9 +113,9 @@ export default function AgentConsoleDrawer() {
     verdict: 'NONE',
   };
 
-  const rootTask = baseTask.parentId
-    ? tasks.find((t) => t.id === baseTask.parentId) || baseTask
-    : baseTask;
+  const parentOfBase = useBoardStore((s) => (baseTask.parentId ? s.tasks.find((t) => t.id === baseTask.parentId) : undefined));
+  const rootTask = parentOfBase || baseTask;
+  const rootTaskId = rootTask.id;
 
   const task: KanbanTask = {
     ...baseTask,
@@ -89,7 +123,9 @@ export default function AgentConsoleDrawer() {
     worktreePath: baseTask.worktreePath || rootTask.worktreePath || `worktrees/${(rootTask.id || baseTask.id).toLowerCase()}`,
   };
 
-  const subtasks = tasks.filter((t) => t.parentId === rootTask.id);
+  const subtasks = useBoardStore(
+    useShallow((s) => (rootTaskId ? s.tasks.filter((t) => t.parentId === rootTaskId) : []))
+  );
 
   // Reset error when switching tasks & load activity history from disk
   useEffect(() => {
@@ -98,193 +134,6 @@ export default function AgentConsoleDrawer() {
       useDrawerStore.getState().loadTaskActivity(activeTaskId);
     }
   }, [activeTaskId]);
-
-  // Listen to agent error & status events from Tauri backend
-  useEffect(() => {
-    if (!task?.id) return;
-    let isDisposed = false;
-    const unlisteners: (() => void)[] = [];
-
-    const setupErrorListeners = async () => {
-      try {
-        if (isDisposed) return;
-
-        const bind = async <K extends keyof AgentEventMap>(
-          event: K,
-          handler: (payload: AgentEventMap[K]) => void
-        ) => {
-          if (isDisposed) return;
-          const u = await listenToEvent(event, (payload) => {
-            if (!isDisposed) handler(payload);
-          });
-          if (isDisposed) {
-            u();
-          } else {
-            unlisteners.push(u);
-          }
-        };
-
-        await Promise.all([
-          // Listen for agent:status terminal states
-          bind('agent:status', (payload) => {
-            if (payload?.taskId === task.id) {
-              const st = payload.status;
-              // Immediate reset of running status on terminal states
-              if (st === 'finished' || st === 'aborted' || st === 'error') {
-                useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-                useDrawerStore.getState().setActiveAgentTask(task.id, false);
-                try {
-                  const ds = useDrawerStore.getState();
-                  ds.setGenerationEndTime(task.id, Date.now());
-                  ds.setTaskEndTime(task.id, Date.now());
-                  if (ds.finalTps[task.id] == null) {
-                    const tele = ds.taskTelemetry[task.id];
-                    const outTokens = tele?.outputTokens || ds.streamedTurnTokens[task.id] || 0;
-                    const start = ds.generationStartTime[task.id] ?? ds.thinkingStartTime[task.id];
-                    const end = ds.generationEndTime[task.id] ?? Date.now();
-                    if (start != null && outTokens > 0) {
-                      const elapsedSec = (end - start) / 1000;
-                      if (elapsedSec > 0.05) {
-                        ds.recordTurnMetrics(task.id, outTokens, elapsedSec);
-                      }
-                    }
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-              if (st === 'error') {
-                setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
-              } else if (st === 'running') {
-                setRunError(null);
-              }
-            }
-          }),
-
-          // Listen for agent:finished
-          bind('agent:finished', (payload) => {
-            if (payload?.taskId === task.id) {
-              useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-              useDrawerStore.getState().setActiveAgentTask(task.id, false);
-              try {
-                const ds = useDrawerStore.getState();
-                ds.setThinkingStartTime(task.id, null);
-              } catch {
-                // ignore
-              }
-            }
-          }),
-
-          // Listen for agent:error
-          bind('agent:error', (payload) => {
-            if (payload && (!payload.taskId || payload.taskId === task.id)) {
-              setRunError(payload.error || 'Произошла непредвиденная ошибка агента');
-              useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-              if (payload.taskId) {
-                useDrawerStore.getState().setActiveAgentTask(payload.taskId, false);
-              } else if (task?.id) {
-                useDrawerStore.getState().setActiveAgentTask(task.id, false);
-              }
-              try {
-                const ds = useDrawerStore.getState();
-                ds.setThinkingStartTime(task.id, null);
-              } catch {
-                // ignore
-              }
-            }
-          }),
-
-          // Listen for subagent:status
-          bind('subagent:status', (payload) => {
-            const sid = payload?.subagentId;
-            const st = payload?.status;
-            if (sid) {
-              if (st === 'running') {
-                useDrawerStore.getState().updateSubagentStatus(sid, 'running');
-                useDrawerStore.getState().setActiveAgentTask(sid, true);
-                return;
-              }
-              const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
-              useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
-              for (const t of tools) {
-                if (t.status === 'running') {
-                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
-                    status: 'failed',
-                    stderr: 'Прервано пользователем',
-                  });
-                }
-              }
-            }
-          }),
-
-          // Listen for subagent:aborted
-          bind('subagent:aborted', (payload) => {
-            const sid = payload?.subagentId;
-            const pid = payload?.parentTaskId;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
-              for (const t of tools) {
-                if (t.status === 'running') {
-                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
-                    status: 'failed',
-                    stderr: 'Прервано пользователем',
-                  });
-                }
-              }
-            } else if (pid && pid === task?.id) {
-              const list = useDrawerStore.getState().subagents[pid] || [];
-              for (const sub of list) {
-                useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
-                useDrawerStore.getState().setActiveAgentTask(sub.id, false);
-                const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
-                for (const t of tools) {
-                  if (t.status === 'running') {
-                    useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
-                      status: 'failed',
-                      stderr: 'Прервано пользователем',
-                    });
-                  }
-                }
-              }
-            }
-          }),
-
-          // Listen for subagent:finished
-          bind('subagent:finished', (payload) => {
-            const sid = payload?.subagentId;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-            }
-          }),
-
-          // Listen for subagent:error
-          bind('subagent:error', (payload) => {
-            const sid = payload?.subagentId;
-            const err = payload?.error;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-            }
-          }),
-        ]);
-      } catch {
-        // web mode fallback
-      }
-    };
-
-    setupErrorListeners();
-    return () => {
-      isDisposed = true;
-      for (const u of unlisteners) {
-        u();
-      }
-    };
-  }, [task?.id, updateTask]);
 
   // Esc key listener to navigate back or close drawer
   useEffect(() => {
@@ -301,34 +150,18 @@ export default function AgentConsoleDrawer() {
   // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
     if (activeSubagentId) {
-      let subFeed = activityFeed[activeSubagentId] || [];
-      if (subFeed.length === 0) {
-        const state = useDrawerStore.getState();
-        const mappedId = state.toolIdToSubagentId[activeSubagentId];
-        if (mappedId && activityFeed[mappedId]?.length) {
-          subFeed = activityFeed[mappedId];
-        } else {
-          for (const [toolId, subId] of Object.entries(state.toolIdToSubagentId)) {
-            if (subId === activeSubagentId && activityFeed[toolId]?.length) {
-              subFeed = activityFeed[toolId];
-              break;
-            }
-          }
-        }
-      }
-      return subFeed.filter((item) => item.type !== 'prompt');
+      return activeFeed;
     }
 
     if (!task) return [];
 
-    const feed = activityFeed[task.id];
-    if (feed && feed.length > 0) {
-      return feed;
+    if (activeFeed && activeFeed.length > 0) {
+      return activeFeed;
     }
 
     // Fallback: merge old streamEntries and toolExecutions if feed is not populated yet
-    const rawStream = streamEntries[task.id] || { thoughts: [], outputs: [] };
-    const rawTools = toolExecutions[task.id] || [];
+    const rawStream = activeStream || { thoughts: [], outputs: [] };
+    const rawTools = activeTaskTools || [];
 
     const merged: DrawerActivityItem[] = [
       ...(rawStream.thoughts ?? []).map((th) => ({
@@ -355,7 +188,7 @@ export default function AgentConsoleDrawer() {
     ];
 
     return merged;
-  }, [task, activeSubagentId, activityFeed, streamEntries, toolExecutions]);
+  }, [task, activeSubagentId, activeFeed, activeStream, activeTaskTools]);
 
   const effectiveModel = settings.model || 'crouton-alpha-free';
   const selectableModels = useMemo(() => {
@@ -370,33 +203,27 @@ export default function AgentConsoleDrawer() {
 
   const turns = useMemo(() => {
     if (!task) return 0;
-    const feed = activityFeed[task.id] || [];
+    const feed = activeFeed || [];
     const feedCount = (feed ?? []).filter((a) => a?.type === 'tool' || a?.type === 'thought' || a?.type === 'output').length;
-    const toolsCount = toolExecutions[task.id]?.length || 0;
-    const outputsCount = streamEntries[task.id]?.outputs?.filter((o) => o?.type === 'output').length || 0;
+    const toolsCount = activeTaskTools?.length || 0;
+    const outputsCount = activeStream?.outputs?.filter((o) => o?.type === 'output').length || 0;
     return Math.max(feedCount, toolsCount + outputsCount, 0);
-  }, [task, activityFeed, toolExecutions, streamEntries]);
+  }, [task, activeFeed, activeTaskTools, activeStream]);
 
   if (!isOpen || !task) return null;
 
   const hasRunningTool = Boolean(
-    toolExecutions[task.id]?.some((t) => t.status === 'running') ||
-    (activeSubagentId && toolExecutions[activeSubagentId]?.some((t) => t.status === 'running'))
+    activeTaskTools?.some((t) => t.status === 'running') ||
+    (activeSubagentId && activeSubagentTools?.some((t) => t.status === 'running'))
   );
 
-  const isAgentActive = Boolean(
-    activeAgentTaskIds?.[task.id] ||
-    (activeSubagentId && activeAgentTaskIds?.[activeSubagentId])
-  );
-
-  const isRunning = isAuthoritativeSessionRunning || isAgentActive || hasRunningTool;
+  const isRunning = task.status === 'running' || isAuthoritativeSessionRunning || isAgentActive || hasRunningTool;
 
   const handleRunAgent = async () => {
     setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
     setActiveAgentTask(task.id, true);
     try {
-      await syncTasksBackend(useBoardStore.getState().tasks);
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('run_agent', { taskId: task.id, prompt: null });
     } catch (err: any) {
@@ -425,9 +252,10 @@ export default function AgentConsoleDrawer() {
           updateTask(boardSub.id, { status: 'paused', isTimerRunning: false });
         }
 
+        const stateTools = useDrawerStore.getState().toolExecutions;
         const subTools = [
-          ...(toolExecutions[activeSubagentId] || []),
-          ...(toolExecutions[resolvedSubagentId] || []),
+          ...(stateTools[activeSubagentId] || []),
+          ...(stateTools[resolvedSubagentId] || []),
         ];
         for (const t of subTools) {
           if (t.status === 'running') {
@@ -448,7 +276,7 @@ export default function AgentConsoleDrawer() {
       await invoke('abort_agent', { taskId: task.id });
       updateTask(task.id, { status: 'paused', isTimerRunning: false });
       setActiveAgentTask(task.id, false);
-      const currTools = toolExecutions[task.id] || [];
+      const currTools = useDrawerStore.getState().toolExecutions[task.id] || [];
       for (const t of currTools) {
         if (t.status === 'running') {
           useDrawerStore.getState().updateToolExecution(task.id, t.id, {
@@ -568,7 +396,6 @@ export default function AgentConsoleDrawer() {
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await syncTasksBackend(useBoardStore.getState().tasks);
       const steerResult = await invoke('steer_agent', {
         taskId: targetId,
         message: mainText,
@@ -599,10 +426,10 @@ export default function AgentConsoleDrawer() {
         {/* Count subagents for header badge */}
         {(() => {
           const storeSubagents = useDrawerStore.getState().subagents[task.id] || [];
-          const subagentToolsCount = (toolExecutions[task.id] || []).filter(
+          const subagentToolsCount = (activeTaskTools || []).filter(
             (t) => t.toolName === 'subagent' || t.toolName === 'subagent_bg'
           ).length;
-          const boardSubtasksCount = tasks.filter((t) => t.parentId === task.id).length;
+          const boardSubtasksCount = subtasks.length;
           const subagentsCount = Math.max(storeSubagents.length, subagentToolsCount, boardSubtasksCount);
 
           return (
@@ -666,17 +493,11 @@ export default function AgentConsoleDrawer() {
                 selectableModels={selectableModels}
                 onSelectEffort={(effort) => {
                   updateTask(task.id, { reasoningEffort: effort });
-                  syncTasksBackend(
-                    tasks.map((t) => (t.id === task.id ? { ...t, reasoningEffort: effort } : t)),
-                  );
                   useDrawerStore.getState().appendOutput(task.id, `Effort изменён на ${effort}`, 'system');
                 }}
                 onSelectPair={(providerId, m) => {
                   const prevModel = task.model || effectiveModel;
                   updateTask(task.id, { model: m, providerId });
-                  syncTasksBackend(
-                    tasks.map((t) => (t.id === task.id ? { ...t, model: m, providerId } : t)),
-                  );
                   void (async () => {
                     const prov = useSettingsStore.getState().providers.find((p) => p.id === providerId);
                     if (prevModel !== m) {

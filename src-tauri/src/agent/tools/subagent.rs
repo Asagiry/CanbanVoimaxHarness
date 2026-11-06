@@ -85,6 +85,22 @@ impl<'a> Drop for TaskStatusGuard<'a> {
     }
 }
 
+struct SubagentActiveHandleGuard<'a> {
+    app_handle: Option<&'a tauri::AppHandle>,
+    repo_root: &'a std::path::Path,
+    subagent_id: &'a str,
+}
+
+impl<'a> Drop for SubagentActiveHandleGuard<'a> {
+    fn drop(&mut self) {
+        if let Some(app) = self.app_handle {
+            if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.remove_active_agent(self.repo_root, self.subagent_id);
+            }
+        }
+    }
+}
+
 pub async fn execute_subagent(
     ctx: &ToolContext<'_>,
     args: &serde_json::Value,
@@ -221,19 +237,14 @@ pub async fn execute_subagent(
                     advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
             );
-            if let Ok(mut map) = state_ref.active_agents.lock() {
-                map.insert(
-                    subagent_id.clone(),
-                    crate::commands::ActiveAgentHandle {
-                        abort_flag: Arc::clone(&sub_abort_handle),
-                        join_handle: Arc::clone(&sub_join_slot),
-                    steering: None,
-                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                    },
-                );
-            }
         }
     }
+
+    let _active_guard = SubagentActiveHandleGuard {
+        app_handle: ctx.app_handle.as_ref(),
+        repo_root: ctx.repo_root,
+        subagent_id: &subagent_id,
+    };
 
     // Parent agent blocks synchronously awaiting clean report from channel (Zero-Pollution Invariant!)
     let mut status_guard = TaskStatusGuard::new(ctx.app_handle.as_ref(), ctx.repo_root, parent_id);
@@ -414,17 +425,6 @@ pub async fn execute_subagent_bg(
                     advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
             );
-            if let Ok(mut map) = state_ref.active_agents.lock() {
-                map.insert(
-                    subagent_id.clone(),
-                    crate::commands::ActiveAgentHandle {
-                        abort_flag: Arc::clone(&sub_abort_handle),
-                        join_handle: Arc::clone(&sub_join_slot),
-                    steering: None,
-                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                    },
-                );
-            }
         }
     }
 
@@ -465,6 +465,12 @@ pub async fn execute_collect_subagent(
     let mut collected_reports: Vec<(String, String)> = Vec::new();
 
     for subagent_id in &ids {
+        if let Some(ref app) = ctx.app_handle {
+            if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.remove_active_agent(repo_root, subagent_id);
+            }
+        }
+
         // 1. Check SUBAGENT_RECEIVERS (in-flight background subagents)
         let rx_opt = {
             let mut reg = SUBAGENT_RECEIVERS.lock().await;
