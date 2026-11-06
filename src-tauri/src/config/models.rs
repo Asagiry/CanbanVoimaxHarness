@@ -262,6 +262,10 @@ pub struct LlmSettings {
     pub temperature: Option<f32>,
     #[serde(rename = "compactorModel", alias = "compactor_model", default = "default_compactor_model")]
     pub compactor_model: String,
+    #[serde(rename = "activeProviderId", alias = "active_provider_id", default, skip_serializing_if = "Option::is_none")]
+    pub active_provider_id: Option<String>,
+    #[serde(default)]
+    pub providers: Vec<crate::config::providers::Provider>,
 }
 
 fn default_llm_provider() -> String {
@@ -293,6 +297,44 @@ impl Default for LlmSettings {
             model: default_llm_model(),
             temperature: Some(0.2),
             compactor_model: default_compactor_model(),
+            active_provider_id: None,
+            providers: Vec::new(),
+        }
+    }
+}
+
+impl LlmSettings {
+    pub fn ensure_providers(&mut self) {
+        if self.providers.is_empty() {
+            self.providers.push(crate::config::providers::legacy_provider(
+                &self.provider,
+                &self.api_key,
+                &self.base_url,
+                &self.model,
+            ));
+        }
+        self.providers = crate::config::providers::normalize_providers(std::mem::take(&mut self.providers));
+        if self.active_provider_id.is_none() {
+            self.active_provider_id = self.providers.first().map(|p| p.id.clone());
+        }
+        if let Some(active_id) = &self.active_provider_id {
+            if !self.providers.iter().any(|p| &p.id == active_id) {
+                self.active_provider_id = self.providers.first().map(|p| p.id.clone());
+            }
+        }
+        if let Some(active) = self
+            .active_provider_id
+            .as_deref()
+            .and_then(|id| self.providers.iter().find(|p| p.id == id))
+        {
+            self.provider = active.name.clone();
+            self.api_key = active.api_key.clone();
+            self.base_url = active.base_url.clone();
+            if let Some(first_model) = active.models.first() {
+                if self.model.trim().is_empty() {
+                    self.model = first_model.id.clone();
+                }
+            }
         }
     }
 }

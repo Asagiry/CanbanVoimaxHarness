@@ -7,14 +7,15 @@ Tool policy resolves stage override, then global setting, then enabled by defaul
 
 | File | Responsibility |
 | --- | --- |
-| `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). |
-| `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules. |
+| `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `providers`, `tool_policy`, `discovery`, `scaffold`, `io`). |
+| `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules; `LlmSettings` carries `providers` + `active_provider_id` (`#[serde(default)]`, `ensure_providers()` on load/save). |
+| `src-tauri/src/config/providers.rs` | LLM provider catalog: `Provider` (`id`, `name`, `is_custom`, `api_key`, `base_url`, `protocol: ProviderProtocol`, `models: Vec<ProviderModel{id, display_name?}>`); `Provider::validate()` boundary guard; `normalize_providers` dedups providers/models; `legacy_provider` migrates flat `LlmSettings` into a single provider. ≤500 lines, zero production unwrap. |
 | `src-tauri/src/config/tool_policy.rs` | Single Authoritative Layer: `stage_override ?? global_enabled ?? true`. |
 | `src-tauri/src/config/discovery.rs` | Multi-tier root discovery, `%LOCALAPPDATA%`. |
 | `src-tauri/src/config/scaffold.rs` | Automatic scaffold, auto-gitignore policies. |
 | `src-tauri/src/config/io.rs` | `atomic_write_file`, JSON load/save. |
 | `src-tauri/src/commands/cortex.rs` | Persona/rules file operations, YAML frontmatter. |
-| `src-tauri/src/commands/llm.rs` | Provider settings, model catalogs and connection checks. |
+| `src-tauri/src/commands/llm.rs` | Provider settings, model catalogs and connection checks; provider CRUD (`list_providers`, `upsert_provider_command`, `delete_provider`) persisted via `config/io.rs` (`atomic_write_file`); `fetch_available_models` signature unchanged. |
 | `src-tauri/src/commands/tools.rs` | Tool policy inspection, stage overrides & matrix updates. |
 | `src-tauri/src/llm/mod.rs` | LLM client and models module re-exports. |
 | `src-tauri/src/llm/client.rs` | Provider requests, streaming parsers and normalized usage. |

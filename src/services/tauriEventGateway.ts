@@ -156,7 +156,7 @@ export interface TaskMovedPayload {
 export interface HookStartPayload {
   taskId?: string;
   stageId?: string;
-  hookType?: 'on_enter' | 'on_leave';
+  hookType?: 'on_enter' | 'on_leave' | 'on_finish' | 'on_exit';
   hookName?: string;
   description?: string;
 }
@@ -164,12 +164,13 @@ export interface HookStartPayload {
 export interface HookFinishPayload {
   taskId?: string;
   stageId?: string;
-  hookType?: 'on_enter' | 'on_leave';
+  hookType?: 'on_enter' | 'on_leave' | 'on_finish' | 'on_exit';
   success?: boolean;
   exitCode?: number | null;
   stdout?: string;
   stderr?: string;
   error?: string;
+  hookName?: string;
 }
 
 export interface TaskUpdatedPayload {
@@ -816,24 +817,37 @@ export function setupTauriEventGateway(): () => void {
       // 14. hook:start
       await addListener('hook:start', (payload) => {
         const { taskId, stageId, hookType, hookName, description } = payload || {};
-        if (taskId && stageId && hookType && hookName) {
-          useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName, description });
+        if (!taskId || !stageId || !hookType) return;
+        // Backend normalizes on_finish/on_exit -> on_leave; older emits
+        // or transitive resolution may still send them — normalize here too.
+        const normalizedHookType = hookType === 'on_finish' || hookType === 'on_exit' ? 'on_leave' : hookType;
+        if (!hookName) {
+          console.warn('[hook:start] missing hookName, falling back to hookType', payload);
         }
+        useBoardStore.getState().setHookStart({
+          taskId,
+          stageId,
+          hookType: normalizedHookType,
+          hookName: hookName || normalizedHookType,
+          description,
+        });
       });
 
       // 15. hook:finish
       await addListener('hook:finish', (payload) => {
-        const { taskId, stageId, hookType, success, exitCode, stdout, stderr, error } = payload || {};
+        const { taskId, stageId, hookType, success, exitCode, stdout, stderr, error, hookName } = payload || {};
         if (taskId && stageId && hookType) {
+          const normalizedHookType = hookType === 'on_finish' || hookType === 'on_exit' ? 'on_leave' : hookType;
           useBoardStore.getState().setHookFinish({
             taskId,
             stageId,
-            hookType,
+            hookType: normalizedHookType,
             success: Boolean(success),
             exitCode,
             stdout,
             stderr,
             error,
+            hookName,
           });
         }
       });

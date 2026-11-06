@@ -89,6 +89,7 @@ export interface TasksCrudSlice {
     stdout?: string;
     stderr?: string;
     error?: string;
+    hookName?: string;
   }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
   setTasks: (tasks: KanbanTask[]) => void;

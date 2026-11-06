@@ -51,13 +51,14 @@ export const createTasksCrudSlice: StateCreator<
 
   setHookStart: ({ taskId, stageId, hookType, hookName, description }) => {
     set((state) => {
+      const normalizedHookType = (hookType as string) === 'on_finish' || (hookType as string) === 'on_exit' ? 'on_leave' : hookType;
       const prev = state.hookStates[taskId] || {};
       const nextTaskHookState: TaskHookStates = {
         ...prev,
-        [hookType]: {
-          hookName,
+        [normalizedHookType]: {
+          hookName: hookName || (normalizedHookType as string),
           stageId,
-          hookType,
+          hookType: normalizedHookType,
           status: 'running',
           startedAt: Date.now(),
           stdout: '',
@@ -83,18 +84,19 @@ export const createTasksCrudSlice: StateCreator<
     });
   },
 
-  setHookFinish: ({ taskId, stageId, hookType, success, exitCode, stdout, stderr, error }) => {
+  setHookFinish: ({ taskId, stageId, hookType, success, exitCode, stdout, stderr, error, hookName }) => {
     set((state) => {
+      const normalizedHookType = (hookType as string) === 'on_finish' || (hookType as string) === 'on_exit' ? 'on_leave' : hookType;
       const prev = state.hookStates[taskId] || {};
-      const existing = prev[hookType];
+      const existing = prev[normalizedHookType];
       const startedAt = existing?.startedAt ?? Date.now();
       const durationMs = Date.now() - startedAt;
       const nextTaskHookState: TaskHookStates = {
         ...prev,
-        [hookType]: {
-          hookName: existing?.hookName || hookType,
+        [normalizedHookType]: {
+          hookName: hookName || existing?.hookName || (normalizedHookType as string),
           stageId,
-          hookType,
+          hookType: normalizedHookType,
           status: success ? 'success' : 'failed',
           startedAt,
           durationMs,
@@ -501,14 +503,25 @@ export const createTasksCrudSlice: StateCreator<
     if (!mapped) return;
     const { columns } = get();
     set((state) => {
+      // Preserve `running` from the live store: a disk `success` snapshot
+      // (hook:finish already recorded on backend) must not clobber the
+      // amber spinner before the hook:finish event itself arrives.
+      const preserveRunning = (incoming: TaskHookStates | undefined): TaskHookStates | undefined => {
+        const live = state.hookStates[mapped.id];
+        if (!live) return incoming;
+        const next: TaskHookStates = { ...incoming };
+        if (live.on_enter?.status === 'running') next.on_enter = live.on_enter;
+        if (live.on_leave?.status === 'running') next.on_leave = live.on_leave;
+        return next;
+      };
       let nextHookStates = state.hookStates;
       if (mapped.hookStates) {
         nextHookStates = {
           ...state.hookStates,
-          [mapped.id]: {
+          [mapped.id]: preserveRunning({
             ...state.hookStates[mapped.id],
             ...mapped.hookStates,
-          },
+          }) as TaskHookStates,
         };
         saveCachedHookStates(nextHookStates);
       }
@@ -518,7 +531,7 @@ export const createTasksCrudSlice: StateCreator<
             if (t.id === mapped.id) {
               const preservedTodos = mapped.todos !== undefined ? mapped.todos : t.todos;
               const mergedHookStates = mapped.hookStates
-                ? { ...t.hookStates, ...mapped.hookStates }
+                ? preserveRunning({ ...t.hookStates, ...mapped.hookStates })
                 : t.hookStates;
               const preservedStageEnteredAt = mapped.stageEnteredAt || t.stageEnteredAt || t.createdAt;
               const preservedStageDurations = mapped.stageDurations && Object.keys(mapped.stageDurations).length > 0
@@ -630,10 +643,15 @@ export const createTasksCrudSlice: StateCreator<
     const nextHookStates: Record<string, TaskHookStates> = { ...prevHookStates };
     for (const t of mapped) {
       if (t.hookStates) {
-        nextHookStates[t.id] = {
+        const merged: TaskHookStates = {
           ...nextHookStates[t.id],
           ...t.hookStates,
         };
+        // Preserve live `running` so a disk `success` snapshot from
+        // tasks:updated cannot kill the spinner before hook:finish lands.
+        if (nextHookStates[t.id]?.on_enter?.status === 'running') merged.on_enter = nextHookStates[t.id].on_enter;
+        if (nextHookStates[t.id]?.on_leave?.status === 'running') merged.on_leave = nextHookStates[t.id].on_leave;
+        nextHookStates[t.id] = merged;
       }
     }
     saveCachedHookStates(nextHookStates);

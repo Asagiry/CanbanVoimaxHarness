@@ -1,22 +1,12 @@
-import { useState, useId, useMemo, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, Check, Cpu, X } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import { showTestNotification } from '../../services/notificationService';
-import {
-  X,
-  Check,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Globe,
-  Cpu,
-  RefreshCw,
-  Search,
-  CheckSquare,
-  Square,
-  Bell,
-} from 'lucide-react';
+import ProviderList from './providers/ProviderList';
+import ProviderEditor from './providers/ProviderEditor';
+import { toProviderIdValue, type Provider } from '../../stores/settings/providers';
 
 export function NotificationToggle({
   checked,
@@ -39,9 +29,7 @@ export function NotificationToggle({
       onClick={onChange}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-hidden ${
         disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
-      } ${
-        checked ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#2c2c33]'
-      }`}
+      } ${checked ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#2c2c33]'}`}
     >
       <span
         aria-hidden="true"
@@ -55,129 +43,58 @@ export function NotificationToggle({
 
 export default function SettingsModal() {
   const { zoom } = useUiZoom();
-  const {
-    isOpen,
-    settings,
-    notificationSettings,
-    availableModels,
-    isSaving,
-    saveStatus,
-    closeSettings,
-    setSettings,
-    setNotificationSettings,
-    saveSettings,
-    addAvailableModels,
-    fetchAvailableModels,
-  } = useSettingsStore();
+  const isOpen = useSettingsStore((s) => s.isOpen);
+  const notificationSettings = useSettingsStore((s) => s.notificationSettings);
+  const isSaving = useSettingsStore((s) => s.isSaving);
+  const saveStatus = useSettingsStore((s) => s.saveStatus);
+  const closeSettings = useSettingsStore((s) => s.closeSettings);
+  const setNotificationSettings = useSettingsStore((s) => s.setNotificationSettings);
+  const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const providers = useSettingsStore((s) => s.providers);
 
   const [activeTab, setActiveTab] = useState<'llm' | 'notifications'>('llm');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isChooseModelsModalOpen, setIsChooseModelsModalOpen] = useState(false);
-  const [isFetchingModels, setIsFetchingModels] = useState(false);
-  const [fetchedCandidates, setFetchedCandidates] = useState<string[]>([]);
-  const [selectedCandidateModels, setSelectedCandidateModels] = useState<Set<string>>(new Set());
-  const [searchFilter, setSearchFilter] = useState('');
-  const [isCustomModelInput, setIsCustomModelInput] = useState(false);
   const [testNotifSent, setTestNotifSent] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const { t } = useTranslation();
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const testNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-      }
-      if (testNotifTimerRef.current) {
-        clearTimeout(testNotifTimerRef.current);
-      }
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (testNotifTimerRef.current) clearTimeout(testNotifTimerRef.current);
     };
   }, []);
-
-  const providerId = useId();
-  const gatewayId = useId();
-  const apiKeyId = useId();
-  const modelId = useId();
-  const compactorModelId = useId();
-
-  // Filtered candidate models in "Choose models to add" modal
-  const filteredCandidates = useMemo(() => {
-    if (!searchFilter.trim()) return fetchedCandidates;
-    const q = searchFilter.toLowerCase();
-    return fetchedCandidates.filter((m) => m.toLowerCase().includes(q));
-  }, [fetchedCandidates, searchFilter]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveSettings();
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
       closeSettings();
       closeTimerRef.current = null;
     }, 400);
   };
 
-  const handleFetchModels = async () => {
-    setIsFetchingModels(true);
-    try {
-      const models = await fetchAvailableModels(
-        settings.baseUrl || settings.gatewayUrl,
-        settings.apiKey
-      );
-      setFetchedCandidates(models);
-      // Select all candidates by default
-      setSelectedCandidateModels(new Set(models));
-      setSearchFilter('');
-      setIsChooseModelsModalOpen(true);
-    } catch (err) {
-      console.error('Failed to fetch available models:', err);
-    } finally {
-      setIsFetchingModels(false);
-    }
-  };
-
-  const toggleSelectCandidate = (modelName: string) => {
-    setSelectedCandidateModels((prev) => {
-      const next = new Set(prev);
-      if (next.has(modelName)) {
-        next.delete(modelName);
-      } else {
-        next.add(modelName);
-      }
-      return next;
+  const handleAddProvider = () => {
+    const id = toProviderIdValue(`custom-${providers.length + 1}`);
+    setEditingProvider({
+      id,
+      name: 'custom',
+      isCustom: true,
+      apiKey: '',
+      baseUrl: '',
+      protocol: 'openai',
+      models: [],
     });
-  };
-
-  const handleToggleSelectAll = () => {
-    if (selectedCandidateModels.size === filteredCandidates.length) {
-      setSelectedCandidateModels(new Set());
-    } else {
-      setSelectedCandidateModels(new Set(filteredCandidates));
-    }
-  };
-
-  const handleAddSelectedModels = () => {
-    const toAdd = Array.from(selectedCandidateModels);
-    if (toAdd.length > 0) {
-      addAvailableModels(toAdd);
-      // If current model is empty or not in available list, set to first added
-      if (!settings.model || settings.model.trim() === '') {
-        setSettings({ model: toAdd[0] });
-      }
-    }
-    setIsChooseModelsModalOpen(false);
   };
 
   const handleTestNotification = async () => {
     await showTestNotification();
     setTestNotifSent(true);
-    if (testNotifTimerRef.current) {
-      clearTimeout(testNotifTimerRef.current);
-    }
+    if (testNotifTimerRef.current) clearTimeout(testNotifTimerRef.current);
     testNotifTimerRef.current = setTimeout(() => {
       setTestNotifSent(false);
       testNotifTimerRef.current = null;
@@ -185,229 +102,61 @@ export default function SettingsModal() {
   };
 
   return (
-    <>
-      <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.title')}</h2>
-            </div>
-            <button
-              onClick={closeSettings}
-              className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
-              aria-label={t('common.close')}
-            >
-              <X className="h-4 w-4" />
-            </button>
+    <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
+      <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
+        <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.title')}</h2>
           </div>
+          <button
+            onClick={closeSettings}
+            className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
+            aria-label={t('common.close')}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-          {/* Tabs */}
-          <div className="flex border-b border-[#ebebeb] dark:border-[#212126] mt-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('llm')}
-              className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
-                activeTab === 'llm'
-                  ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
-                  : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
-              }`}
-            >
-              <Cpu className="h-3.5 w-3.5" />
-              <span>{t('settings.tabLlm')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('notifications')}
-              className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
-                activeTab === 'notifications'
-                  ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
-                  : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
-              }`}
-            >
-              <Bell className="h-3.5 w-3.5" />
-              <span>{t('settings.tabNotifications')}</span>
-            </button>
-          </div>
+        <div className="flex border-b border-[#ebebeb] dark:border-[#212126] mt-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('llm')}
+            className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+              activeTab === 'llm'
+                ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
+                : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
+            }`}
+          >
+            <Cpu className="h-3.5 w-3.5" />
+            <span>{t('settings.tabLlm')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('notifications')}
+            className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+              activeTab === 'notifications'
+                ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
+                : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
+            }`}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            <span>{t('settings.tabNotifications')}</span>
+          </button>
+        </div>
 
-          {/* Form Body */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
-            {activeTab === 'llm' ? (
-              <>
-            {/* Provider */}
-            <div className="space-y-1">
-              <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
-                {t('settings.provider')}
-              </label>
-              <div className="relative">
-                <select
-                  id={providerId}
-                  value={settings.provider}
-                  onChange={(e) => setSettings({ provider: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] px-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
-                >
-                  <option value="Antigravity Proxy">Antigravity Proxy</option>
-                  <option value="OpenCode Go">OpenCode Go</option>
-                  <option value="OpenAI">OpenAI</option>
-                  <option value="Anthropic">Anthropic</option>
-                  <option value="Ollama">Ollama</option>
-                  {!['Antigravity Proxy', 'OpenCode Go', 'OpenAI', 'Anthropic', 'Ollama', 'Custom'].includes(settings.provider) && (
-                    <option value={settings.provider}>{settings.provider}</option>
-                  )}
-                  <option value="Custom">Custom</option>
-                </select>
-              </div>
-            </div>
-
-            {/* API Gateway URL */}
-            <div className="space-y-1">
-              <label htmlFor={gatewayId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
-                {t('settings.gatewayUrl')}
-              </label>
-              <div className="relative flex items-center">
-                <Globe className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
-                <input
-                  id={gatewayId}
-                  type="text"
-                  value={settings.gatewayUrl}
-                  onChange={(e) => setSettings({ gatewayUrl: e.target.value, baseUrl: e.target.value })}
-                  placeholder="http://127.0.0.1:port/v1"
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* API Key (Masked) */}
-            <div className="space-y-1">
-              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
-                {t('settings.apiKey')}
-              </label>
-              <div className="relative flex items-center">
-                <KeyRound className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
-                <input
-                  id={apiKeyId}
-                  type={showApiKey ? 'text' : 'password'}
-                  value={settings.apiKey}
-                  onChange={(e) => setSettings({ apiKey: e.target.value })}
-                  placeholder={
-                    settings.provider === 'Antigravity Proxy' || settings.provider === 'Ollama'
-                      ? t('settings.apiKeyPlaceholderProxy')
-                      : 'sk-...'
-                  }
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-8 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2 p-1 text-[#666666] hover:text-[#171717] cursor-pointer"
-                  aria-label={showApiKey ? t('settings.hideKey') : t('settings.showKey')}
-                >
-                  {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Model Section */}
-            <div className="space-y-1 pt-1">
-              <div className="flex items-center justify-between">
-                <label htmlFor={modelId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
-                  {t('settings.model')}
-                </label>
-                <button
-                  type="button"
-                  onClick={handleFetchModels}
-                  disabled={isFetchingModels}
-                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f4f4f5] hover:text-[#4d4d4d] dark:hover:text-[#71717a] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23]"
-                  aria-label={t('settings.fetchModels')}
-                >
-                  <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
-                  <span>{isFetchingModels ? t('settings.fetching') : t('settings.fetchModels')}</span>
-                </button>
-              </div>
-
-              {isCustomModelInput ? (
-                <div className="relative flex items-center">
-                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
-                  <input
-                    id={modelId}
-                    type="text"
-                    value={settings.model}
-                    onChange={(e) => setSettings({ model: e.target.value })}
-                    placeholder={t('settings.customModelPlaceholder')}
-                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="relative flex items-center">
-                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
-                  <select
-                    id={modelId}
-                    value={settings.model}
-                    required
-                    onChange={(e) => setSettings({ model: e.target.value })}
-                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs transition cursor-pointer"
-                  >
-                    <option value="" disabled>{t('settings.selectFromList')}</option>
-                    {!availableModels.includes(settings.model) && settings.model && (
-                      <option value={settings.model}>{settings.model}</option>
-                    )}
-                    {availableModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between text-[10px] text-[#666666] pt-0.5 font-sans">
-                <span>
-                  {t('settings.modelsCount', { count: availableModels.length })}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsCustomModelInput(!isCustomModelInput)}
-                  className="text-[#666666] hover:text-[#171717] underline cursor-pointer"
-                >
-                  {isCustomModelInput ? t('settings.selectFromList') : t('settings.enterManually')}
-                </button>
-              </div>
-            </div>
-
-            {/* Compactor Model Section */}
-            <div className="space-y-1 pt-1 border-t border-[#f4f4f5] dark:border-[#212126]">
-              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
-                {t('settings.compactorModel')}
-              </label>
-              <div className="relative flex items-center">
-                <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
-                <select
-                  id={compactorModelId}
-                  value={settings.compactorModel || 'inherit'}
-                  onChange={(e) => setSettings({ compactorModel: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs transition cursor-pointer"
-                >
-                  <option value="inherit">{t('settings.inheritModel')}</option>
-                  {availableModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                  {settings.compactorModel && settings.compactorModel !== 'inherit' && !availableModels.includes(settings.compactorModel) && (
-                    <option value={settings.compactorModel}>{settings.compactorModel}</option>
-                  )}
-                </select>
-              </div>
-              <p className="text-[10px] text-[#666666] font-sans">
-                {t('settings.compactorDesc')}
-              </p>
-            </div>
-            </>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
+          {activeTab === 'llm' ? (
+            editingProvider ? (
+              <ProviderEditor
+                provider={editingProvider}
+                onCancel={() => setEditingProvider(null)}
+                onSaved={() => setEditingProvider(null)}
+              />
             ) : (
+              <ProviderList onEdit={(provider) => setEditingProvider(provider)} onAdd={handleAddProvider} />
+            )
+          ) : (
             <div className="space-y-4 py-1">
-              {/* Master toggle */}
               <div className="flex items-center justify-between p-3 rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#17171b]">
                 <div className="space-y-0.5 pr-2">
                   <span className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] font-sans block">
@@ -424,13 +173,9 @@ export default function SettingsModal() {
                 />
               </div>
 
-              {/* Sub-toggles */}
               <div className={`space-y-2 px-3 transition-opacity ${notificationSettings.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                {/* On Question */}
                 <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#212126]">
-                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
-                    {t('settings.notifyOnQuestion')}
-                  </span>
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">{t('settings.notifyOnQuestion')}</span>
                   <NotificationToggle
                     checked={notificationSettings.onQuestion}
                     disabled={!notificationSettings.enabled}
@@ -438,12 +183,8 @@ export default function SettingsModal() {
                     ariaLabel={t('settings.notifyOnQuestion')}
                   />
                 </div>
-
-                {/* On Advance Task */}
                 <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#212126]">
-                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
-                    {t('settings.notifyOnAdvanceTask')}
-                  </span>
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">{t('settings.notifyOnAdvanceTask')}</span>
                   <NotificationToggle
                     checked={notificationSettings.onAdvanceTask}
                     disabled={!notificationSettings.enabled}
@@ -451,12 +192,8 @@ export default function SettingsModal() {
                     ariaLabel={t('settings.notifyOnAdvanceTask')}
                   />
                 </div>
-
-                {/* On Task Completed */}
                 <div className="flex items-center justify-between py-1.5">
-                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
-                    {t('settings.notifyOnTaskCompleted')}
-                  </span>
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">{t('settings.notifyOnTaskCompleted')}</span>
                   <NotificationToggle
                     checked={notificationSettings.onTaskCompleted}
                     disabled={!notificationSettings.enabled}
@@ -466,7 +203,6 @@ export default function SettingsModal() {
                 </div>
               </div>
 
-              {/* Test Notification Button */}
               <div className="pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
                 <button
                   type="button"
@@ -476,9 +212,7 @@ export default function SettingsModal() {
                   {testNotifSent ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        {t('settings.testNotificationSent')}
-                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t('settings.testNotificationSent')}</span>
                     </>
                   ) : (
                     <>
@@ -489,144 +223,33 @@ export default function SettingsModal() {
                 </button>
               </div>
             </div>
-            )}
+          )}
 
-            {/* Action buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126]">
-              <button
-                type="button"
-                onClick={closeSettings}
-                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs transition cursor-pointer"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs border border-transparent dark:border-[#2c2c33]"
-              >
-                {saveStatus === 'saved' ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" />
-                    <span>{t('common.saved')}</span>
-                  </>
-                ) : (
-                  <span>{t('common.save')}</span>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* Modal Dialog: "Choose models to add" */}
-      {isChooseModelsModalOpen && (
-        <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
-              <div className="flex items-center space-x-2">
-                <Cpu className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5]" />
-                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.chooseModelsTitle')}</h3>
-              </div>
-              <button
-                onClick={() => setIsChooseModelsModalOpen(false)}
-                className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
-                aria-label={t('common.close')}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="mt-4">
-              <div className="relative flex items-center">
-                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder={t('settings.searchModels')}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] text-xs placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans transition"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Selection Quick Action & Count */}
-            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] dark:text-[#71717a] px-0.5 select-none font-sans">
-              <button
-                type="button"
-                onClick={handleToggleSelectAll}
-                className="text-[#171717] dark:text-[#f4f4f5] hover:underline font-medium cursor-pointer transition"
-              >
-                {selectedCandidateModels.size === filteredCandidates.length && filteredCandidates.length > 0
-                  ? t('settings.deselectAll')
-                  : t('settings.selectAll')}
-              </button>
-              <span className="text-[11px] text-[#8f8f8f] dark:text-[#71717a] tabular-nums">
-                {t('settings.selectedCount', { selected: selectedCandidateModels.size, total: filteredCandidates.length })}
-              </span>
-            </div>
-
-            {/* Models Checkbox List */}
-            <div className="mt-2 border border-[#ebebeb] dark:border-[#2c2c33] rounded-md bg-white dark:bg-[#17171b] max-h-64 overflow-y-auto divide-y divide-[#ebebeb] dark:divide-[#212126]">
-              {filteredCandidates.length > 0 ? (
-                filteredCandidates.map((modelName) => {
-                  const isChecked = selectedCandidateModels.has(modelName);
-                  const isAlreadyAdded = availableModels.includes(modelName);
-                  return (
-                    <div
-                      key={modelName}
-                      onClick={() => toggleSelectCandidate(modelName)}
-                      className={`flex items-center space-x-2.5 px-3 py-2 cursor-pointer transition select-none ${
-                        isChecked ? 'bg-[#f4f4f5] dark:bg-[#232328]' : 'hover:bg-[#fafafa] dark:hover:bg-[#232328]/50'
-                      }`}
-                    >
-                      {isChecked ? (
-                        <CheckSquare className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
-                      ) : (
-                        <Square className="h-4 w-4 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
-                      )}
-                      <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] truncate flex-1">
-                        {modelName}
-                      </span>
-                      {isAlreadyAdded && (
-                        <span className="text-[10px] text-[#666666] dark:text-[#71717a] bg-[#f4f4f5] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] px-1.5 py-0.5 rounded-md font-sans">
-                          {t('settings.alreadyAdded')}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126]">
+            <button
+              type="button"
+              onClick={closeSettings}
+              className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs transition cursor-pointer"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs border border-transparent dark:border-[#2c2c33]"
+            >
+              {saveStatus === 'saved' ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  <span>{t('common.saved')}</span>
+                </>
               ) : (
-                <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#71717a] font-sans">
-                  {t('settings.noModelsFound')}
-                </div>
+                <span>{t('common.save')}</span>
               )}
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb] dark:border-[#212126]">
-              <button
-                type="button"
-                onClick={() => setIsChooseModelsModalOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs transition cursor-pointer"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handleAddSelectedModels}
-                disabled={selectedCandidateModels.size === 0}
-                className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
-              >
-                {t('settings.addSelected', { count: selectedCandidateModels.size })}
-              </button>
-            </div>
+            </button>
           </div>
-        </div>
-      )}
-    </>
+        </form>
+      </div>
+    </div>
   );
 }

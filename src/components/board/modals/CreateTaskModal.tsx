@@ -29,7 +29,8 @@ export default function CreateTaskModal({
   defaultColumnId,
 }: CreateTaskModalProps) {
   const { addTask, activeBoardId } = useBoardStore();
-  const { availableModels, settings } = useSettingsStore();
+  const providers = useSettingsStore((s) => s.providers);
+  const settings = useSettingsStore((s) => s.settings);
   const { t } = useTranslation();
   const { zoom } = useUiZoom();
   const effectiveStages = stages ?? columns;
@@ -51,7 +52,8 @@ export default function CreateTaskModal({
       setNewTitle('');
       setNewDescription('');
       setNewAttachments([]);
-      setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
+      const firstAvailable = providers.flatMap((p) => p.models.map((m) => m.id))[0] ?? '';
+      setSelectedModel(settings.model || firstAvailable || 'gemini-3.8-flash-high');
       const intakeCol = effectiveStages?.find((c) => c.isIntake);
       const fallbackId =
         intakeCol?.id ||
@@ -60,7 +62,7 @@ export default function CreateTaskModal({
       setPreviewLightbox(null);
       setIsSubmitting(false);
     }
-  }, [isOpen, initialStage, effectiveStages, settings.model, availableModels]);
+  }, [isOpen, initialStage, effectiveStages, settings.model, providers]);
 
   // Global Escape key listener (only when lightbox is not active)
   useEffect(() => {
@@ -381,11 +383,14 @@ export default function CreateTaskModal({
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs cursor-pointer transition"
               >
-                {Array.from(new Set([selectedModel, ...(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high'])])).map((m) => (
-                  <option key={m} value={m} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
-                    {m}
-                  </option>
-                ))}
+                {Array.from(new Set([selectedModel, ...providers.flatMap((p) => p.models.map((m) => m.id))])).map((m) => {
+                  const label = providers.flatMap((p) => p.models).find((model) => model.id === m)?.displayName ?? m;
+                  return (
+                    <option key={m} value={m} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

@@ -661,6 +661,83 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(useBoardStore.getState().hookStates['CVH-001']?.on_enter).toBeUndefined();
     });
 
+    it('normalizes on_finish/on_exit to on_leave on hook start and finish', () => {
+      const task = createSampleTask({ id: 'CVH-001' });
+      useBoardStore.getState().setTasks([task]);
+
+      useBoardStore.getState().setHookStart({
+        taskId: 'CVH-001',
+        stageId: 'dev',
+        hookType: 'on_finish' as unknown as 'on_leave',
+        hookName: 'cleanup.bat',
+      });
+
+      let hook = useBoardStore.getState().hookStates['CVH-001']?.on_leave;
+      expect(hook?.status).toBe('running');
+      expect(hook?.hookType).toBe('on_leave');
+      expect(useBoardStore.getState().hookStates['CVH-001']).not.toHaveProperty('on_finish');
+
+      useBoardStore.getState().setHookFinish({
+        taskId: 'CVH-001',
+        stageId: 'dev',
+        hookType: 'on_finish' as unknown as 'on_leave',
+        success: true,
+        exitCode: 0,
+      });
+
+      hook = useBoardStore.getState().hookStates['CVH-001']?.on_leave;
+      expect(hook?.status).toBe('success');
+      expect(hook?.hookName).toBe('cleanup.bat');
+    });
+
+    it('falls back to hookType when hookName is empty', () => {
+      const task = createSampleTask({ id: 'CVH-001' });
+      useBoardStore.getState().setTasks([task]);
+
+      useBoardStore.getState().setHookStart({
+        taskId: 'CVH-001',
+        stageId: 'dev',
+        hookType: 'on_leave',
+        hookName: '',
+      });
+
+      const hook = useBoardStore.getState().hookStates['CVH-001']?.on_leave;
+      expect(hook?.status).toBe('running');
+      expect(hook?.hookName).toBeTruthy();
+    });
+
+    it('preserves running hooks against disk success snapshots on setBackendTasks', () => {
+      const task = createSampleTask({ id: 'CVH-001' });
+      useBoardStore.getState().setTasks([task]);
+
+      useBoardStore.getState().setHookStart({
+        taskId: 'CVH-001',
+        stageId: 'dev',
+        hookType: 'on_enter',
+        hookName: 'gatekeeper.bat',
+      });
+
+      useBoardStore.getState().setBackendTasks([
+        {
+          id: 'CVH-001',
+          title: task.title,
+          stageId: 'dev',
+          hookStates: {
+            on_enter: {
+              hookName: 'gatekeeper.bat',
+              stageId: 'dev',
+              hookType: 'on_enter',
+              status: 'success',
+              startedAt: Date.now(),
+              durationMs: 10,
+            },
+          },
+        } as unknown as { id: string },
+      ]);
+
+      expect(useBoardStore.getState().hookStates['CVH-001']?.on_enter?.status).toBe('running');
+    });
+
     it('sets search query and hovered/selected task IDs', () => {
       useBoardStore.getState().setSearchQuery('auth');
       expect(useBoardStore.getState().searchQuery).toBe('auth');

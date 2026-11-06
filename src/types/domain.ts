@@ -32,6 +32,27 @@ export type StageId = Brand<string, 'StageId'>;
  */
 export type BoardId = Brand<string, 'BoardId'>;
 
+export type ProviderId = Brand<string, 'ProviderId'>;
+
+/**
+ * Factory with validation for ProviderId.
+ * Normalizes input string to lowercase and trims whitespace.
+ */
+export function toProviderId(raw: string): ProviderId {
+  if (typeof raw !== 'string') {
+    throw new DomainValidationError(`Expected string for ProviderId, received ${typeof raw}`);
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) {
+    throw new DomainValidationError('Invalid ProviderId: cannot be empty');
+  }
+  return normalized as ProviderId;
+}
+
+export function isProviderId(raw: unknown): raw is ProviderId {
+  return typeof raw === 'string' && raw.trim().length > 0 && raw === raw.trim().toLowerCase();
+}
+
 /**
  * Domain validation error thrown when input fails value object constraints.
  */

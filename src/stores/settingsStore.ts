@@ -1,4 +1,14 @@
 import { create } from 'zustand';
+import type { ProviderId } from '../types/domain';
+import {
+  availableModelIds,
+  deleteProviderLocal,
+  migrateFlatToProviders,
+  upsertProviderLocal,
+  type Provider,
+} from './settings/providers';
+
+export type { Provider, ProviderModel, ProviderProtocol } from './settings/providers';
 
 export interface LlmSettingsState {
   provider: string;
@@ -7,6 +17,8 @@ export interface LlmSettingsState {
   apiKey: string;
   model: string;
   compactorModel?: string;
+  activeProviderId?: ProviderId;
+  providers?: Provider[];
 }
 
 export interface NotificationSettings {
@@ -21,6 +33,8 @@ interface SettingsStoreState {
   settings: LlmSettingsState;
   notificationSettings: NotificationSettings;
   availableModels: string[];
+  providers: Provider[];
+  activeProviderId: ProviderId;
   isSaving: boolean;
   saveStatus: 'idle' | 'saved' | 'error';
   errorMessage: string | null;
@@ -31,9 +45,14 @@ interface SettingsStoreState {
   setNotificationSettings: (partial: Partial<NotificationSettings>) => void;
   setAvailableModels: (models: string[]) => void;
   addAvailableModels: (newModels: string[]) => void;
+  setProviders: (providers: Provider[], activeProviderId?: ProviderId) => void;
+  upsertProvider: (provider: Provider) => Promise<Provider[]>;
+  deleteProvider: (providerId: ProviderId) => Promise<Provider[]>;
+  setActiveProvider: (providerId: ProviderId) => void;
   loadSettings: () => Promise<void>;
   saveSettings: (newSettings?: Partial<LlmSettingsState>) => Promise<boolean>;
   fetchAvailableModels: (baseUrl?: string, apiKey?: string) => Promise<string[]>;
+  fetchProviderModels: (providerId: ProviderId) => Promise<string[]>;
 }
 
 const DEFAULT_SETTINGS: LlmSettingsState = {
@@ -44,6 +63,23 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
   model: 'gemini-3.8-flash-high',
   compactorModel: 'inherit',
 };
+
+const DEFAULT_PROVIDERS = migrateFlatToProviders(DEFAULT_SETTINGS);
+
+function syncFlatFromProviders(providers: Provider[], activeProviderId: ProviderId, base: LlmSettingsState): LlmSettingsState {
+  const active = providers.find((p) => p.id === activeProviderId) ?? providers[0];
+  if (!active) return base;
+  return {
+    ...base,
+    provider: active.name,
+    gatewayUrl: active.baseUrl || base.gatewayUrl,
+    baseUrl: active.baseUrl || base.baseUrl,
+    apiKey: active.apiKey,
+    model: base.model || active.models[0]?.id || '',
+    activeProviderId: active.id,
+    providers,
+  };
+}
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
@@ -99,9 +135,11 @@ const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: strin
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
-  settings: DEFAULT_SETTINGS,
+  settings: { ...DEFAULT_SETTINGS, activeProviderId: DEFAULT_PROVIDERS.activeProviderId, providers: DEFAULT_PROVIDERS.providers },
   notificationSettings: loadStoredNotificationSettings(),
   availableModels: ['gemini-3.8-flash-high'],
+  providers: DEFAULT_PROVIDERS.providers,
+  activeProviderId: DEFAULT_PROVIDERS.activeProviderId,
   isSaving: false,
   saveStatus: 'idle',
   errorMessage: null,
@@ -145,6 +183,62 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     } catch {
       // Ignore localStorage error
     }
+  },
+
+  setProviders: (providers, activeProviderId) => {
+    const migrated = migrateFlatToProviders({ providers, activeProviderId });
+    const settings = syncFlatFromProviders(migrated.providers, migrated.activeProviderId, get().settings);
+    set({
+      providers: migrated.providers,
+      activeProviderId: migrated.activeProviderId,
+      settings,
+      availableModels: availableModelIds(migrated.providers).length > 0
+        ? availableModelIds(migrated.providers)
+        : get().availableModels,
+    });
+  },
+
+  upsertProvider: async (provider) => {
+    const next = upsertProviderLocal(get().providers, provider);
+    const activeProviderId = get().activeProviderId;
+    const settings = syncFlatFromProviders(next, activeProviderId, get().settings);
+    set({ providers: next, settings, availableModels: availableModelIds(next).length > 0 ? availableModelIds(next) : get().availableModels });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const saved = await invoke<Provider[]>('upsert_provider_command', { provider });
+      if (Array.isArray(saved) && saved.length > 0) {
+        get().setProviders(saved, activeProviderId);
+        return get().providers;
+      }
+    } catch {
+      // Local-first fallback; backend save happens on saveSettings
+    }
+    return next;
+  },
+
+  deleteProvider: async (providerId) => {
+    const { providers, activeProviderId } = deleteProviderLocal(get().providers, get().activeProviderId, providerId);
+    const settings = syncFlatFromProviders(providers, activeProviderId, get().settings);
+    set({ providers, activeProviderId, settings, availableModels: availableModelIds(providers) });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const saved = await invoke<Provider[]>('delete_provider', { providerId });
+      if (Array.isArray(saved) && saved.length > 0) {
+        get().setProviders(saved, activeProviderId);
+        return get().providers;
+      }
+    } catch {
+      // Local-first fallback
+    }
+    return providers;
+  },
+
+  setActiveProvider: (providerId) => {
+    const providers = get().providers;
+    const active = providers.find((p) => p.id === providerId);
+    if (!active) return;
+    const settings = syncFlatFromProviders(providers, providerId, get().settings);
+    set({ activeProviderId: providerId, settings });
   },
 
   setSettings: (partial) => {
@@ -201,14 +295,21 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       const backendSettings = await invoke<any>('get_llm_settings');
       if (backendSettings) {
         const gUrl = backendSettings.gatewayUrl || backendSettings.gateway_url || backendSettings.baseUrl || backendSettings.base_url || DEFAULT_SETTINGS.gatewayUrl;
-        loaded = {
+        const flat: LlmSettingsState = {
           provider: backendSettings.provider || DEFAULT_SETTINGS.provider,
           gatewayUrl: gUrl,
           baseUrl: gUrl,
           apiKey: backendSettings.apiKey || backendSettings.api_key || '',
           model: backendSettings.model || DEFAULT_SETTINGS.model,
           compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
+          activeProviderId: backendSettings.activeProviderId || backendSettings.active_provider_id,
+          providers: Array.isArray(backendSettings.providers) ? backendSettings.providers : undefined,
         };
+        loaded = syncFlatFromProviders(
+          migrateFlatToProviders(flat).providers,
+          migrateFlatToProviders(flat).activeProviderId,
+          flat,
+        );
       }
     } catch {
       // Ignore Tauri invoke error in browser
@@ -221,14 +322,21 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         if (raw) {
           const parsed = JSON.parse(raw);
           const gUrl = parsed.gatewayUrl || parsed.baseUrl || DEFAULT_SETTINGS.gatewayUrl;
-          loaded = {
+          const flat: LlmSettingsState = {
             provider: parsed.provider || DEFAULT_SETTINGS.provider,
             gatewayUrl: gUrl,
             baseUrl: gUrl,
             apiKey: parsed.apiKey || '',
             model: parsed.model || DEFAULT_SETTINGS.model,
             compactorModel: parsed.compactorModel || 'inherit',
+            activeProviderId: parsed.activeProviderId,
+            providers: Array.isArray(parsed.providers) ? parsed.providers : undefined,
           };
+          loaded = syncFlatFromProviders(
+            migrateFlatToProviders(flat).providers,
+            migrateFlatToProviders(flat).activeProviderId,
+            flat,
+          );
         }
       } catch {
         // Ignore JSON error
@@ -236,7 +344,15 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }
 
     if (loaded) {
-      set({ settings: loaded, notificationSettings: loadStoredNotificationSettings() });
+      const providers = loaded.providers ?? get().providers;
+      const activeProviderId = loaded.activeProviderId ?? get().activeProviderId;
+      set({
+        settings: loaded,
+        providers,
+        activeProviderId,
+        availableModels: availableModelIds(providers).length > 0 ? availableModelIds(providers) : get().availableModels,
+        notificationSettings: loadStoredNotificationSettings(),
+      });
     } else {
       set({ notificationSettings: loadStoredNotificationSettings() });
     }
@@ -269,6 +385,8 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           apiKey: target.apiKey.trim(),
           model: target.model.trim(),
           compactorModel: (target.compactorModel || 'inherit').trim(),
+          activeProviderId: get().activeProviderId,
+          providers: get().providers,
         },
       });
       set({ settings: target, isSaving: false, saveStatus: 'saved' });
@@ -362,5 +480,13 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }`;
     set({ errorMessage: errMessage });
     throw new Error(errMessage);
+  },
+
+  fetchProviderModels: async (providerId) => {
+    const provider = get().providers.find((p) => p.id === providerId);
+    if (!provider) {
+      throw new Error(`Provider not found: ${providerId}`);
+    }
+    return get().fetchAvailableModels(provider.baseUrl, provider.apiKey);
   },
 }));
