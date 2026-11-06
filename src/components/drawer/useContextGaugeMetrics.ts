@@ -124,7 +124,7 @@ export function useContextGaugeMetrics({
     textChars: number;
   }>({ valid: false, thoughtsLen: 0, outputsLen: 0, lastThoughtLen: 0, lastOutputLen: 0, textChars: 0 });
 
-  const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens } = useMemo(() => {
+  const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens, isEstimate } = useMemo(() => {
     const thoughtsArr = thoughts ?? [];
     const outputsArr = outputs ?? [];
     const toolsArr = tools ?? [];
@@ -185,9 +185,16 @@ export function useContextGaugeMetrics({
       }
     }
 
+    const telemetrySys = typeof telemetry?.systemTokens === 'number' && Number.isFinite(telemetry.systemTokens) && (telemetry.systemTokens as number) > 0
+      ? (telemetry.systemTokens as number)
+      : undefined;
+    const telemetryTool = typeof telemetry?.toolTokens === 'number' && Number.isFinite(telemetry.toolTokens) && (telemetry.toolTokens as number) >= 0
+      ? (telemetry.toolTokens as number)
+      : undefined;
+
     const isExploratorySubagent = taskId.includes('.sub-') || taskId.includes(':sub:');
-    const baseSystem = isExploratorySubagent ? 800 : 3593;
-    const baseTool = isExploratorySubagent ? 1000 : 2604;
+    const baseSystem = telemetrySys ?? (isExploratorySubagent ? 800 : 0);
+    const baseTool = telemetryTool ?? (isExploratorySubagent ? 1000 : 0);
 
     let messageChars = textChars;
     for (const t of toolsArr) {
@@ -195,6 +202,8 @@ export function useContextGaugeMetrics({
     }
     const hasMessages = thoughtsArr.length > 0 || outputsArr.length > 0 || toolsArr.length > 0 || ((feed?.length ?? 0) > 0) || messageChars > 0;
     const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 2.2));
+
+    const isTelemetryEstimate = telemetrySys !== undefined || telemetryTool !== undefined;
 
     let total: number;
     if (currentEstimatedTokens !== undefined) {
@@ -236,7 +245,7 @@ export function useContextGaugeMetrics({
       }
     }
 
-    return { totalUsedTokens: total, systemPromptTokens: sys, toolDefTokens: tool, messageTokens: msg };
+    return { totalUsedTokens: total, systemPromptTokens: sys, toolDefTokens: tool, messageTokens: msg, isEstimate: !isTelemetryEstimate && total > 0 };
   }, [
     taskId, currentEstimatedTokens, resolvedCompactTokens, tokenOverride,
     telemetry?.inputTokens, telemetry?.cacheReadTokens, telemetry?.outputTokens,
@@ -394,7 +403,7 @@ export function useContextGaugeMetrics({
 
   return {
     effectiveLimit, percent, usedTokensK, maxTokensK, systemPct, toolPct, msgPct,
-    systemPromptTokens, toolDefTokens, messageTokens, effectiveTurns, stepsCount,
+    systemPromptTokens, toolDefTokens, messageTokens, isEstimate, effectiveTurns, stepsCount,
     llmTimeSec, toolTimeSec, ttftMs, tpsValue,
     cacheHitRate: safeCacheHitRate, uncachedInput, cachedInput, outputTokens, totalTokens,
     isCompacting, savingsBadge, handleCompactClick,

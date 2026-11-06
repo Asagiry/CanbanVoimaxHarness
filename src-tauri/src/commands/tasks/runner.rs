@@ -1662,15 +1662,15 @@ pub async fn compact_context(
             let sys = guard.messages.first()
                 .and_then(|m| m.content.as_deref())
                 .map(crate::agent::compactor::estimate_text_tokens)
-                .unwrap_or(3593);
-            let tool = 2604usize;
+                .unwrap_or(0);
+            let tool = crate::agent::compactor::estimate_tools_tokens(&None);
             let tot = crate::agent::compactor::estimate_tokens(&guard.messages) + tool;
             (sys, tool, tot)
         } else {
-            (3593, 2604, tokens_after + 3593 + 2604)
+            (0, 0, tokens_after)
         }
     } else {
-        (3593, 2604, tokens_after + 3593 + 2604)
+        (0, 0, tokens_after)
     };
 
     let report = crate::agent::compactor::CompactionReport {
