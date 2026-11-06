@@ -160,6 +160,18 @@ export function isBackendTaskDTO(raw: unknown): raw is BackendTaskDTO {
   return typeof candidate.id === 'string' && candidate.id.trim() !== '';
 }
 
+/** Per-agent / per-stage reasoning effort. `"off"` = not set (omitted from LLM payload). */
+export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high';
+
+export const REASONING_EFFORTS: readonly ReasoningEffort[] = ['off', 'low', 'medium', 'high'];
+
+export function normalizeReasoningEffort(raw: unknown): ReasoningEffort | null {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim().toLowerCase();
+  if (v === 'low' || v === 'medium' || v === 'high') return v;
+  return null;
+}
+
 export interface PipelineStage {
   id: string;
   title: string;

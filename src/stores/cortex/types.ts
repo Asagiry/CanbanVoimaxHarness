@@ -14,6 +14,7 @@ export interface AgentPersonaInfo {
   icon?: string;
   color?: string;
   contextWindow?: number;
+  reasoningEffort?: string | null;
 }
 
 export interface RawAgentPersona {
@@ -31,6 +32,8 @@ export interface RawAgentPersona {
   color?: string;
   contextWindow?: number;
   context_window?: number;
+  reasoningEffort?: string | null;
+  reasoning_effort?: string | null;
 }
 
 export interface PersonasState {

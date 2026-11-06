@@ -446,4 +446,28 @@ mod tests {
         let deserialized: ChatMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.as_str(), Some("Look at this capybara"));
     }
+
+    #[test]
+    fn test_reasoning_effort_payload_mapping() {
+        // `None` (off / unset) → omitted from the chat/completions payload.
+        let off = OpenAIChatRequest {
+            model: "crouton-alpha-free".to_string(),
+            messages: vec![ChatMessage::user("hi")],
+            temperature: None,
+            stream: true,
+            tools: None,
+            reasoning_effort: None,
+            stream_options: None,
+        };
+        let off_json = serde_json::to_value(&off).unwrap();
+        assert!(off_json.get("reasoning_effort").is_none(), "off must omit reasoning_effort");
+
+        // `Some("high")` → snake_case `reasoning_effort` (OpenAI-compatible shape).
+        let high = OpenAIChatRequest {
+            reasoning_effort: Some("high".to_string()),
+            ..off.clone()
+        };
+        let high_json = serde_json::to_value(&high).unwrap();
+        assert_eq!(high_json["reasoning_effort"], "high");
+    }
 }
