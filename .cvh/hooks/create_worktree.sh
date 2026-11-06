@@ -41,6 +41,13 @@ else
     fi
 fi
 
+# Sync live .cvh/ from root (canonical source) into worktree mirror, minus secrets
+if [ -d ".cvh" ]; then
+    cp -a .cvh "$WT_DIR/.cvh"
+    rm -f "$WT_DIR/.cvh/llm.json" "$WT_DIR/.cvh"/*.secret "$WT_DIR/.cvh"/*.key 2>/dev/null || true
+    git -C "$WT_DIR" update-index --assume-unchanged -- .cvh >/dev/null 2>&1 || true
+fi
+
 # Ensure dist directory exists for tauri generate_context!() proc macro
 mkdir -p "$WT_DIR/dist"
 

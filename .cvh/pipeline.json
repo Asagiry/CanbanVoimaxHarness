@@ -136,7 +136,6 @@
           "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
         }
       },
-
       "autoRun": true,
       "terminal": null,
       "isIntake": null
@@ -154,7 +153,6 @@
       "temperature": 0.2,
       "gatekeeperSensor": null,
       "allowedTools": [
-        "execute_command",
         "read_file",
         "write_file",
         "edit_file",
@@ -351,7 +349,6 @@
           "temperature": 0.2,
           "gatekeeperSensor": null,
           "allowedTools": [
-            "execute_command",
             "read_file",
             "write_file",
             "edit_file",
@@ -387,7 +384,7 @@
             "glob",
             "grep"
           ],
-
+          "hooks": {},
           "autoRun": null,
           "terminal": true,
           "isIntake": null
@@ -441,18 +438,7 @@
             "write_file",
             "glob",
             "grep",
-            "load_rule",
-            "todo_write",
-            "question",
-            "subagent",
-            "subagent_bg",
-            "collect_subagent",
-            "subagent_list",
-            "advance_task",
-            "list_tasks",
-            "get_task_history",
-            "web_search",
-            "web_fetch"
+            "web_search"
           ],
           "hooks": {},
           "autoRun": null,

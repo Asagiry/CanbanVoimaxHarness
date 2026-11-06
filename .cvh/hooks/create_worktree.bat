@@ -53,6 +53,15 @@ if exist "%WT_DIR%" (
     )
 )
 
+REM Sync live .cvh/ protected paths from root (canonical source) into worktree mirror
+if exist ".cvh\agents" (xcopy /E /I /Y ".cvh\agents" "%WT_DIR%\.cvh\agents" >nul)
+if exist ".cvh\rules" (xcopy /E /I /Y ".cvh\rules" "%WT_DIR%\.cvh\rules" >nul)
+if exist ".cvh\hooks" (xcopy /E /I /Y ".cvh\hooks" "%WT_DIR%\.cvh\hooks" >nul)
+if exist ".cvh\settings\tool-policy.json" (xcopy /Y ".cvh\settings\tool-policy.json" "%WT_DIR%\.cvh\settings\" >nul)
+if exist ".cvh\boards.json" (xcopy /Y ".cvh\boards.json" "%WT_DIR%\.cvh\" >nul)
+if exist ".cvh\pipeline.json" (xcopy /Y ".cvh\pipeline.json" "%WT_DIR%\.cvh\" >nul)
+git -C "%WT_DIR%" update-index --assume-unchanged -- .cvh >nul 2>&1
+
 REM Ensure dist directory exists for tauri generate_context!() proc macro
 if not exist "%WT_DIR%\dist" (
     mkdir "%WT_DIR%\dist" >nul 2>&1

@@ -26,9 +26,9 @@ else
         git push origin main || true
     else
         echo "[CVH Merge Hook] Checking out main..."
-        # Discard uncommitted dual-write residue before checkout/pull/merge (§ 2.23)
-        git restore --staged .cvh >/dev/null 2>&1 || true
-        git restore .cvh >/dev/null 2>&1 || true
+        # Preserve live .cvh/ (canonical source, uncommitted) across checkout/pull/merge
+        BACKUP="$(mktemp -d)"
+        if [ -d ".cvh" ]; then cp -a .cvh "$BACKUP/"; fi
 
         git checkout main
         if [ $? -ne 0 ]; then
@@ -36,19 +36,15 @@ else
             exit 1
         fi
 
-        # Discard uncommitted dual-write residue on main before merge
-        git restore --staged .cvh >/dev/null 2>&1 || true
-        git restore .cvh >/dev/null 2>&1 || true
-
         echo "[CVH Merge Hook] Pulling latest main from origin..."
         git pull --rebase origin main || true
 
-        # Ensure clean state before merge
-        git restore --staged .cvh >/dev/null 2>&1 || true
-        git restore .cvh >/dev/null 2>&1 || true
-
         echo "[CVH Merge Hook] Merging branch '$BRANCH' into main..."
         git merge --no-ff "$BRANCH" -m "feat($TASK_ID): $TITLE [approved]"
+        # Unstage any .cvh/ introduced by merge, then restore live backup over .cvh/
+        git restore --staged .cvh >/dev/null 2>&1 || true
+        if [ -d "$BACKUP/.cvh" ]; then cp -a "$BACKUP/.cvh/." .cvh/; fi
+        rm -rf "$BACKUP"
         git push origin main
         echo "[CVH Merge Hook] SUCCESS: $BRANCH merged into main and pushed to origin/main!"
     fi

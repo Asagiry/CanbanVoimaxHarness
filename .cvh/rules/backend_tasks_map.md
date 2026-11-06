@@ -18,7 +18,8 @@ Commands coordinate task state, stage hooks and agent sessions. `runner.rs` star
 | `src-tauri/src/commands/dialogs.rs` | Dialogue history, steer persistence and stopped-dialog item deletion. |
 | `src-tauri/src/commands/git.rs` | Worktree lifecycle, branch diffs, commit queries. |
 | `src-tauri/src/commands/projects.rs` | Workspace root switching, recent projects list. |
-| `src-tauri/src/git.rs` | Worktree isolation, prune, branch teardown. |
+| `src-tauri/src/git/mod.rs` | Worktree isolation, prune, branch teardown. |
+| `src-tauri/src/git/cvh_sync.rs` | Live `.cvh/` sync to worktrees, secret exclusion, assume-unchanged. |
 | `src-tauri/src/hooks.rs` | Transition scripts, process tree kill on Windows. |
 
 ## Related checks
