@@ -52,6 +52,7 @@ use std::path::PathBuf;
             context_window: Some(400000),
             reasoning_effort: Some("medium".to_string()),
             model: None,
+            provider_id: None,
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
@@ -77,6 +78,7 @@ use std::path::PathBuf;
             context_window: Some(128000),
             reasoning_effort: None,
             model: None,
+            provider_id: None,
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));

@@ -1171,7 +1171,7 @@ async fn steer_waits_for_tool_batch_and_survives_closed_gate_resume() {
     let task_id = "CVH-STEER";
     crate::commands::tasks::save_tasks_to_disk(&base, &[make_test_task(task_id, "dev", "test-board")]).await.unwrap();
     #[cfg(windows)]
-    let command = "ping 127.0.0.1 -n 2 > nul && echo STEER_COMMAND_OK";
+    let command = "waitfor /t 1 STEER_GATE >nul 2>&1 & echo STEER_COMMAND_OK";
     #[cfg(not(windows))]
     let command = "sleep 1; echo STEER_COMMAND_OK";
     let first = serde_json::json!({"choices": [{"delta": {"tool_calls": [

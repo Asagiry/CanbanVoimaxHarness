@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use crate::agent::{Task, TodoItem};
 use crate::db::get_db_conn;
 use rusqlite::{params, TransactionBehavior};
@@ -11,7 +11,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-                    custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
+                    custom_flow, status, model, provider_id, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
                     stage_entered_at, stage_durations, total_elapsed
@@ -33,28 +33,29 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let custom_flow_raw: Option<String> = row.get(8)?;
             let status: Option<String> = row.get(9)?;
             let model: Option<String> = row.get(10)?;
-            let parent_id: Option<String> = row.get(11)?;
-            let subtask_index_i64: Option<i64> = row.get(12)?;
-            let waiting_for_subtask_id: Option<String> = row.get(13)?;
-            let handover_summary: Option<String> = row.get(14)?;
-            let cover_image: Option<String> = row.get(15)?;
-            let priority: Option<String> = row.get(16)?;
-            let current_tokens_i64: Option<i64> = row.get(17)?;
-            let skip_worktree_i64: i64 = row.get(18)?;
-            let created_at: i64 = row.get(19)?;
-            let updated_at: i64 = row.get(20)?;
-            let attachments_raw: Option<String> = row.get(21).ok();
-            let tags_raw: Option<String> = row.get(22).ok();
-            let position: Option<f64> = row.get(23).ok();
-            let hook_states_raw: Option<String> = row.get(24).ok();
-            let completed_at: Option<i64> = row.get(25).ok();
-            let stage_entered_at: Option<i64> = row.get(26).ok();
-            let stage_durations_raw: Option<String> = row.get(27).ok();
-            let total_elapsed: Option<i64> = row.get(28).ok();
+            let provider_id: Option<String> = row.get(11)?;
+            let parent_id: Option<String> = row.get(12)?;
+            let subtask_index_i64: Option<i64> = row.get(13)?;
+            let waiting_for_subtask_id: Option<String> = row.get(14)?;
+            let handover_summary: Option<String> = row.get(15)?;
+            let cover_image: Option<String> = row.get(16)?;
+            let priority: Option<String> = row.get(17)?;
+            let current_tokens_i64: Option<i64> = row.get(18)?;
+            let skip_worktree_i64: i64 = row.get(19)?;
+            let created_at: i64 = row.get(20)?;
+            let updated_at: i64 = row.get(21)?;
+            let attachments_raw: Option<String> = row.get(22).ok();
+            let tags_raw: Option<String> = row.get(23).ok();
+            let position: Option<f64> = row.get(24).ok();
+            let hook_states_raw: Option<String> = row.get(25).ok();
+            let completed_at: Option<i64> = row.get(26).ok();
+            let stage_entered_at: Option<i64> = row.get(27).ok();
+            let stage_durations_raw: Option<String> = row.get(28).ok();
+            let total_elapsed: Option<i64> = row.get(29).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-                custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
+                custom_flow_raw, status, model, provider_id, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
                 created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
                 stage_entered_at, stage_durations_raw, total_elapsed,
@@ -85,7 +86,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
     for row_res in task_rows {
         let (
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-            custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
+            custom_flow_raw, status, model, provider_id, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
             created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
             stage_entered_at, stage_durations_raw, total_elapsed,
@@ -110,6 +111,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             custom_flow,
             status,
             model,
+            provider_id,
             parent_id,
             subtask_index: subtask_index_i64.map(|v| v as u32),
             waiting_for_subtask_id,
@@ -142,7 +144,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-                    custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
+                    custom_flow, status, model, provider_id, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
                     stage_entered_at, stage_durations, total_elapsed
@@ -172,24 +174,25 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let custom_flow_raw: Option<String> = row.get(8).map_err(|e| e.to_string())?;
     let status: Option<String> = row.get(9).map_err(|e| e.to_string())?;
     let model: Option<String> = row.get(10).map_err(|e| e.to_string())?;
-    let parent_id: Option<String> = row.get(11).map_err(|e| e.to_string())?;
-    let subtask_index_i64: Option<i64> = row.get(12).map_err(|e| e.to_string())?;
-    let waiting_for_subtask_id: Option<String> = row.get(13).map_err(|e| e.to_string())?;
-    let handover_summary: Option<String> = row.get(14).map_err(|e| e.to_string())?;
-    let cover_image: Option<String> = row.get(15).map_err(|e| e.to_string())?;
-    let priority: Option<String> = row.get(16).map_err(|e| e.to_string())?;
-    let current_tokens_i64: Option<i64> = row.get(17).map_err(|e| e.to_string())?;
-    let skip_worktree_i64: i64 = row.get(18).map_err(|e| e.to_string())?;
-    let created_at: i64 = row.get(19).map_err(|e| e.to_string())?;
-    let updated_at: i64 = row.get(20).map_err(|e| e.to_string())?;
-    let attachments_raw: Option<String> = row.get(21).ok();
-    let tags_raw: Option<String> = row.get(22).ok();
-    let position: Option<f64> = row.get(23).ok();
-    let hook_states_raw: Option<String> = row.get(24).ok();
-    let completed_at: Option<i64> = row.get(25).ok();
-    let stage_entered_at: Option<i64> = row.get(26).ok();
-    let stage_durations_raw: Option<String> = row.get(27).ok();
-    let total_elapsed: Option<i64> = row.get(28).ok();
+    let provider_id: Option<String> = row.get(11).map_err(|e| e.to_string())?;
+    let parent_id: Option<String> = row.get(12).map_err(|e| e.to_string())?;
+    let subtask_index_i64: Option<i64> = row.get(13).map_err(|e| e.to_string())?;
+    let waiting_for_subtask_id: Option<String> = row.get(14).map_err(|e| e.to_string())?;
+    let handover_summary: Option<String> = row.get(15).map_err(|e| e.to_string())?;
+    let cover_image: Option<String> = row.get(16).map_err(|e| e.to_string())?;
+    let priority: Option<String> = row.get(17).map_err(|e| e.to_string())?;
+    let current_tokens_i64: Option<i64> = row.get(18).map_err(|e| e.to_string())?;
+    let skip_worktree_i64: i64 = row.get(19).map_err(|e| e.to_string())?;
+    let created_at: i64 = row.get(20).map_err(|e| e.to_string())?;
+    let updated_at: i64 = row.get(21).map_err(|e| e.to_string())?;
+    let attachments_raw: Option<String> = row.get(22).ok();
+    let tags_raw: Option<String> = row.get(23).ok();
+    let position: Option<f64> = row.get(24).ok();
+    let hook_states_raw: Option<String> = row.get(25).ok();
+    let completed_at: Option<i64> = row.get(26).ok();
+    let stage_entered_at: Option<i64> = row.get(27).ok();
+    let stage_durations_raw: Option<String> = row.get(28).ok();
+    let total_elapsed: Option<i64> = row.get(29).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -226,6 +229,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         custom_flow,
         status,
         model,
+        provider_id,
         parent_id,
         subtask_index: subtask_index_i64.map(|v| v as u32),
         waiting_for_subtask_id,
@@ -269,11 +273,11 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     tx.execute(
         "INSERT INTO tasks (
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-            custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
+            custom_flow, status, model, provider_id, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
             created_at, updated_at, completed_at, attachments, tags, position, hook_states,
             stage_entered_at, stage_durations, total_elapsed
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?30, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -285,6 +289,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             custom_flow = excluded.custom_flow,
             status = excluded.status,
             model = excluded.model,
+            provider_id = excluded.provider_id,
             parent_id = excluded.parent_id,
             subtask_index = excluded.subtask_index,
             waiting_for_subtask_id = excluded.waiting_for_subtask_id,
@@ -332,6 +337,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             task.stage_entered_at,
             stage_durations_json,
             task.total_elapsed,
+            task.provider_id,
         ],
     )
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -379,11 +385,11 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         tx.execute(
             "INSERT INTO tasks (
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
-                custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
+                custom_flow, status, model, provider_id, parent_id, subtask_index, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens, skip_worktree,
                 created_at, updated_at, completed_at, attachments, tags, position, hook_states,
                 stage_entered_at, stage_durations, total_elapsed
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?30, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -442,6 +448,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 task.stage_entered_at,
                 stage_durations_json,
                 task.total_elapsed,
+                task.provider_id,
             ],
         )
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;

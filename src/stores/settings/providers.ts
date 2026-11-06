@@ -24,7 +24,6 @@ export interface FlatLlmSettingsShape {
   apiKey?: string;
   model?: string;
   compactorModel?: string;
-  activeProviderId?: string;
   providers?: Provider[];
 }
 
@@ -123,15 +122,12 @@ export function legacyProviderFromFlat(flat: FlatLlmSettingsShape): Provider {
   };
 }
 
-export function migrateFlatToProviders(flat: FlatLlmSettingsShape): { providers: Provider[]; activeProviderId: ProviderId } {
+export function migrateFlatToProviders(flat: FlatLlmSettingsShape): { providers: Provider[] } {
   const rawProviders = Array.isArray(flat.providers) && flat.providers.length > 0
     ? flat.providers
     : [legacyProviderFromFlat(flat)];
   const providers = normalizeProviders(rawProviders);
-  const fallback: Provider = providers[0] ?? legacyProviderFromFlat(flat);
-  const requested = (flat.activeProviderId ?? '').trim().toLowerCase();
-  const activeProviderId = (providers.find((p) => p.id === requested)?.id ?? fallback.id) as ProviderId;
-  return { providers, activeProviderId };
+  return { providers };
 }
 
 export function availableModelIds(providers: Provider[]): string[] {
@@ -193,19 +189,12 @@ export function upsertProviderLocal(providers: Provider[], provider: Provider): 
 
 export function deleteProviderLocal(
   providers: Provider[],
-  activeProviderId: ProviderId,
   providerId: ProviderId,
-): { providers: Provider[]; activeProviderId: ProviderId } {
+): { providers: Provider[] } {
   if (providers.length <= 1) {
     throw new Error('Cannot delete the last provider');
   }
   const next = providers.filter((p) => p.id !== providerId);
   // Deleting the first/builtin provider is allowed when others remain.
-  // Active falls back to the first remaining provider (never to the
-  // deleted one).
-  const fallback = next[0];
-  const active = next.some((p) => p.id === activeProviderId)
-    ? activeProviderId
-    : (fallback.id as ProviderId);
-  return { providers: next, activeProviderId: active };
+  return { providers: next };
 }

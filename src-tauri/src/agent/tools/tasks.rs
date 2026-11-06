@@ -260,6 +260,7 @@ pub async fn execute_create_task(
             custom_flow: None,
             status: Some("idle".to_string()),
             model: input.model.or_else(|| current_task_opt.as_ref().and_then(|ct| ct.model.clone())),
+            provider_id: current_task_opt.as_ref().and_then(|ct| ct.provider_id.clone()),
             parent_id,
             subtask_index: None,
             waiting_for_subtask_id: None,

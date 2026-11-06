@@ -63,6 +63,7 @@ export interface KanbanTask {
   verdict?: TaskVerdict;
   verdictNote?: string;
   model?: string;
+  providerId?: string | null;
   parentId?: string;
   subtaskIndex?: number;
   waitingForSubtaskId?: string;
@@ -103,6 +104,8 @@ export interface BackendTaskDTO {
   custom_flow?: string[];
   status?: string;
   model?: string;
+  providerId?: string | null;
+  provider_id?: string | null;
   parentId?: string;
   parent_id?: string;
   subtaskIndex?: number;

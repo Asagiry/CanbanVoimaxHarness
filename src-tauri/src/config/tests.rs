@@ -51,7 +51,7 @@ use std::path::{Path, PathBuf};
         assert_eq!(settings.providers[0].api_key, "sk-local-abc");
         assert_eq!(settings.providers[0].models.len(), 1);
         assert_eq!(settings.providers[0].models[0].id, "gemini-3.8-flash-high");
-        assert_eq!(settings.active_provider_id.as_deref(), Some(settings.providers[0].id.as_str()));
+        assert_eq!(settings.provider, settings.providers[0].name);
     }
 
     #[test]
@@ -78,7 +78,8 @@ use std::path::{Path, PathBuf};
         settings.ensure_providers();
         assert_eq!(settings.api_key, "sk-1");
         let serialized = serde_json::to_string(&settings).expect("serialize");
-        assert!(serialized.contains("\"activeProviderId\":\"tg\""));
+        // The concept is gone: the field must not come back on serialize.
+        assert!(!serialized.contains("activeProviderId"));
         assert!(serialized.contains("\"isCustom\":true"));
     }
 
@@ -110,7 +111,7 @@ use std::path::{Path, PathBuf};
     }
 
     #[test]
-    fn test_endpoint_resolves_by_provider_id_not_first() {
+    fn test_endpoint_pair_resolves_by_provider_id_not_first() {
         let json = r#"{
             "provider": "Antigravity Proxy",
             "apiKey": "sk-first",
@@ -140,14 +141,18 @@ use std::path::{Path, PathBuf};
         }"#;
         let mut settings: LlmSettings = serde_json::from_str(json).expect("two providers parse");
         settings.ensure_providers();
-        // Flat fields must sync from the SELECTED provider, not from [0].
-        assert_eq!(settings.provider, "OpenCode Go");
-        assert_eq!(settings.base_url, "https://opencode.ai/inference/go/openai/v1");
-        assert_eq!(settings.api_key, "sk-go");
-        assert_eq!(settings.model, "beam-free");
-        let (base_url, api_key) = settings.endpoint();
-        assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
-        assert_eq!(api_key.as_deref(), Some("sk-go"));
+        // Flat fields sync from providers[0] — the concept of a "selected"
+        // provider is gone; explicit pairs drive dispatch.
+        assert_eq!(settings.provider, "Antigravity Proxy");
+        assert_eq!(settings.model, "gemini-3.8-flash-high");
+        // The model id exists in both providers' catalogs, yet each explicit
+        // pair must resolve to its OWN provider's endpoint.
+        let (url_first, key_first) = settings.endpoint_for_pair(Some("antigravity proxy"), "gemini-3.8-flash-high");
+        assert_eq!(url_first, "http://127.0.0.1:8045/v1");
+        assert_eq!(key_first.as_deref(), Some("sk-first"));
+        let (url_second, key_second) = settings.endpoint_for_pair(Some("opencode go"), "crouton-alpha-free");
+        assert_eq!(url_second, "https://opencode.ai/inference/go/openai/v1");
+        assert_eq!(key_second.as_deref(), Some("sk-go"));
     }
 
     #[tokio::test]

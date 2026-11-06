@@ -257,6 +257,7 @@ export function normalizeKanbanTask(
     verdict: (raw.verdict as TaskVerdict) || 'NONE',
     verdictNote: raw.verdictNote,
     model: raw.model || undefined,
+    providerId: raw.providerId ?? raw.provider_id ?? undefined,
     parentId: raw.parentId ?? raw.parent_id ?? undefined,
     subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
     waitingForSubtaskId: effectiveWaitingForSubtaskId,

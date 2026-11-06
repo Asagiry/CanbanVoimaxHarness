@@ -262,8 +262,6 @@ pub struct LlmSettings {
     pub temperature: Option<f32>,
     #[serde(rename = "compactorModel", alias = "compactor_model", default = "default_compactor_model")]
     pub compactor_model: String,
-    #[serde(rename = "activeProviderId", alias = "active_provider_id", default, skip_serializing_if = "Option::is_none")]
-    pub active_provider_id: Option<String>,
     #[serde(default)]
     pub providers: Vec<crate::config::providers::Provider>,
 }
@@ -297,37 +295,39 @@ impl Default for LlmSettings {
             model: default_llm_model(),
             temperature: Some(0.2),
             compactor_model: default_compactor_model(),
-            active_provider_id: None,
             providers: Vec::new(),
         }
     }
 }
 
 impl LlmSettings {
-    /// Active provider by id (trimmed, case-insensitive). Single source of
-    /// truth for dispatch: base_url/api_key/model must come from here, not
-    /// from providers[0] or stale flat fields.
-    pub fn active_provider(&self) -> Option<&crate::config::providers::Provider> {
-        let active_id = self.active_provider_id.as_deref()?.trim();
-        if active_id.is_empty() {
-            return None;
+    /// Dispatch endpoint for an explicit Provider / Model pair — no
+    /// "active provider" gate, no search-by-model. The chosen provider
+    /// owns the endpoint; this is what prevents two providers sharing
+    /// the same model id from colliding.
+    pub fn endpoint_for_pair(&self, provider_id: Option<&str>, model_id: &str) -> (String, Option<String>) {
+        let pid = provider_id.map(|s| s.trim()).filter(|s| !s.is_empty());
+        if let Some(pid) = pid {
+            if let Some(p) = self.providers.iter().find(|p| p.id.eq_ignore_ascii_case(pid)) {
+                let key = p.api_key.trim().to_string();
+                return (p.base_url.trim().to_string(), if key.is_empty() { None } else { Some(key) });
+            }
         }
-        self.providers
-            .iter()
-            .find(|p| p.id.eq_ignore_ascii_case(active_id))
+        // Legacy fallback when no provider was chosen: look up by known model
+        // only as a last resort (old tasks without providerId), otherwise flat.
+        let needle = model_id.trim();
+        if !needle.is_empty() {
+            if let Some(p) = self.providers.iter().find(|p| p.models.iter().any(|m| m.id == needle)) {
+                let key = p.api_key.trim().to_string();
+                return (p.base_url.trim().to_string(), if key.is_empty() { None } else { Some(key) });
+            }
+        }
+        let key = self.api_key.trim().to_string();
+        (self.base_url.trim().to_string(), if key.is_empty() { None } else { Some(key) })
     }
 
-    /// Dispatch endpoint for LLM requests: base_url + api_key of the selected
-    /// provider. Falls back to flat fields only when no active provider is
-    /// resolvable (never silently to providers[0]).
+    /// Legacy flat endpoint. Prefer `endpoint_for_pair(provider, model)`.
     pub fn endpoint(&self) -> (String, Option<String>) {
-        if let Some(active) = self.active_provider() {
-            let key = active.api_key.trim().to_string();
-            return (
-                active.base_url.trim().to_string(),
-                if key.is_empty() { None } else { Some(key) },
-            );
-        }
         let key = self.api_key.trim().to_string();
         (
             self.base_url.trim().to_string(),
@@ -345,26 +345,16 @@ impl LlmSettings {
             ));
         }
         self.providers = crate::config::providers::normalize_providers(std::mem::take(&mut self.providers));
-        if self.active_provider().is_none() {
-            // No resolvable active id (missing, empty or stale): heal to the
-            // first provider so dispatch has a valid endpoint. With
-            // lowercased ids this is only hit on corrupt legacy data.
-            self.active_provider_id = self.providers.first().map(|p| p.id.clone());
-        }
-        if let Some(active) = self.active_provider().cloned() {
-            self.provider = active.name.clone();
-            self.api_key = active.api_key.clone();
-            self.base_url = active.base_url.clone();
-            let model_in_catalog = active.models.iter().any(|m| m.id == self.model);
-            if !model_in_catalog {
-                if let Some(first_model) = active.models.first() {
-                    if !self.model.trim().is_empty() {
-                        eprintln!(
-                            "LlmSettings: model '{}' not in active provider '{}' catalog, falling back to '{}'",
-                            self.model, active.id, first_model.id
-                        );
-                    }
-                    self.model = first_model.id.clone();
+        if let Some(first) = self.providers.first().cloned() {
+            self.provider = first.name.clone();
+            self.api_key = first.api_key.clone();
+            self.base_url = first.base_url.clone();
+            // Flat model is legacy only; per-model routing uses endpoint_for_model.
+            // Keep it if it exists in any catalog, otherwise leave as-is.
+            let in_any_catalog = self.providers.iter().any(|p| p.models.iter().any(|m| m.id == self.model));
+            if !in_any_catalog {
+                if let Some(any_first) = self.providers.iter().flat_map(|p| p.models.iter()).next() {
+                    self.model = any_first.id.clone();
                 }
             }
         }
@@ -645,6 +635,8 @@ pub const DEFAULT_AGENT_SETTING_JSON: &str = r##"{
 /// defaults (see [`load_agent_setting`]).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct AgentSetting {
+    #[serde(default, alias = "providerId", alias = "provider_id")]
+    pub provider_id: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]

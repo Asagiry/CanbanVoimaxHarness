@@ -25,7 +25,6 @@ describe('providers domain helpers', () => {
     expect(migrated.providers).toHaveLength(1);
     expect(migrated.providers[0].apiKey).toBe('sk-1');
     expect(migrated.providers[0].models[0].id).toBe('gemini-3.8-flash-high');
-    expect(migrated.activeProviderId).toBe(toProviderIdValue('antigravity proxy'));
   });
 
   it('keeps providers when backend returns them', () => {
@@ -41,7 +40,6 @@ describe('providers domain helpers', () => {
     const migrated = migrateFlatToProviders({
       provider: 'tg',
       providers: [provider],
-      activeProviderId: 'tg',
     });
     expect(migrated.providers).toHaveLength(1);
     expect(providerModelLabel(migrated.providers[0].models[0])).toBe('M One');
@@ -71,16 +69,15 @@ describe('providers domain helpers', () => {
     expect(() => validateProvider({ ...provider, baseUrl: 'http://x/v1', models: [{ id: ' ' }] })).toThrow('Model id cannot be empty');
   });
 
-  it('upserts and deletes providers locally with fallback', () => {
+  it('upserts and deletes providers locally', () => {
     const a: Provider = { id: toProviderIdValue('a'), name: 'A', isCustom: false, apiKey: '', baseUrl: '', protocol: 'openai', models: [] };
     const b: Provider = { id: toProviderIdValue('b'), name: 'B', isCustom: true, apiKey: '', baseUrl: '', protocol: 'openai', models: [] };
     const next = upsertProviderLocal([a], b);
     expect(next.map((p) => p.id)).toEqual(['a', 'b']);
     const replaced = upsertProviderLocal(next, { ...a, name: 'A2' });
     expect(replaced[0].name).toBe('A2');
-    const deleted = deleteProviderLocal(next, toProviderIdValue('b'), toProviderIdValue('b'));
+    const deleted = deleteProviderLocal(next, toProviderIdValue('b'));
     expect(deleted.providers.map((p) => p.id)).toEqual(['a']);
-    expect(deleted.activeProviderId).toBe(toProviderIdValue('a'));
   });
 
   it('deletes the first provider when others remain', () => {
@@ -95,11 +92,10 @@ describe('providers domain helpers', () => {
       models: [{ id: 'beam-free' }, { id: 'crouton-alpha-free' }],
     };
     const providers = [first, second];
-    const deleted = deleteProviderLocal(providers, toProviderIdValue('antigravity proxy'), toProviderIdValue('antigravity proxy'));
+    const deleted = deleteProviderLocal(providers, toProviderIdValue('antigravity proxy'));
     expect(deleted.providers.map((p) => p.id)).toEqual(['opencode go']);
-    expect(deleted.activeProviderId).toBe(toProviderIdValue('opencode go'));
-    // Endpoint resolves by selected id, not providers[0] of the old list.
-    const settings = syncFlatFromProviders(deleted.providers, deleted.activeProviderId, {
+    // Flat legacy fields always mirror providers[0] of the remaining list.
+    const settings = syncFlatFromProviders(deleted.providers, {
       provider: 'Antigravity Proxy', gatewayUrl: 'http://127.0.0.1:8045/v1', apiKey: '', model: 'gemini-3.8-flash-high',
     });
     expect(settings.baseUrl).toBe('https://opencode.ai/inference/go/openai/v1');
@@ -107,7 +103,7 @@ describe('providers domain helpers', () => {
     expect(settings.model).toBe('beam-free');
   });
 
-  it('syncs flat endpoint from the selected (second) provider', () => {
+  it('syncs flat fields from providers[0] regardless of catalog position', () => {
     const first: Provider = { id: toProviderIdValue('antigravity proxy'), name: 'Antigravity Proxy', isCustom: false, apiKey: 'sk-first', baseUrl: 'http://127.0.0.1:8045/v1', protocol: 'openai', models: [{ id: 'gemini-3.8-flash-high' }] };
     const second: Provider = {
       id: toProviderIdValue('opencode go'),
@@ -118,18 +114,20 @@ describe('providers domain helpers', () => {
       protocol: 'openai',
       models: [{ id: 'beam-free' }, { id: 'crouton-alpha-free' }],
     };
-    const settings = syncFlatFromProviders([first, second], toProviderIdValue('opencode go'), {
+    // No "active provider": flat legacy fields mirror the first provider,
+    // while dispatch uses explicit Provider / Model pairs.
+    const settings = syncFlatFromProviders([first, second], {
       provider: 'Antigravity Proxy', gatewayUrl: 'http://127.0.0.1:8045/v1', apiKey: 'sk-first', model: 'gemini-3.8-flash-high',
     });
-    expect(settings.provider).toBe('OpenCode Go');
-    expect(settings.baseUrl).toBe('https://opencode.ai/inference/go/openai/v1');
-    expect(settings.apiKey).toBe('sk-go');
-    expect(settings.model).toBe('beam-free');
+    expect(settings.provider).toBe('Antigravity Proxy');
+    expect(settings.baseUrl).toBe('http://127.0.0.1:8045/v1');
+    expect(settings.apiKey).toBe('sk-first');
+    expect(settings.model).toBe('gemini-3.8-flash-high');
   });
 
   it('refuses to delete the last provider', () => {
     const a: Provider = { id: toProviderIdValue('a'), name: 'A', isCustom: false, apiKey: '', baseUrl: '', protocol: 'openai', models: [] };
-    expect(() => deleteProviderLocal([a], toProviderIdValue('a'), toProviderIdValue('a')))
+    expect(() => deleteProviderLocal([a], toProviderIdValue('a')))
       .toThrow('Cannot delete the last provider');
   });
 
@@ -144,9 +142,9 @@ describe('providers domain helpers', () => {
       models: [{ id: 'beam-free' }, { id: 'crouton-alpha-free' }],
     }];
     const base = { provider: 'OpenCode Go', gatewayUrl: '', apiKey: '', model: 'crouton-alpha-free' };
-    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), base).model).toBe('crouton-alpha-free');
-    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), { ...base, model: '' }).model).toBe('beam-free');
-    expect(syncFlatFromProviders(providers, toProviderIdValue('opencode go'), { ...base, model: 'gemini-3.8-flash-high' }).model).toBe('beam-free');
+    expect(syncFlatFromProviders(providers, base).model).toBe('crouton-alpha-free');
+    expect(syncFlatFromProviders(providers, { ...base, model: '' }).model).toBe('beam-free');
+    expect(syncFlatFromProviders(providers, { ...base, model: 'gemini-3.8-flash-high' }).model).toBe('beam-free');
   });
 
   it('legacy provider marks custom names', () => {

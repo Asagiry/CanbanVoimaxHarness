@@ -400,6 +400,8 @@ pub struct AgentPersonaInfo {
     pub reasoning_effort: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub provider_id: Option<String>,
 }
 
 /// Валидация имени персоны: ^[a-z0-9][a-z0-9-]*$
@@ -566,6 +568,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             context_window,
             reasoning_effort,
             model: setting.model,
+            provider_id: setting.provider_id,
         });
     }
     out.sort_by(|a, b| a.role.cmp(&b.role));

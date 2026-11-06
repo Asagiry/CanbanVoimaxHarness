@@ -24,6 +24,7 @@ use std::path::PathBuf;
             custom_flow: None,
             status: None,
             model: Some("user-custom-model".to_string()),
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -63,13 +64,13 @@ use std::path::PathBuf;
     }
 
     #[tokio::test]
-    async fn test_resolve_model_maps_stale_sqlite_model_to_selected_provider() {
+    async fn test_resolve_model_ignores_stale_sqlite_and_pair_owns_endpoint() {
         let base = PathBuf::from("target").join(format!("cvh_model_stale_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base).await.expect("test dir");
 
-        // Active provider is OpenCode Go (second in list); the task still
-        // carries the old Antigravity model from SQLite. Dispatch must use
-        // the OpenCode Go catalog model, not the stale one.
+        // The task still carries the old Antigravity model from SQLite, but
+        // per-agent settings is the source of truth: the stale model is
+        // ignored and dispatch falls back to the pair/default model.
         let mut llm_settings = crate::config::LlmSettings::default();
         llm_settings.providers = vec![
             crate::config::Provider {
@@ -97,16 +98,13 @@ use std::path::PathBuf;
                 ],
             },
         ];
-        llm_settings.active_provider_id = Some("opencode go".to_string());
         llm_settings.model = "gemini-3.8-flash-high".to_string();
         llm_settings.ensure_providers();
-        assert_eq!(llm_settings.model, "beam-free");
+        // All providers are valid now: the model exists in the antigravity
+        // catalog, so the legacy flat field legitimately keeps it.
+        assert_eq!(llm_settings.model, "gemini-3.8-flash-high");
 
-        let (base_url, api_key) = llm_settings.endpoint();
-        assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
-        assert_eq!(api_key.as_deref(), Some("sk-go"));
-
-        let task = Task {
+        let mut task = Task {
             id: "CVH-042".to_string(),
             title: "Task".to_string(),
             description: String::new(),
@@ -118,6 +116,7 @@ use std::path::PathBuf;
             custom_flow: None,
             status: None,
             model: Some("gemini-3.8-flash-high".to_string()),
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -139,6 +138,14 @@ use std::path::PathBuf;
             stage_durations: None,
             total_elapsed: None,
         };
+        // Explicit Provider / Model pair: the chosen provider owns the
+        // endpoint even when two providers list the same model id.
+        task.provider_id = Some("opencode go".to_string());
+        let (base_url, api_key) = llm_settings
+            .endpoint_for_pair(task.provider_id.as_deref(), task.model.as_deref().unwrap_or(""));
+        assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
+        assert_eq!(api_key.as_deref(), Some("sk-go"));
+
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
         assert_eq!(resolved, "crouton-alpha-free");
 
@@ -254,6 +261,7 @@ use std::path::PathBuf;
             custom_flow: None,
             status: Some("idle".to_string()),
             model: None,
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -339,6 +347,7 @@ use std::path::PathBuf;
             custom_flow: None,
             status: Some("idle".to_string()),
             model: None,
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -373,6 +382,7 @@ use std::path::PathBuf;
             custom_flow: None,
             status: Some("running".to_string()),
             model: None,
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,

@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 use crate::config::ToolPolicyConfig;
 use std::sync::Arc;
 
@@ -65,6 +65,7 @@ use std::sync::Arc;
             custom_flow: None,
             status: Some("running".to_string()),
             model: None,
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,
@@ -103,6 +104,7 @@ use std::sync::Arc;
             base_url: None,
             api_key: None,
             model: None,
+            
             temperature: None,
             reasoning_effort: None,
             call_id: None,
@@ -233,6 +235,7 @@ use std::sync::Arc;
             custom_flow: None,
             status: Some("running".to_string()),
             model: None,
+            provider_id: None,
             parent_id: None,
             subtask_index: None,
             waiting_for_subtask_id: None,

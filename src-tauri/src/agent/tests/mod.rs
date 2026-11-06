@@ -110,6 +110,7 @@ pub(crate) fn make_test_task(id: &str, stage_id: &str, board_id: &str) -> Task {
         custom_flow: None,
         status: Some("running".to_string()),
         model: None,
+        provider_id: None,
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,

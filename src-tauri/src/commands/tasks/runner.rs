@@ -88,14 +88,15 @@ pub async fn resolve_task_active_agent_model(
         .or(proj_default)
         .unwrap_or_else(|| "crouton-alpha-free".to_string());
 
-    // Validate against the SELECTED provider's catalog (SQLite-stale models
-    // from a previous provider must not be dispatched to the new endpoint).
-    if let Some(active) = llm_settings.active_provider() {
-        if !active.models.is_empty() && !active.models.iter().any(|m| m.id == candidate) {
-            if let Some(first) = active.models.first() {
+    // Validate candidate exists in ANY provider catalog (all providers active).
+    // Unknown model falls back to first catalog model of first provider with a catalog.
+    if !llm_settings.providers.is_empty() {
+        let in_any = llm_settings.providers.iter().any(|p| p.models.iter().any(|m| m.id == candidate));
+        if !in_any {
+            if let Some(first) = llm_settings.providers.iter().flat_map(|p| p.models.iter()).next() {
                 eprintln!(
-                    "CVH [resolve_model]: model '{}' not in active provider '{}' catalog, using '{}'",
-                    candidate, active.id, first.id
+                    "CVH [resolve_model]: model '{}' not in any provider catalog, using '{}'",
+                    candidate, first.id
                 );
                 return first.id.clone();
             }
@@ -373,9 +374,10 @@ async fn run_agent_inner(
 
     let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
 
-    // Dispatch endpoint comes from the SELECTED provider (not flat fields /
-    // providers[0]): OpenCode Go must hit its own URL with its own key.
-    let (provider_base_url, api_key) = llm_settings.endpoint();
+    // Dispatch endpoint comes from the explicitly selected Provider / Model
+    // pair (never searched by model alone): the chosen provider owns URL+key.
+    let (provider_base_url, api_key) =
+        llm_settings.endpoint_for_pair(task.provider_id.as_deref(), &model);
     let mut base_url = if !provider_base_url.trim().is_empty() {
         provider_base_url
     } else {
@@ -1441,7 +1443,11 @@ pub async fn compact_context(
         &active_agent_model,
     );
 
-    let (provider_base_url, api_key) = llm_settings.endpoint();
+    // Same explicit-provider rule for the compactor dispatch.
+    let (provider_base_url, api_key) = llm_settings.endpoint_for_pair(
+        task.as_ref().and_then(|t| t.provider_id.as_deref()),
+        &compactor_model,
+    );
     let base_url = if !provider_base_url.trim().is_empty() {
         provider_base_url
     } else {

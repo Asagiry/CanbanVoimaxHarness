@@ -1,4 +1,4 @@
-pub mod compactor;
+﻿pub mod compactor;
 pub use compactor::*;
 pub mod tool_schemas;
 pub use tool_schemas::*;
@@ -77,6 +77,8 @@ pub struct Task {
     pub status: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(rename = "providerId", alias = "provider_id", default)]
+    pub provider_id: Option<String>,
     #[serde(rename = "parentId", alias = "parent_id", default)]
     pub parent_id: Option<String>,
     #[serde(rename = "subtaskIndex", alias = "subtask_index", default)]
@@ -1997,6 +1999,7 @@ Req chars: {}
                 base_url: ctx.base_url.as_deref(),
                 api_key: ctx.api_key.as_deref(),
                 model: Some(model),
+                
                 temperature: ctx.temperature,
                 reasoning_effort: ctx.reasoning_effort.as_deref(),
                 call_id: Some(&tc.id),

@@ -17,7 +17,6 @@ export interface LlmSettingsState {
   apiKey: string;
   model: string;
   compactorModel?: string;
-  activeProviderId?: ProviderId;
   providers?: Provider[];
 }
 
@@ -34,7 +33,6 @@ interface SettingsStoreState {
   notificationSettings: NotificationSettings;
   availableModels: string[];
   providers: Provider[];
-  activeProviderId: ProviderId;
   isSaving: boolean;
   saveStatus: 'idle' | 'saved' | 'error';
   errorMessage: string | null;
@@ -45,10 +43,9 @@ interface SettingsStoreState {
   setNotificationSettings: (partial: Partial<NotificationSettings>) => void;
   setAvailableModels: (models: string[]) => void;
   addAvailableModels: (newModels: string[]) => void;
-  setProviders: (providers: Provider[], activeProviderId?: ProviderId) => void;
+  setProviders: (providers: Provider[]) => void;
   upsertProvider: (provider: Provider) => Promise<Provider[]>;
   deleteProvider: (providerId: ProviderId) => Promise<Provider[]>;
-  setActiveProvider: (providerId: ProviderId) => void;
   loadSettings: () => Promise<void>;
   saveSettings: (newSettings?: Partial<LlmSettingsState>) => Promise<boolean>;
   fetchAvailableModels: (baseUrl?: string, apiKey?: string) => Promise<string[]>;
@@ -66,21 +63,22 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
 
 const DEFAULT_PROVIDERS = migrateFlatToProviders(DEFAULT_SETTINGS);
 
-export function syncFlatFromProviders(providers: Provider[], activeProviderId: ProviderId, base: LlmSettingsState): LlmSettingsState {
-  const active = providers.find((p) => p.id === activeProviderId) ?? providers[0];
-  if (!active) return base;
-  const catalogIds = new Set(active.models.map((m) => m.id));
+export function syncFlatFromProviders(providers: Provider[], base: LlmSettingsState): LlmSettingsState {
+  // No "active provider": flat legacy fields always mirror providers[0]
+  // (matching the backend's ensure_providers sync).
+  const first = providers[0];
+  if (!first) return base;
+  const catalogIds = new Set(first.models.map((m) => m.id));
   const model = base.model && catalogIds.has(base.model)
     ? base.model
-    : active.models[0]?.id || base.model || '';
+    : first.models[0]?.id || base.model || '';
   return {
     ...base,
-    provider: active.name,
-    gatewayUrl: active.baseUrl || base.gatewayUrl,
-    baseUrl: active.baseUrl || base.baseUrl,
-    apiKey: active.apiKey,
+    provider: first.name,
+    gatewayUrl: first.baseUrl || base.gatewayUrl,
+    baseUrl: first.baseUrl || base.baseUrl,
+    apiKey: first.apiKey,
     model,
-    activeProviderId: active.id,
     providers,
   };
 }
@@ -139,11 +137,10 @@ const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: strin
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
-  settings: { ...DEFAULT_SETTINGS, activeProviderId: DEFAULT_PROVIDERS.activeProviderId, providers: DEFAULT_PROVIDERS.providers },
+  settings: { ...DEFAULT_SETTINGS, providers: DEFAULT_PROVIDERS.providers },
   notificationSettings: loadStoredNotificationSettings(),
   availableModels: ['gemini-3.8-flash-high'],
   providers: DEFAULT_PROVIDERS.providers,
-  activeProviderId: DEFAULT_PROVIDERS.activeProviderId,
   isSaving: false,
   saveStatus: 'idle',
   errorMessage: null,
@@ -189,12 +186,11 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }
   },
 
-  setProviders: (providers, activeProviderId) => {
-    const migrated = migrateFlatToProviders({ providers, activeProviderId });
-    const settings = syncFlatFromProviders(migrated.providers, migrated.activeProviderId, get().settings);
+  setProviders: (providers) => {
+    const migrated = migrateFlatToProviders({ providers });
+    const settings = syncFlatFromProviders(migrated.providers, get().settings);
     set({
       providers: migrated.providers,
-      activeProviderId: migrated.activeProviderId,
       settings,
       availableModels: availableModelIds(migrated.providers).length > 0
         ? availableModelIds(migrated.providers)
@@ -204,14 +200,13 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
   upsertProvider: async (provider) => {
     const next = upsertProviderLocal(get().providers, provider);
-    const activeProviderId = get().activeProviderId;
-    const settings = syncFlatFromProviders(next, activeProviderId, get().settings);
+    const settings = syncFlatFromProviders(next, get().settings);
     set({ providers: next, settings, availableModels: availableModelIds(next).length > 0 ? availableModelIds(next) : get().availableModels });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const saved = await invoke<Provider[]>('upsert_provider_command', { provider });
       if (Array.isArray(saved) && saved.length > 0) {
-        get().setProviders(saved, activeProviderId);
+        get().setProviders(saved);
         return get().providers;
       }
     } catch {
@@ -221,28 +216,20 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 
   deleteProvider: async (providerId) => {
-    const { providers, activeProviderId } = deleteProviderLocal(get().providers, get().activeProviderId, providerId);
-    const settings = syncFlatFromProviders(providers, activeProviderId, get().settings);
-    set({ providers, activeProviderId, settings, availableModels: availableModelIds(providers) });
+    const { providers } = deleteProviderLocal(get().providers, providerId);
+    const settings = syncFlatFromProviders(providers, get().settings);
+    set({ providers, settings, availableModels: availableModelIds(providers) });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const saved = await invoke<Provider[]>('delete_provider', { providerId });
       if (Array.isArray(saved) && saved.length > 0) {
-        get().setProviders(saved, activeProviderId);
+        get().setProviders(saved);
         return get().providers;
       }
     } catch {
       // Local-first fallback
     }
     return providers;
-  },
-
-  setActiveProvider: (providerId) => {
-    const providers = get().providers;
-    const active = providers.find((p) => p.id === providerId);
-    if (!active) return;
-    const settings = syncFlatFromProviders(providers, providerId, get().settings);
-    set({ activeProviderId: providerId, settings });
   },
 
   setSettings: (partial) => {
@@ -312,11 +299,10 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
             apiKey: backendSettings.apiKey || backendSettings.api_key || '',
             model: backendSettings.model || '',
             compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
-            activeProviderId: backendSettings.activeProviderId || backendSettings.active_provider_id,
             providers: backendProviders.length > 0 ? backendProviders : undefined,
           };
           const migrated = migrateFlatToProviders(flat);
-          loaded = syncFlatFromProviders(migrated.providers, migrated.activeProviderId, flat);
+          loaded = syncFlatFromProviders(migrated.providers, flat);
         }
       }
     } catch {
@@ -337,14 +323,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
             apiKey: parsed.apiKey || '',
             model: parsed.model || DEFAULT_SETTINGS.model,
             compactorModel: parsed.compactorModel || 'inherit',
-            activeProviderId: parsed.activeProviderId,
             providers: Array.isArray(parsed.providers) ? parsed.providers : undefined,
           };
-          loaded = syncFlatFromProviders(
-            migrateFlatToProviders(flat).providers,
-            migrateFlatToProviders(flat).activeProviderId,
-            flat,
-          );
+          loaded = syncFlatFromProviders(migrateFlatToProviders(flat).providers, flat);
         }
       } catch {
         // Ignore JSON error
@@ -353,12 +334,10 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
     if (loaded) {
       const providers = loaded.providers ?? get().providers;
-      const activeProviderId = loaded.activeProviderId ?? get().activeProviderId;
       const derived = availableModelIds(providers);
       set({
         settings: loaded,
         providers,
-        activeProviderId,
         availableModels: derived.length > 0 ? derived : storedModels.length > 0 ? storedModels : get().availableModels,
         notificationSettings: loadStoredNotificationSettings(),
       });
@@ -396,7 +375,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           apiKey: target.apiKey.trim(),
           model: target.model.trim(),
           compactorModel: (target.compactorModel || 'inherit').trim(),
-          activeProviderId: get().activeProviderId,
           providers: get().providers,
         },
       });

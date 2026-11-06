@@ -28,7 +28,7 @@ export interface DrawerSteerBarProps {
   isToolAllowed: (toolName: string, stageId?: string) => boolean;
   effectiveModel: string;
   selectableModels: string[];
-  onSelectModel: (model: string) => void;
+  onSelectPair: (providerId: string, model: string) => void;
 }
 
 export default function DrawerSteerBar({
@@ -40,7 +40,7 @@ export default function DrawerSteerBar({
   isToolAllowed,
   effectiveModel,
   selectableModels,
-  onSelectModel,
+  onSelectPair,
 }: DrawerSteerBarProps) {
   const [interactiveInput, setInteractiveInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
@@ -104,15 +104,19 @@ export default function DrawerSteerBar({
   const effectiveLimit = matchedPersona?.contextWindow || parentLimit;
 
   // --- Provider / Model label (screenshot format: "OpenCode Go / Crouton Alpha Free Max") ---
+  // The pair comes from the task's explicit selection — never searched by
+  // model id alone, no "active provider" concept at all.
   const providers = useSettingsStore((s) => s.providers);
-  const activeProviderId = useSettingsStore((s) => s.activeProviderId);
-  const modelId = matchedPersona?.model || effectiveModel;
-  const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0] || null;
+  const modelId = task.model || matchedPersona?.model || effectiveModel;
+  const pairProvider =
+    (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
+    (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
+    null;
   const modelDisplay =
-    activeProvider?.models.find((m) => m.id === modelId)?.displayName ||
+    pairProvider?.models.find((m) => m.id === modelId)?.displayName ||
     modelId;
-  const providerModelLabel = activeProvider
-    ? `${activeProvider.name} / ${modelDisplay}`
+  const providerModelLabel = pairProvider
+    ? `${pairProvider.name} / ${modelDisplay}`
     : modelDisplay;
   const reasoningRaw = matchedPersona?.reasoningEffort || null;
   const reasoningLabel = reasoningRaw
@@ -435,7 +439,7 @@ export default function DrawerSteerBar({
                         key={`${m.providerId}-${m.id}`}
                         type="button"
                         onClick={() => {
-                          onSelectModel(m.id);
+                          onSelectPair(m.providerId, m.id);
                           setIsModelMenuOpen(false);
                         }}
                         className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between cursor-pointer font-sans ${

@@ -1,4 +1,4 @@
-use crate::agent::Task;
+﻿use crate::agent::Task;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, TransactionBehavior};
@@ -78,6 +78,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                  custom_flow TEXT,
                  status TEXT NOT NULL DEFAULT 'idle',
                  model TEXT,
+                 provider_id TEXT,
                  parent_id TEXT,
                  subtask_index INTEGER,
                  waiting_for_subtask_id TEXT,
@@ -132,6 +133,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                  id TEXT PRIMARY KEY,
                  task_id TEXT NOT NULL,
                  model TEXT,
+                 provider_id TEXT,
                  input_tokens INTEGER DEFAULT 0,
                  output_tokens INTEGER DEFAULT 0,
                  cached_tokens INTEGER DEFAULT 0,
@@ -154,6 +156,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_entered_at INTEGER", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_durations TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN provider_id TEXT", []);
         let _ = conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 

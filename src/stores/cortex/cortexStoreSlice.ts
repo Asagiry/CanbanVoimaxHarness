@@ -353,6 +353,7 @@ export const createCortexSlice: StateCreator<
         contextWindow: item.contextWindow ?? item.context_window,
         reasoningEffort: item.reasoningEffort ?? item.reasoning_effort ?? null,
         model: item.model ?? null,
+        providerId: item.providerId ?? item.provider_id ?? null,
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));

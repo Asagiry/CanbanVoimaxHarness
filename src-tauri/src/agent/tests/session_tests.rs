@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 use crate::config::ToolPolicyConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -604,6 +604,7 @@ use std::sync::Arc;
             base_url: None,
             api_key: None,
             model: None,
+            
             temperature: None,
             reasoning_effort: None,
             call_id: Some("call_arch_1".to_string()),

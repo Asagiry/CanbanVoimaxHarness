@@ -73,7 +73,6 @@ describe('Provider selection and cache accounting', () => {
       apiKey: 'sk-go',
       model: 'crouton-alpha-free',
       compactorModel: 'inherit',
-      activeProviderId: 'opencode go',
       providers: [{
         id: 'opencode go',
         name: 'OpenCode Go',

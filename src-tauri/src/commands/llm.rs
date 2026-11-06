@@ -72,9 +72,6 @@ pub async fn delete_provider(
         return Err("Cannot delete the last provider".to_string());
     }
     settings.providers.retain(|p| p.id != provider_id);
-    if settings.active_provider_id.as_deref() == Some(provider_id) {
-        settings.active_provider_id = settings.providers.first().map(|p| p.id.clone());
-    }
     settings.ensure_providers();
     save_llm_settings_to_disk(&root, &settings)
         .await

@@ -665,21 +665,17 @@ export default function AgentConsoleDrawer() {
                 isToolAllowed={isToolAllowed}
                 effectiveModel={effectiveModel}
                 selectableModels={selectableModels}
-                onSelectModel={(m) => {
-                  const prevModel = effectiveModel;
-                  updateTask(task.id, { model: m });
-                  syncTasksBackend(tasks.map((t) => (t.id === task.id ? { ...t, model: m } : t)));
+                onSelectPair={(providerId, m) => {
+                  const prevModel = task.model || effectiveModel;
+                  updateTask(task.id, { model: m, providerId });
+                  syncTasksBackend(
+                    tasks.map((t) => (t.id === task.id ? { ...t, model: m, providerId } : t)),
+                  );
                   void (async () => {
-                    const settingsStore = useSettingsStore.getState();
-                    const inCatalog = settingsStore.providers.some((p) => p.models.some((model) => model.id === m));
-                    if (inCatalog) {
-                      settingsStore.setSettings({ model: m });
-                      await settingsStore.saveSettings();
-                    }
-                    const prov = settingsStore.providers.find((p) => p.models.some((model) => model.id === m));
-                    const display = prov?.models.find((model) => model.id === m)?.displayName || m;
-                    const label = prov ? `${prov.name} / ${display}` : display;
+                    const prov = useSettingsStore.getState().providers.find((p) => p.id === providerId);
                     if (prevModel !== m) {
+                      const display = prov?.models.find((model) => model.id === m)?.displayName || m;
+                      const label = prov ? `${prov.name} / ${display}` : display;
                       useDrawerStore.getState().appendOutput(task.id, `Модель изменена на ${label}`, 'system');
                     }
                   })();
