@@ -226,7 +226,7 @@
       "timeout_sec": 180
     },
     "read_file": {
-      "max_lines": 2000
+      "max_lines": 200
     },
     "subagent_bg": {
       "max_concurrent": 3

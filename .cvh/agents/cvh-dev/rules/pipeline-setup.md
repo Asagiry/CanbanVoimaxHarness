@@ -24,8 +24,8 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
      ]
    }
    ```
-3. **Analyze the Project's Technology Stack via Subagent Discovery**:
-   Before generating files, explore the repository topology using subagents (`subagent`):
+3. **Analyze the Project's Technology Stack**:
+   Before generating files, inspect the repository topology directly. Delegate independent, complex discovery only when the benefit justifies extra context and coordination:
    - **TypeScript/JavaScript & Testing**: look for `package.json`, `tsconfig.json`, `vite.config.ts`. Check for Vitest support (`vitest` in dependencies, `"test": "vitest run"` in scripts). If Vitest is present, ensure `pnpm test` is wired into gatekeepers and developer workflows.
    - **Rust Backend Modular Structure**: look for `Cargo.toml`, `src-tauri/` or crate structure (`src/`, modular subpackages). Wire `cargo test` and `cargo check` into backend gatekeepers.
    - **Python**: look for `pyproject.toml`, `requirements.txt`, `main.py`, `pytest` or `ruff`.
@@ -54,7 +54,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
   - **Read-Only Operational Boundary**: `edit_file` and `write_file` physically stripped from tool schema (Tool Policy Level B).
   - **Presumption of Guilt**: Three-axis review (Invariants, Contract, Ponytail).
   - **Gate 1 Map Sync Enforcement**: Reject diffs with `CHANGES_REQUESTED` if project files/modules were added, deleted, moved, or renamed without synchronizing `.cvh/rules/` navigation maps.
-  - **Sensor Gatekeeper Checklist**: Mandatory execution of project compiler, test runner, and linters.
+  - **Verification Evidence**: Require relevant compiler, test, and linter results for the affected subsystems. Reuse logs for the reviewed commit and unchanged environment; rerun only missing, failed, stale, or unverifiable checks, or checks justified by a concrete risk.
   - **Anthropic Claude Code Convergence Protocol**: Immunity to pre-existing historical bugs, diff-only re-review, actionable `file:line` references, anti-nitpicking.
   - **Zero Silent Failures Audit**: Reject empty catch blocks, silent fallbacks, or discarded results.
 - **For Retro** (`retro`, continuous improvement — when requested): `load_rule("role-retro")`
@@ -65,7 +65,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
 - **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
   - **Read-Only Scope**: Context window protection for developer; static inspection only.
   - **Direct Coordinate Navigation & On-Demand Map Loading**: Jump directly to target files when paths/coordinates are known; invoke `load_rule("<map_name>")` on Turn 1 when exploring unfamiliar subsystems, planning unguided, or mapping multi-file architecture.
-  - **Subagent Codebase Discovery**: Dispatch specialized subagents (`subagent`) to explore codebase architecture and discover exact file coordinates.
+  - **Scoped Codebase Discovery**: Explore directly; use subagents only for independent, complex investigations whose benefit justifies extra context and coordination. File count alone does not require delegation.
   - **Modular Architecture Planning**: Identifying domain boundaries, Value Objects, state machine transitions, and component/module sizing limits.
   - **"Deeper, Not Bigger" (be-ambitious) Protocol**: 4 foundational deepening questions.
 
@@ -130,7 +130,7 @@ When the operator approves a pipeline topology, `cvh-dev` generates:
 ├── hooks/
 │   └── gatekeeper.bat       # Fast sensor scripts executed on card moves
 ├── rules/
-│   └── architecture.md      # Tailored navigation maps authored via subagents
+│   └── architecture.md      # Navigation maps matching the inspected project
 └── agents/
     ├── <role_1>/
     │   ├── persona.md       # Frontmatter (icon, color, tools) + Core mandate
@@ -204,25 +204,23 @@ Authoritative code craftsmanship and simplicity standard.
 - Before calling `advance_task`, run `git diff` and audit every single changed line:
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
-- Ensure all live Ground Truth Sensors pass (`pnpm test`, `tsc`, `oxlint`, `mbx test`, `mbx check`).
+- Run relevant compiler, linter, and behavior checks once after implementation for the affected subsystems. Report commands, logs, exit codes, the delivered commit, and relevant environment so the Reviewer can reuse valid evidence. Repeat only after relevant changes or to resolve failures.
 ```
 
 ### 5.2 Template: `.cvh/agents/reviewer/rules/review-checklist.md`
 ```markdown
-# Rule: Review Checklist & 5-Sensor Verification Protocol (review-checklist.md)
+# Rule: Review Checklist & Verification Evidence (review-checklist.md)
 
 Authoritative Red Team code audit protocol.
 
 ## 1. Cognitive Stance: Presumption of Guilt
 Assume the diff contains hidden defects, async race conditions, unhandled edge cases, or architectural violations until proven innocent.
 
-## 2. The 5-Sensor Ground Truth Checklist
-Every review MUST execute and verify all applicable sensors:
-1. `pnpm test` (Vitest unit tests pass 100%).
-2. `pnpm exec tsc --noEmit` (TypeScript type check passes with 0 errors).
-3. `pnpm exec oxlint --deny-warnings` (Oxlint linter passes with 0 warnings).
-4. `mbx test --manifest-path src-tauri/Cargo.toml` (Rust unit tests pass 100%).
-5. `mbx check --manifest-path src-tauri/Cargo.toml` (Rust compiler check passes with 0 errors).
+## 2. Verification Evidence for the Changed Scope
+- Require successful checks for affected subsystems. Frontend: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`. Backend: `mbx check --manifest-path src-tauri/Cargo.toml`, `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`, plus targeted tests when changed behavior needs them. Adapt commands to the actual project's toolchain.
+- Reuse command logs and exit codes for the reviewed commit when relevant sources, dependencies, configuration, toolchain, and environment are unchanged. A bare claim of success is insufficient.
+- Run only missing, failed, stale, or unverifiable checks, or checks justified by a concrete risk found in the diff. Explain the reason; entering review alone does not require repeating successful checks.
+- Documentation and prompt-only changes normally need static inspection of the diff, references, and contracts, without compilation.
 
 ## 3. Invariant Verification
 - **Frontend Invariants**:

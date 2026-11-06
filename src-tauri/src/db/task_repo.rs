@@ -706,19 +706,16 @@ pub fn db_complete_all_todos(root: &Path, task_id: &str) -> Result<Option<Vec<To
 }
 
 /// Checks whether a task has any unfinished todos in SQLite.
-pub fn db_has_unfinished_todos(root: &Path, task_id: &str) -> bool {
-    let conn = match get_db_conn(root) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
+pub fn db_has_unfinished_todos(root: &Path, task_id: &str) -> Result<bool, String> {
+    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM task_todos WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND status != 'completed'",
             params![task_id],
             |r| r.get(0),
         )
-        .unwrap_or(0);
-    count > 0
+        .map_err(|e| format!("Failed to read task todos: {}", e))?;
+    Ok(count > 0)
 }
 
 // Aliases for convenience

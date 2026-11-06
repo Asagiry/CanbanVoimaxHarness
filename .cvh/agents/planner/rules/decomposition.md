@@ -70,7 +70,7 @@ The Planner follows a disciplined 5-step analysis cycle adhering to the project'
 - Break complex requirements into atomic, ordered implementation tasks.
 - Keep the number of items between 3 and 10 for optimal tracking.
 - Every task must be self-contained and executable in an isolated git worktree.
-- **Large Task Decomposition (> 5-7 Files)**: When planning large architectural migrations or broad cross-cutting changes spanning many files, explicitly structure the plan into decoupled modular packages (e.g. Package A: board/, Package B: card/, Package C: drawer/) designated for concurrent subagent execution, preventing single-agent context exhaustion.
+- **Delegation Scoping**: Identify independent, complex work that would benefit from separate investigation or implementation. Recommend subagents only when that benefit justifies their extra context and coordination; file count or repetitive edits alone are not reasons to delegate. Define non-overlapping scopes and integration checks when delegation is useful.
 
 ### Step 5: Relay Handover to Developer
 - Advance the task to the Developer stage by invoking `advance_task(summary)`.

@@ -24,7 +24,7 @@ pub struct ToolPolicyConfig {
 
 pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
-    map.insert("read_file".to_string(), serde_json::json!({ "max_lines": 2000 }));
+    map.insert("read_file".to_string(), serde_json::json!({ "max_lines": 200 }));
     map.insert("subagent".to_string(), serde_json::json!({ "max_concurrent": 3 }));
     map.insert("subagent_bg".to_string(), serde_json::json!({ "max_concurrent": 3 }));
     map.insert("todo_write".to_string(), serde_json::json!({ "min_items": 3, "max_items": 20 }));

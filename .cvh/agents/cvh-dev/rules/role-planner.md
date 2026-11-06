@@ -12,6 +12,7 @@ Authoritative behavioral specifications and architectural DNA for the Planner ro
 - Provide exact file paths, line numbers, function signatures, and data contracts so the developer never performs blind searches.
 - **Zero Command Execution**: The Planner NEVER executes compilation checks (`cargo check`, `npx tsc`, `npm run build`), test suites, or startup shell commands. Planning is strictly static inspection via `read_file`, `glob`, and `grep`. Verification sensors are specified for the Developer, not run by the Planner.
 - **Direct Coordinate Navigation & On-Demand Map Loading**: When target files and line coordinates are already known or specified in the prompt/task, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture. Once a target file is identified from the navigation map, jump straight to it with `read_file`; targeted `grep` for specific symbols (function names, IPC commands, types) remains a natural, valid tool.
+- **Completion & Handoff**: Progress commentary must accompany actual inspection tool calls. Once a useful plan is ready, invoke `advance_task(summary)` with paths, implementation steps, invariants, and relevant verification. Do not finish with a promise to investigate; if blocked, state the concrete blocker and required input.
 
 ---
 

@@ -152,6 +152,9 @@ effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? 
 
 ### Prompt Caching and Context Compaction
 
+- **Bounded reading**: `read_file` returns 200 lines by default; explicit `offset` and `limit` select another range. Partial reads include the next offset. This read default is separate from the spill thresholds below.
+- **Prompt content**: Persona and rule YAML metadata stays in configuration files and is excluded from model-facing bodies. Navigation maps use small routers plus topic maps loaded on demand.
+- **Completion checks**: With `todo_write` enabled, a text-only response with unfinished task items gets one continuation reminder per run. A second such response stops with an error instead of reporting success. Provider output limits and incomplete streams also stop; partial tool calls are not executed.
 - **Spill on arrival**: Oversized tool results are written to `.cvh/spill/` before entering the conversation. The model receives a bounded head/tail preview and a path to the full log. This happens once per result.
 - **Stable history between compactions**: Ordinary agent steps append messages. There is no rolling rule that rewrites a tool result when it becomes two turns old. Saved conversation snapshots preserve message boundaries across restarts.
 - **Compaction at the context limit**: Automatic compaction starts when estimated conversation tokens reach the configured context window (128,000 by default), targeting 75% of that window. A separate request-size guard can compact earlier when the full request reaches its ceiling. Compaction rewrites an older batch and resets the affected cache prefix. The two-turn retention rule belongs to this compaction pass, not to every agent step. There is no fixed 15-step schedule.
@@ -194,7 +197,7 @@ CVH equips agents with an industrial-grade tool suite compliant with SWE-bench s
 | | `write_file` | Full UTF-8 file creation and replacement. |
 | | `edit_file` *(alias `str_replace`)* | 5-tier progressive matching with whitespace-relaxed fallback. |
 | | `glob` | Rapid pattern-based file discovery in active worktree. |
-| | `grep` | High-speed regex text search across worktree files. |
+| | `grep` | Literal substring search across worktree files; batch separate calls for alternative terms. |
 | | `execute_command` *(alias `bash`)* | Shell execution with timeout enforcement and stdio capture. |
 | **Research & Web** | `web_search` | DuckDuckGo search integration with zero API key requirement. |
 | | `web_fetch` | Clean Markdown webpage content extraction. |

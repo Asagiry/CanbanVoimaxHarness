@@ -75,7 +75,7 @@ pub async fn execute_load_rule(
     }
 
     if let Some(text) = content {
-        Ok(text)
+        Ok(crate::agent::strip_yaml_frontmatter(&text).to_string())
     } else {
         bail!(
             "Rule '{}' not found in .cvh/agents/{}/rules or .cvh/rules",
