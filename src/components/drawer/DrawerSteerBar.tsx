@@ -27,7 +27,6 @@ export interface DrawerSteerBarProps {
   onSendPrompt: (promptText: string, attachedImages: Array<{ id: string; name: string; dataUrl: string }>) => Promise<void> | void;
   onAbortAgent: () => Promise<void> | void;
   isToolAllowed: (toolName: string, stageId?: string) => boolean;
-  effectiveModel: string;
   selectableModels: string[];
   onSelectPair: (providerId: string, model: string) => void;
   onSelectEffort: (effort: ReasoningEffort) => void;
@@ -40,7 +39,6 @@ export default function DrawerSteerBar({
   onSendPrompt,
   onAbortAgent,
   isToolAllowed,
-  effectiveModel,
   selectableModels,
   onSelectPair,
   onSelectEffort,
@@ -107,10 +105,15 @@ export default function DrawerSteerBar({
   const effectiveLimit = matchedPersona?.contextWindow || parentLimit;
 
   // --- Provider / Model label (screenshot format: "OpenCode Go / Crouton Alpha Free Max") ---
-  // The pair comes from the task's explicit selection — never searched by
-  // model id alone, no "active provider" concept at all.
+  // Honest display = what the backend will actually dispatch:
+  // explicit pair (task.providerId + task.model) > per-persona setting >
+  // hardcoded fallback. The global flat `settings.model` is display-only
+  // legacy and would lie (it still says beam-free while the planner
+  // dispatches crouton), so it is NOT in this chain — same rule the
+  // backend resolver uses (pair > agent setting > col > project > crouton).
   const providers = useSettingsStore((s) => s.providers);
-  const modelId = task.model || matchedPersona?.model || effectiveModel;
+  const pairModel = task.providerId ? task.model : null;
+  const modelId = pairModel || matchedPersona?.model || 'crouton-alpha-free';
   const pairProvider =
     (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
     (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||

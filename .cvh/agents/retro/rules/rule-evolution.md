@@ -112,6 +112,11 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Lesson: The harness dual-writes .cvh/ modifications to the root repository. Merge hooks (on_review_finish.{bat,sh}) must defensively clean uncommitted dual-write residue (git restore --staged .cvh && git restore .cvh) before checkout main and git merge --no-ff, and developers must commit .cvh edits cleanly to the feature branch.
 - Evidence: CVH-057 (commit 8ab5ce7a, fixed in 09693c48 / 8d0bea10) - Review on_leave hook failure: 'Your local changes to .cvh/rules/frontend_map.md would be overwritten by merge'.
 
+### [CLE: Merge Hook Backup-Then-Discard Ordering & Untracked Residue]
+- Cue: When a merge hook backs up live .cvh/ to %TEMP% before `git checkout main` / `git merge --no-ff`, but the main worktree still holds uncommitted or untracked .cvh/ residue identical to the feature branch.
+- Lesson: Backup alone does not unblock checkout/merge; after backup, discard residue in both tracked and untracked forms (`git restore -- .cvh` + `git clean -fd -- .cvh` in .bat, `git restore -- .cvh` + `git clean -fd -- .cvh` in .sh) before checkout/merge, then restore the backup after merge. Keep .bat and .sh in parity.
+- Evidence: CVH-048 (commit 54e9bb5f) - Gate 6 rejection: hook backed up .cvh/ (line 39) but never discarded `M .cvh/hooks/create_worktree.bat`, so merge aborted with 'Your local changes to .cvh/hooks/create_worktree.bat would be overwritten by merge'; fixed by adding restore+clean after backup, verified via `git merge-tree --write-tree main HEAD` exit 0 (36896340).
+
 ### [CLE: UI Column Layout Symmetry & Visual Boundaries]
 - Cue: When designing or styling sidebars, drawers, or floating cockpit columns (SubagentsSidebar, GitDiffSidebar, AgentConsoleDrawer cockpit, CortexExplorer).
 - Lesson: Columns must own their full perimeter: apply symmetric vertical margins (my-1.5), precise height calculations matching vertical margins (h-[calc(100%-0.75rem)]), complete 4-corner radius (rounded-xl), closed border (border), and clipping (overflow-hidden) to prevent unstyled flat bottom collisions with screen edges.

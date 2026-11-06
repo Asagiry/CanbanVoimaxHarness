@@ -29,6 +29,9 @@ else
         # Preserve live .cvh/ (canonical source, uncommitted) across checkout/pull/merge
         BACKUP="$(mktemp -d)"
         if [ -d ".cvh" ]; then cp -a .cvh "$BACKUP/"; fi
+        # Discard uncommitted .cvh/ residue so checkout/merge cannot abort on local changes
+        git restore -- .cvh >/dev/null 2>&1 || true
+        git clean -fd -- .cvh >/dev/null 2>&1 || true
 
         git checkout main
         if [ $? -ne 0 ]; then

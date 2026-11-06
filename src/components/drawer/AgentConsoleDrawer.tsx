@@ -663,7 +663,6 @@ export default function AgentConsoleDrawer() {
                 onSendPrompt={handleSendPrompt}
                 onAbortAgent={handleAbortAgent}
                 isToolAllowed={isToolAllowed}
-                effectiveModel={effectiveModel}
                 selectableModels={selectableModels}
                 onSelectEffort={(effort) => {
                   updateTask(task.id, { reasoningEffort: effort });
