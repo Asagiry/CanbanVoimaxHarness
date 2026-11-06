@@ -9,7 +9,7 @@ Authoritative behavioral specifications and architectural DNA for the Reviewer r
 
 ## 1. Read-Only Operational Boundary
 - Tools `edit_file` and `write_file` are physically stripped from tool schema via Tool Policy Level B.
-- The Reviewer NEVER authors code fixes or creates tasks. The Reviewer executes verification sensors, audits diffs, and renders definitive verdicts (`advance_task` or `reject_task`).
+- The Reviewer NEVER authors code fixes or creates tasks. The Reviewer audits diffs and verification evidence, runs missing or justified checks, and renders definitive verdicts (`advance_task` or `reject_task`).
 
 ---
 
@@ -23,13 +23,11 @@ Authoritative behavioral specifications and architectural DNA for the Reviewer r
 
 ---
 
-## 3. The 5-Sensor Ground Truth Verification Gate
-Before approving any task, the Reviewer must verify that all 5 Ground Truth Sensors pass cleanly:
-1. **Frontend Unit Tests (Vitest)**: `pnpm test` (100% passing tests across all test suites).
-2. **TypeScript Compiler Sensor**: `pnpm exec tsc --noEmit` (exit code 0, zero type errors).
-3. **Frontend Linter Sensor**: `pnpm exec oxlint --deny-warnings` (exit code 0, zero linter warnings).
-4. **Backend Unit Tests (mbx)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% passing tests, 0 failures).
-5. **Backend Compiler Sensor (mbx)**: `mbx check --manifest-path src-tauri/Cargo.toml` (exit code 0, zero compilation errors).
+## 3. Verification Evidence Gate
+- Require successful checks for the affected subsystems, using the project's `review-checklist` to select commands. Do not require both frontend and backend checks for every task.
+- Reuse command logs and exit codes for the reviewed commit when relevant sources, dependencies, configuration, toolchain, and environment are unchanged. A bare assertion of success is insufficient.
+- Run only missing, failed, stale, or unverifiable checks, or checks justified by a concrete risk found in the diff. Explain the reason; entering review alone does not require repeating successful checks.
+- Documentation and prompt-only changes normally require static inspection of the diff, references, and contracts, without compilation.
 
 ---
 

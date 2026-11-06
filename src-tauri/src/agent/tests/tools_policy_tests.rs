@@ -391,7 +391,7 @@ Rule: Never use naked unwrap.",
 
         tokio::fs::write(
             shared_rules.join("architecture.md"),
-            "# Architecture Invariants
+            "---\ndescription: PRIVATE_RULE_METADATA\n---\n# Architecture Invariants
 Rule: Strictly isolated worktrees.",
         )
         .await
@@ -440,6 +440,7 @@ Rule: Strictly isolated worktrees.",
             .await
             .expect("load arch rule");
         assert!(arch_content.contains("Strictly isolated worktrees"));
+        assert!(!arch_content.contains("PRIVATE_RULE_METADATA"));
 
         // 5. Non-existent rule returns error
         let err = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "non_existent" }))

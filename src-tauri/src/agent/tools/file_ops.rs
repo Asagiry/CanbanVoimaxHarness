@@ -265,7 +265,7 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
         .get("read_file")
         .and_then(|v| v.get("max_lines"))
         .and_then(|v| v.as_u64())
-        .unwrap_or(2000) as usize;
+        .unwrap_or(200) as usize;
     let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
     let limit = args
         .get("limit")
@@ -282,7 +282,7 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
     if start >= lines.len() {
         return Ok("(File is empty or offset out of range)\n".to_string());
     }
-    let end = (start + limit).min(lines.len());
+    let end = start.saturating_add(limit).min(lines.len());
     if start > end {
         return Ok("(File is empty or offset out of range)\n".to_string());
     }
@@ -294,6 +294,8 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
 
     if output.is_empty() {
         output.push_str("(File is empty or offset out of range)\n");
+    } else if end < lines.len() {
+        output.push_str(&format!("[Showing lines {}-{} of {}. Use offset={} to continue.]\n", start + 1, end, lines.len(), end + 1));
     }
 
     Ok(output)

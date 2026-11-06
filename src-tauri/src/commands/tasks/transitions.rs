@@ -1598,7 +1598,7 @@ pub fn auto_complete_task_todos(
     let db_had_unfinished = if memory_had_unfinished {
         true
     } else {
-        crate::db::db_has_unfinished_todos(root, &task.id)
+        crate::db::db_has_unfinished_todos(root, &task.id).unwrap_or(true)
     };
 
     if !memory_had_unfinished && !db_had_unfinished {

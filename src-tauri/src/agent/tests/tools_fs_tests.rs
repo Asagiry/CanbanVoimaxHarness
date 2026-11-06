@@ -51,6 +51,20 @@ line 2 again"
         assert!(read_res.contains("3: line 3"), "got: {}", read_res);
         assert!(!read_res.contains("1: line 1"));
 
+        assert!(read_res.contains("Use offset=4"));
+        let long_text = (1..=250).map(|n| format!("row {n}\n")).collect::<String>();
+        tokio::fs::write(base.join("large.txt"), &long_text).await.unwrap();
+        let first = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt"})).await.unwrap();
+        assert!(first.contains("200: row 200\n"));
+        assert!(!first.contains("201: row 201\n"));
+        assert!(first.contains("Use offset=201"));
+        let rest = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt", "offset": 201})).await.unwrap();
+        assert!(rest.contains("201: row 201\n"));
+        assert!(rest.contains("250: row 250\n"));
+        assert!(!rest.contains("Use offset="));
+        let full = execute_read_file(&tool_ctx, &serde_json::json!({"file_path": "large.txt", "limit": 250})).await.unwrap();
+        assert!(full.contains("250: row 250\n"));
+
         // 3. edit_file with single replacement
         let edit_res = execute_tool(&tool_ctx, "edit_file", &serde_json::json!({
             "file_path": "src/demo.txt",
