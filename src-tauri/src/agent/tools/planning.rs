@@ -151,8 +151,11 @@ pub async fn execute_question(
 
     let text = args
         .get("text")
+        .or_else(|| args.get("question"))
         .and_then(|v| v.as_str())
-        .context("Missing required parameter 'text'")?;
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .context("Missing required parameter 'text' (or alias 'question')")?;
     let options = args.get("options").cloned();
     let multiple = args.get("multiple").and_then(|v| v.as_bool()).unwrap_or(false);
 

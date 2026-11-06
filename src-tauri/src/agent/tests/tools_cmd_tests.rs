@@ -241,6 +241,84 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
     }
 
     #[tokio::test]
+    async fn test_question_tool_alias_question_field() {
+        let _lock = QUESTION_TEST_MUTEX.lock().await;
+        let base = std::path::PathBuf::from("target").join(format!("cvh_q_alias_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-092"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let responder = tokio::spawn(async {
+            for _ in 0..60 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let mut reg = QUESTION_REGISTRY.lock().await;
+                if !reg.is_empty() {
+                    let q_id = reg.keys().next().cloned().unwrap();
+                    if let Some(sender) = reg.remove(&q_id) {
+                        let _ = sender.send("All badges".to_string());
+                        return true;
+                    }
+                }
+            }
+            false
+        });
+
+        let question_text = "Tooltip StageDurationsPopover shows on both Done in and In Progress. Remove only on Done in or everywhere?";
+        let res = execute_tool(&tool_ctx, "question", &serde_json::json!({
+            "question": question_text,
+            "options": [
+                { "label": "Only Done in", "description": "Keep popover in In Progress, remove only from Done" },
+                { "label": "All badges", "description": "Remove popover everywhere and delete StageDurationsPopover" }
+            ],
+            "multiple": false
+        }))
+        .await
+        .expect("question alias execution");
+
+        let did_answer = responder.await.expect("join responder");
+        assert!(did_answer, "Question was not registered in QUESTION_REGISTRY within timeout");
+        assert_eq!(res, "All badges");
+
+        let dialog_items = crate::db::load_dialog_items(&base, "CVH-092").expect("load items");
+        assert!(!dialog_items.is_empty(), "Question must be persisted in SQLite");
+        let q_item = dialog_items.iter().find(|i| i.item_type == "question").expect("question item");
+        assert_eq!(q_item.content.as_deref().unwrap(), question_text);
+        let tool_meta = q_item.tool.as_ref().expect("tool meta");
+        assert_eq!(tool_meta["status"], "success");
+        assert_eq!(tool_meta["selectedAnswer"], "All badges");
+        assert_eq!(tool_meta["params"]["text"], question_text);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_are_questions_duplicate() {
+        assert!(are_questions_duplicate("Hello world", "  Hello   world  "));
+        assert!(are_questions_duplicate("Which database engine?", "Which database engine?"));
+        assert!(are_questions_duplicate("Which database engine?  ", "Which   database engine?"));
+        assert!(!are_questions_duplicate("Which database engine?", "Which database engine should we use?"));
+        assert!(!are_questions_duplicate("", "  "));
+    }
+
+    #[tokio::test]
     async fn test_question_tool_abort_flag_cleanup() {
         let _lock = QUESTION_TEST_MUTEX.lock().await;
         let base = std::path::PathBuf::from("target").join(format!("cvh_q_abort_{}", uuid::Uuid::new_v4()));
