@@ -297,6 +297,7 @@ use std::sync::Arc;
         assert!(create_res.is_ok(), "create_task must succeed for cvh-dev when allowed by policy");
 
         // 2. Tools allowed by the Tool Policy Matrix (including todo_write) work for cvh-dev
+        crate::db::db_upsert_task(&base, &make_test_task("CVH-200", "dev", "test-board")).unwrap();
         let todo_res = execute_tool(&cvh_dev_ctx, "todo_write", &serde_json::json!({
             "todos": [{ "content": "Configure pipeline", "status": "in_progress" }]
         })).await;
