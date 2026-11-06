@@ -1604,7 +1604,11 @@ Task Title: {}
     let model = resolved_model.as_str();
     let api_key = ctx.api_key.as_deref();
     let temperature = ctx.temperature.or(Some(0.2));
-    let reasoning_effort = ctx.reasoning_effort.clone();
+    // A subagent's own `setting` wins over the parent-inherited effort.
+    let reasoning_effort = crate::config::normalize_reasoning_effort(
+        subagent_setting.reasoning_effort.as_deref(),
+    )
+    .or_else(|| ctx.reasoning_effort.clone());
 
     let llm_client = LlmClient::for_conversation(&ctx.repo_root, &subagent_id);
     let mut sub_turn = 0;

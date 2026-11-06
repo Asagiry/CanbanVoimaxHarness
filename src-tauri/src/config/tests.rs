@@ -302,6 +302,30 @@ use std::path::{Path, PathBuf};
     }
 
     #[test]
+    fn test_agent_setting_reasoning_effort_parsing_and_normalize() {
+        // camelCase (as stored in `.cvh/agents/<role>/setting`) and snake_case
+        // both parse; missing field stays `None`.
+        let camel: AgentSetting =
+            serde_json::from_str(r#"{"reasoningEffort": "high"}"#).expect("camelCase");
+        assert_eq!(camel.reasoning_effort.as_deref(), Some("high"));
+        let snake: AgentSetting =
+            serde_json::from_str(r#"{"reasoning_effort": "low"}"#).expect("snake_case");
+        assert_eq!(snake.reasoning_effort.as_deref(), Some("low"));
+        let absent: AgentSetting = serde_json::from_str("{}").expect("absent");
+        assert_eq!(absent.reasoning_effort, None);
+
+        // Normalization: off/empty/unknown → None (payload field omitted).
+        assert_eq!(normalize_reasoning_effort(None), None);
+        assert_eq!(normalize_reasoning_effort(Some("")), None);
+        assert_eq!(normalize_reasoning_effort(Some("off")), None);
+        assert_eq!(normalize_reasoning_effort(Some("none")), None);
+        assert_eq!(normalize_reasoning_effort(Some("bogus")), None);
+        assert_eq!(normalize_reasoning_effort(Some(" LOW ")).as_deref(), Some("low"));
+        assert_eq!(normalize_reasoning_effort(Some("medium")).as_deref(), Some("medium"));
+        assert_eq!(normalize_reasoning_effort(Some("High")).as_deref(), Some("high"));
+    }
+
+    #[test]
     fn test_agent_allows_tool_intersection() {
         // None → unrestricted.
         assert!(agent_allows_tool(None, "read_file"));

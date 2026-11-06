@@ -630,10 +630,25 @@ pub struct AgentSetting {
     pub max_tokens: Option<u64>,
     #[serde(default, alias = "allowedTools")]
     pub allowed_tools: Option<Vec<String>>,
+    #[serde(default, alias = "reasoningEffort")]
+    pub reasoning_effort: Option<String>,
     #[serde(default)]
     pub icon: Option<String>,
     #[serde(default)]
     pub color: Option<String>,
+}
+
+/// Normalize a raw `reasoningEffort` value (`low|medium|high|off`) into the
+/// value sent to the LLM payload. `"off"` (and `none`/empty/unknown) means
+/// "not set" and maps to `None`, so the field is omitted from the payload
+/// (backwards-compatible default).
+pub fn normalize_reasoning_effort(value: Option<&str>) -> Option<String> {
+    match value.map(|v| v.trim().to_lowercase()).as_deref() {
+        Some("low") => Some("low".to_string()),
+        Some("medium") => Some("medium".to_string()),
+        Some("high") => Some("high".to_string()),
+        _ => None,
+    }
 }
 
 /// `<root>/.cvh/agents/<role>`

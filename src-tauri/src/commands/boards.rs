@@ -396,6 +396,8 @@ pub struct AgentPersonaInfo {
     pub color: Option<String>,
     #[serde(default)]
     pub context_window: Option<u64>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 /// Валидация имени персоны: ^[a-z0-9][a-z0-9-]*$
@@ -547,6 +549,8 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
 
         let setting = crate::config::load_agent_setting(root, &role).await;
         let context_window = setting.context_window;
+        let reasoning_effort =
+            crate::config::normalize_reasoning_effort(setting.reasoning_effort.as_deref());
 
         out.push(AgentPersonaInfo {
             role,
@@ -558,6 +562,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             icon: Some(icon),
             color: Some(color),
             context_window,
+            reasoning_effort,
         });
     }
     out.sort_by(|a, b| a.role.cmp(&b.role));

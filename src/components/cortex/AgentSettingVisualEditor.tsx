@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import {
   Bot,
+  Brain,
   Thermometer,
   Maximize2,
   AlertTriangle,
@@ -11,6 +12,16 @@ import {
   Palette,
   Check,
 } from 'lucide-react';
+import type { ReasoningEffort } from '../../types';
+import { REASONING_EFFORTS, normalizeReasoningEffort } from '../../types';
+import type { TranslationKey } from '../../i18n/types';
+
+const REASONING_EFFORT_LABELS: Record<ReasoningEffort, TranslationKey> = {
+  off: 'ruleEditor.reasoningOff',
+  low: 'ruleEditor.reasoningLow',
+  medium: 'ruleEditor.reasoningMedium',
+  high: 'ruleEditor.reasoningHigh',
+};
 import AgentIcon from '../common/AgentIcon';
 import {
   AGENT_PALETTE,
@@ -28,9 +39,10 @@ export interface AgentSettingVisualEditorProps {
   onSwitchToCode?: () => void;
 }
 
-interface ParsedSetting {
+export interface ParsedSetting {
   model: string | null;
   temperature: number;
+  reasoningEffort: ReasoningEffort;
   contextWindow: number;
   maxTokens: number;
   hasAllowedTools: boolean;
@@ -54,7 +66,7 @@ const MAX_TOKENS_CHIPS = [
   { value: 65536, label: '64K' },
 ];
 
-function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string | null } {
+export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string | null } {
   try {
     const trimmed = raw.trim();
     const obj = trimmed ? JSON.parse(trimmed) : {};
@@ -72,6 +84,10 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
       typeof obj.temperature === 'number' && !isNaN(obj.temperature)
         ? Math.max(0, Math.min(1, obj.temperature))
         : 0.2;
+
+    // `"off"` (absent/unknown) = default: omitted from the LLM payload.
+    const reasoningEffort: ReasoningEffort =
+      normalizeReasoningEffort(obj.reasoningEffort ?? obj.reasoning_effort) ?? 'off';
 
     const rawCw = obj.contextWindow ?? obj.context_window;
     const contextWindow =
@@ -96,6 +112,8 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
         ![
           'model',
           'temperature',
+          'reasoningEffort',
+          'reasoning_effort',
           'contextWindow',
           'context_window',
           'maxTokens',
@@ -114,6 +132,7 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
       parsed: {
         model,
         temperature,
+        reasoningEffort,
         contextWindow,
         maxTokens,
         hasAllowedTools,
@@ -130,6 +149,7 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
       parsed: {
         model: 'inherit',
         temperature: 0.2,
+        reasoningEffort: 'off',
         contextWindow: 200000,
         maxTokens: 8192,
         hasAllowedTools: false,
@@ -144,7 +164,7 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
   }
 }
 
-function serializeSetting(parsed: ParsedSetting): string {
+export function serializeSetting(parsed: ParsedSetting): string {
   const output: Record<string, unknown> = {};
 
   if (parsed.rawExtra._comment) {
@@ -156,6 +176,10 @@ function serializeSetting(parsed: ParsedSetting): string {
     !parsed.model || parsed.model === 'inherit' ? 'inherit' : parsed.model.trim();
 
   output.temperature = Number(parsed.temperature.toFixed(2));
+  // `off` stays absent (backwards-compat: default null/off ⇒ no field).
+  if (parsed.reasoningEffort && parsed.reasoningEffort !== 'off') {
+    output.reasoningEffort = parsed.reasoningEffort;
+  }
   output.contextWindow = parsed.contextWindow;
   output.maxTokens = parsed.maxTokens;
 
@@ -210,6 +234,7 @@ export default function AgentSettingVisualEditor({
 
   const [model, setModel] = useState<string>('inherit');
   const [temperature, setTemperature] = useState<number>(0.2);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('off');
   const [contextWindow, setContextWindow] = useState<number>(200000);
   const [maxTokens, setMaxTokens] = useState<number>(8192);
   const [allowedToolsData, setAllowedToolsData] = useState<{
@@ -240,6 +265,7 @@ export default function AgentSettingVisualEditor({
     setParseError(null);
     setModel(parsed.model ?? 'inherit');
     setTemperature(parsed.temperature);
+    setReasoningEffort(parsed.reasoningEffort);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
     setAllowedToolsData({
@@ -264,6 +290,7 @@ export default function AgentSettingVisualEditor({
     setParseError(null);
     setModel(parsed.model ?? 'inherit');
     setTemperature(parsed.temperature);
+    setReasoningEffort(parsed.reasoningEffort);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
     setAllowedToolsData({
@@ -281,6 +308,7 @@ export default function AgentSettingVisualEditor({
   const emitChanges = (
     nextModel: string,
     nextTemp: number,
+    nextReasoning: ReasoningEffort,
     nextCw: number,
     nextMt: number,
     nextIcon: string | undefined,
@@ -290,6 +318,7 @@ export default function AgentSettingVisualEditor({
     const nextSetting: ParsedSetting = {
       model: nextModel,
       temperature: nextTemp,
+      reasoningEffort: nextReasoning,
       contextWindow: nextCw,
       maxTokens: nextMt,
       hasAllowedTools: allowedToolsData.has,
@@ -306,36 +335,41 @@ export default function AgentSettingVisualEditor({
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
-    emitChanges(newModel, temperature, contextWindow, maxTokens, icon, color, rawExtra);
+    emitChanges(newModel, temperature, reasoningEffort, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleTemperatureChange = (newTemp: number) => {
     const clamped = Math.max(0, Math.min(1, Number(newTemp.toFixed(2))));
     setTemperature(clamped);
-    emitChanges(model, clamped, contextWindow, maxTokens, icon, color, rawExtra);
+    emitChanges(model, clamped, reasoningEffort, contextWindow, maxTokens, icon, color, rawExtra);
+  };
+
+  const handleReasoningEffortChange = (newEffort: ReasoningEffort) => {
+    setReasoningEffort(newEffort);
+    emitChanges(model, temperature, newEffort, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleContextWindowChange = (newCw: number) => {
     const val = Math.max(1000, newCw);
     setContextWindow(val);
-    emitChanges(model, temperature, val, maxTokens, icon, color, rawExtra);
+    emitChanges(model, temperature, reasoningEffort, val, maxTokens, icon, color, rawExtra);
   };
 
   const handleMaxTokensChange = (newMt: number) => {
     const val = Math.max(256, newMt);
     setMaxTokens(val);
-    emitChanges(model, temperature, contextWindow, val, icon, color, rawExtra);
+    emitChanges(model, temperature, reasoningEffort, contextWindow, val, icon, color, rawExtra);
   };
 
   const handleIconChange = (newIcon: string) => {
     setIcon(newIcon);
-    emitChanges(model, temperature, contextWindow, maxTokens, newIcon, color, rawExtra);
+    emitChanges(model, temperature, reasoningEffort, contextWindow, maxTokens, newIcon, color, rawExtra);
   };
 
   const handleColorChange = (newColor: string) => {
     if (!isAllowedAgentColor(newColor)) return;
     setColor(newColor);
-    emitChanges(model, temperature, contextWindow, maxTokens, icon, newColor, rawExtra);
+    emitChanges(model, temperature, reasoningEffort, contextWindow, maxTokens, icon, newColor, rawExtra);
   };
 
   // Dynamic model list: 'inherit', then settings.model, then provider catalog (displayName ?? id)
@@ -636,6 +670,39 @@ export default function AgentSettingVisualEditor({
             >
               {t('ruleEditor.tempCreative')}
             </button>
+          </div>
+        </div>
+
+        {/* Effort рассуждений */}
+        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
+              <Brain className="h-3.5 w-3.5 text-[#6366f1]" />
+              <span>{t('ruleEditor.reasoningLabel')}</span>
+            </label>
+            <span className="font-mono text-xs font-bold tabular-nums px-2 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]">
+              {t(REASONING_EFFORT_LABELS[reasoningEffort])}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {REASONING_EFFORTS.map((effort) => {
+              const isActive = reasoningEffort === effort;
+              return (
+                <button
+                  key={effort}
+                  type="button"
+                  onClick={() => handleReasoningEffortChange(effort)}
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
+                    isActive
+                      ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
+                      : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
+                  }`}
+                >
+                  {t(REASONING_EFFORT_LABELS[effort])}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>

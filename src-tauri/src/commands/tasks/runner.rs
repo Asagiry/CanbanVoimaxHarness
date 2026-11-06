@@ -515,7 +515,14 @@ async fn run_agent_inner(
         api_key,
         model,
         temperature,
-        reasoning_effort: col.reasoning_effort.clone(),
+        // Per-agent setting wins over the stage default; both normalized
+        // (`"off"`/empty/unknown → `None` → omitted from the payload).
+        reasoning_effort: crate::config::normalize_reasoning_effort(
+            agent_setting.reasoning_effort.as_deref(),
+        )
+        .or_else(|| {
+            crate::config::normalize_reasoning_effort(col.reasoning_effort.as_deref())
+        }),
         max_turns: 25,
         app_handle: Some(app_handle.clone()),
         context_window: Some(resolved_context_window),
