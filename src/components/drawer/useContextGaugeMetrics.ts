@@ -100,7 +100,9 @@ export function useContextGaugeMetrics({
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
   const isTaskRunning = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.status === 'running');
-  const isAgentRunning = isTaskRunning || useDrawerStore((s) => Boolean(s.activeAgentTaskIds[taskId] || (s.toolIdToSubagentId[taskId] && s.activeAgentTaskIds[s.toolIdToSubagentId[taskId]])));
+  // NOTE: both hooks must run unconditionally — `||` short-circuit would violate Rules of Hooks
+  const isDrawerAgentRunning = useDrawerStore((s) => Boolean(s.activeAgentTaskIds[taskId] || (s.toolIdToSubagentId[taskId] && s.activeAgentTaskIds[s.toolIdToSubagentId[taskId]])));
+  const isAgentRunning = isTaskRunning || isDrawerAgentRunning;
 
   const { latestCompactedTokens, postCompactionTokens } = useMemo(() => parseCompactedFromFeed(feed), [feed]);
   const baseCompacted = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;

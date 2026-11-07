@@ -312,8 +312,6 @@ export default function AgentConsoleDrawer() {
   ) => {
     const trimmed = promptText.trim();
     if (!trimmed && images.length === 0) {
-      if (isRunning) return;
-
       if (activeSubagentId) {
         const isSubagentABoardTask = Boolean(
           useBoardStore.getState().tasks.some((t) => t.id === activeSubagentId)
@@ -322,6 +320,7 @@ export default function AgentConsoleDrawer() {
           const resolvedSubagentId =
             useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
           setActiveAgentTask(activeSubagentId, true);
+          setRunError(null);
           try {
             const { invoke } = await import('@tauri-apps/api/core');
             await invoke('retry_subagent', {
@@ -329,13 +328,17 @@ export default function AgentConsoleDrawer() {
               subagentId: resolvedSubagentId,
               message: null,
             });
-          } catch (err) {
-            console.info('retry_subagent invoke error or web mode:', err);
+          } catch (err: any) {
+            const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка перезапуска субагента');
+            setRunError(errMsg);
+            setActiveAgentTask(activeSubagentId, false);
+            setActiveAgentTask(resolvedSubagentId, false);
           }
           return;
         }
       }
 
+      if (isRunning) return;
       await handleRunAgent();
       return;
     }
@@ -374,8 +377,11 @@ export default function AgentConsoleDrawer() {
           subagentId: resolvedSubagentId,
           message: mainText,
         });
-      } catch (err) {
-        console.info('retry_subagent invoke error or web mode:', err);
+      } catch (err: any) {
+        const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды субагенту');
+        setRunError(errMsg);
+        setActiveAgentTask(activeSubagentId, false);
+        setActiveAgentTask(resolvedSubagentId, false);
       }
       return;
     }
@@ -383,8 +389,8 @@ export default function AgentConsoleDrawer() {
     // Append user steer message into feed immediately with attached images
     const isSteer = targetIsRunning;
     appendOutput(targetId, mainText, isSteer ? 'steer' : 'user', imageUrls.length > 0 ? imageUrls : undefined);
-    const optimisticFeed = useDrawerStore.getState().activityFeed[targetId];
-    const messageId = optimisticFeed[optimisticFeed.length - 1].id;
+    const optimisticFeed = useDrawerStore.getState().activityFeed[targetId] ?? [];
+    const messageId = optimisticFeed[optimisticFeed.length - 1]?.id;
 
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.

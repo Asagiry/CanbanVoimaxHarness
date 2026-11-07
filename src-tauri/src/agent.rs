@@ -1630,6 +1630,7 @@ Task Title: {}
         app_handle: ctx.app_handle.clone(),
     });
     let subagent_engine = ReActEngine::new(subagent_driver);
+    let mut stream_retries = 0;
 
     loop {
         sub_turn += 1;
@@ -1723,6 +1724,28 @@ Req chars: {}
         subagent_engine.driver.finalize_turn_thoughts();
 
         if let Some(err) = stream_res.error {
+            // Transient provider overload (429 rate-limit, 5xx, timeouts): retry the turn
+            // instead of instantly bricking the subagent (Ponytail: 2 backoff retries).
+            let low = err.to_ascii_lowercase();
+            let retryable = low.contains("429")
+                || low.contains("rate_limit")
+                || low.contains("temporarily")
+                || low.contains("overloaded")
+                || low.contains("capacity")
+                || low.contains("timeout")
+                || low.contains("500")
+                || low.contains("502")
+                || low.contains("503")
+                || low.contains("504");
+            if retryable && stream_retries < 2 && !ctx.abort_handle.load(Ordering::SeqCst) {
+                stream_retries += 1;
+                eprintln!(
+                    "CVH [agent]: Subagent [{}] turn {} got transient stream error (retry {}/2): {}",
+                    subagent_id, sub_turn, stream_retries, err
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(2000 * stream_retries as u64)).await;
+                continue;
+            }
             sub_error = Some(err);
             break;
         }

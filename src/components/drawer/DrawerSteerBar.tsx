@@ -72,8 +72,8 @@ export default function DrawerSteerBar({
     return boardTasks.some((t) => t.id === activeSubagentId);
   }, [activeSubagentId, boardTasks]);
 
-  const boards = useBoardStore((s) => s.boards);
-  const columns = useBoardStore((s) => s.columns);
+  const boards = useBoardStore((s) => s.boards) ?? [];
+  const columns = useBoardStore((s) => s.columns) ?? [];
   const taskBoard = boards.find((b) => b.id === task.boardId);
   const boardCols = taskBoard?.columns && taskBoard.columns.length > 0 ? taskBoard.columns : columns;
   const taskColumn = boardCols.find((c) => c.id === task.stageId) || columns.find((c) => c.id === task.stageId);
@@ -111,7 +111,7 @@ export default function DrawerSteerBar({
   // legacy and would lie (it still says beam-free while the planner
   // dispatches crouton), so it is NOT in this chain — same rule the
   // backend resolver uses (pair > agent setting > col > project > crouton).
-  const providers = useSettingsStore((s) => s.providers);
+  const providers = useSettingsStore((s) => s.providers) ?? [];
   const pairModel = task.providerId ? task.model : null;
   const modelId = pairModel || matchedPersona?.model || 'crouton-alpha-free';
   const pairProvider =
@@ -134,8 +134,8 @@ export default function DrawerSteerBar({
       displayName: m.displayName || m.id,
       label: `${p.name} / ${m.displayName || m.id}`,
     })));
-    if (flat.length === 0 && selectableModels.length > 0) {
-      return selectableModels.map((id) => ({ providerName: '', providerId: '', id, displayName: id, label: id }));
+    if (flat.length === 0 && (selectableModels?.length ?? 0) > 0) {
+      return (selectableModels ?? []).map((id) => ({ providerName: '', providerId: '', id, displayName: id, label: id }));
     }
     return flat;
   }, [providers, selectableModels]);
