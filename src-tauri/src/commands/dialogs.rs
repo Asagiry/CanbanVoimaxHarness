@@ -474,8 +474,10 @@ pub async fn retry_subagent(
     parent_task_id: String,
     subagent_id: String,
     message: Option<String>,
+    model: Option<String>,
+    provider_id: Option<String>,
 ) -> Result<(), String> {
-    crate::agent::retry_subagent_execution(Some(&parent_task_id), &subagent_id, message)
+    crate::agent::retry_subagent_execution(Some(&parent_task_id), &subagent_id, message, model, provider_id)
         .await
         .map_err(|e| e.to_string())
 }

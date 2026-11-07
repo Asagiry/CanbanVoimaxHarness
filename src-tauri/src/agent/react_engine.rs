@@ -146,19 +146,19 @@ impl SubagentDriver {
     }
 
     pub fn reset_turn_thoughts(&self, thought_id: String) {
-        *self.turn_thought_id.lock().unwrap() = thought_id;
-        *self.thought_start.lock().unwrap() = None;
-        *self.thought_end.lock().unwrap() = None;
-        self.accumulated_thoughts.lock().unwrap().clear();
+        *self.turn_thought_id.lock().unwrap_or_else(|p| p.into_inner()) = thought_id;
+        *self.thought_start.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *self.thought_end.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        self.accumulated_thoughts.lock().unwrap_or_else(|p| p.into_inner()).clear();
     }
 
     pub fn finalize_turn_thoughts(&self) {
-        let thoughts = self.accumulated_thoughts.lock().unwrap().clone();
+        let thoughts = self.accumulated_thoughts.lock().unwrap_or_else(|p| p.into_inner()).clone();
         if !thoughts.is_empty() {
-            let start = *self.thought_start.lock().unwrap();
-            let end = *self.thought_end.lock().unwrap();
+            let start = *self.thought_start.lock().unwrap_or_else(|p| p.into_inner());
+            let end = *self.thought_end.lock().unwrap_or_else(|p| p.into_inner());
             let duration_ms = start.zip(end).map(|(s, e)| e.duration_since(s).as_secs_f64() * 1000.0);
-            let thought_id = self.turn_thought_id.lock().unwrap().clone();
+            let thought_id = self.turn_thought_id.lock().unwrap_or_else(|p| p.into_inner()).clone();
             let th_item = ActivityItem {
                 id: thought_id,
                 item_type: "thought".to_string(),
@@ -200,19 +200,19 @@ impl AgentSessionDriver for SubagentDriver {
                 }
             }
             AgentEvent::Thought(text) => {
-                let mut start_guard = self.thought_start.lock().unwrap();
+                let mut start_guard = self.thought_start.lock().unwrap_or_else(|p| p.into_inner());
                 if start_guard.is_none() {
                     *start_guard = Some(std::time::Instant::now());
                 }
                 drop(start_guard);
-                *self.thought_end.lock().unwrap() = Some(std::time::Instant::now());
+                *self.thought_end.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::time::Instant::now());
 
-                let mut thoughts_guard = self.accumulated_thoughts.lock().unwrap();
+                let mut thoughts_guard = self.accumulated_thoughts.lock().unwrap_or_else(|p| p.into_inner());
                 thoughts_guard.push_str(&text);
                 let current_thoughts = thoughts_guard.clone();
                 drop(thoughts_guard);
 
-                let thought_id = self.turn_thought_id.lock().unwrap().clone();
+                let thought_id = self.turn_thought_id.lock().unwrap_or_else(|p| p.into_inner()).clone();
                 let th_item = ActivityItem {
                     id: thought_id,
                     item_type: "thought".to_string(),

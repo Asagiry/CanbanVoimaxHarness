@@ -98,6 +98,18 @@ export async function initSubagentListeners(store: typeof useDrawerStore = useDr
       if (!subagentId) return;
       const state = store.getState();
       state.setActiveAgentTask(subagentId, false);
+      // Clear parent alias flag (open via tool id) and fail stale running tools
+      const toolIdAlias = Object.entries(state.toolIdToSubagentId).find(([, v]) => v === subagentId)?.[0];
+      if (toolIdAlias) state.setActiveAgentTask(toolIdAlias, false);
+      const tools = state.toolExecutions[subagentId] || [];
+      for (const t of tools) {
+        if (t.status === 'running') {
+          state.updateToolExecution(subagentId, t.id, {
+            status: 'failed',
+            stderr: 'Прервано пользователем',
+          });
+        }
+      }
       const existingFeed = state.activityFeed[subagentId] || [];
       if (response && !existingFeed.some((i) => i.type === 'output' && i.content === response)) {
         const outItem: DrawerActivityItem = {
@@ -123,16 +135,48 @@ export async function initSubagentListeners(store: typeof useDrawerStore = useDr
     unlisteners.push(await listenToEvent('subagent:error', (payload) => {
       const { subagentId, error } = payload || {};
       if (!subagentId) return;
-      store.getState().setActiveAgentTask(subagentId, false);
+      const state = store.getState();
+      state.setActiveAgentTask(subagentId, false);
+      // Clear parent alias flag (open via tool id) and fail stale running tools
+      const toolIdAlias = Object.entries(state.toolIdToSubagentId).find(([, v]) => v === subagentId)?.[0];
+      if (toolIdAlias) state.setActiveAgentTask(toolIdAlias, false);
+      const tools = state.toolExecutions[subagentId] || [];
+      for (const t of tools) {
+        if (t.status === 'running') {
+          state.updateToolExecution(subagentId, t.id, {
+            status: 'failed',
+            stderr: error || 'Ошибка сабагента',
+          });
+        }
+      }
       store.getState().updateSubagentStatus(subagentId, 'error', error);
     }));
 
-    unlisteners.push(await listenToEvent('subagent:status', ({ subagentId, status }) => {
+    unlisteners.push(await listenToEvent('subagent:status', ({ subagentId, status, error }) => {
       if (!subagentId) return;
       const state = store.getState();
       if (status === 'running') {
         state.updateSubagentStatus(subagentId, 'running');
         state.setActiveAgentTask(subagentId, true);
+        return;
+      }
+      // Paused (transient provider error, e.g. 429): still "in work", awaiting
+      // user Continue/Stop — never auto-finished by the backend.
+      if (status === 'paused') {
+        state.updateSubagentStatus(subagentId, 'paused', error);
+        state.setActiveAgentTask(subagentId, false);
+        const toolIdAlias = Object.entries(state.toolIdToSubagentId).find(([, v]) => v === subagentId)?.[0];
+        if (toolIdAlias) state.setActiveAgentTask(toolIdAlias, false);
+        const tools = state.toolExecutions[subagentId] || [];
+        for (const t of tools) {
+          if (t.status === 'running') {
+            state.updateToolExecution(subagentId, t.id, {
+              status: 'failed',
+              stderr: error || 'Пауза: временная ошибка провайдера',
+            });
+          }
+        }
+        if (error) state.appendOutput(subagentId, `Пауза (провайдер): ${error}`, 'error');
         return;
       }
       if (status === 'finished' || status === 'aborted' || status === 'stopped' || status === 'error') {

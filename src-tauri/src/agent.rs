@@ -2119,9 +2119,7 @@ Req chars: {}
         }
     }
 
-    // Zero-Pollution of Parent Context on Subagent Failure (§ Directive 1):
-    // If the subagent encountered an error, record error, emit subagent:error,
-    // and keep parent channel pending so parent context is never polluted!
+    // Terminal error handling
     if let Some(err_msg) = sub_error {
         let duration_ms = start_instant.elapsed().as_millis() as f64;
         let err_item = ActivityItem {
@@ -2134,6 +2132,68 @@ Req chars: {}
             images: None,
         };
         let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&err_item));
+        if let Some(ref app) = ctx.app_handle {
+            let _ = app.emit("subagent:activity", serde_json::json!({
+                "parentTaskId": &parent_id,
+                "subagentId": &subagent_id,
+                "activity": &err_item,
+            }));
+        }
+
+        // Transient provider errors (429 rate-limit, 5xx, timeouts): the subagent is NOT
+        // finished. Park it as paused — the parent channel stays pending, and the user
+        // can Continue (with model switch) or manually Stop (abort). Never auto-complete.
+        let is_transient = {
+            let low = err_msg.to_ascii_lowercase();
+            low.contains("429")
+                || low.contains("rate_limit")
+                || low.contains("temporarily")
+                || low.contains("overloaded")
+                || low.contains("capacity")
+                || low.contains("timeout")
+                || low.contains("500")
+                || low.contains("502")
+                || low.contains("503")
+                || low.contains("504")
+        };
+
+        if is_transient {
+            if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+                let mut info = session.retry_info.lock().await;
+                info.status = "paused".to_string();
+                info.last_error = Some(err_msg.clone());
+                info.duration_ms = Some(duration_ms);
+            }
+
+            if let Some(ref app) = ctx.app_handle {
+                if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                    state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Paused);
+                    if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                        let _ = app.emit("agent:session_status", &summary);
+                    }
+                }
+                let _ = app.emit(
+                    "subagent:status",
+                    serde_json::json!({
+                        "parentTaskId": &parent_id,
+                        "subagentId": &subagent_id,
+                        "status": "paused",
+                        "error": &err_msg,
+                        "durationMs": duration_ms,
+                    }),
+                );
+            }
+
+            eprintln!(
+                "CVH [agent]: Subagent [{}] paused on transient provider error (awaiting user Continue/Stop): {}",
+                subagent_id, err_msg
+            );
+            // Intentionally NOT sending through the parent channel and NOT removing
+            // the active entry: the parent stays parked until the user continues
+            // (retry_subagent) or manually aborts (abort_agent).
+            bail!("Subagent [{}] paused on transient provider error: {}", subagent_id, err_msg);
+        }
+
         if let Some(ref app) = ctx.app_handle {
             let _ = app.emit("subagent:error", serde_json::json!({
                 "parentTaskId": &parent_id,
@@ -2344,6 +2404,8 @@ pub async fn retry_subagent_execution(
     parent_task_id: Option<&str>,
     subagent_id: &str,
     additional_prompt: Option<String>,
+    model: Option<String>,
+    provider_id: Option<String>,
 ) -> Result<()> {
     let (resolved_id, session) = find_subagent_session(parent_task_id, subagent_id)
         .await
@@ -2364,6 +2426,22 @@ pub async fn retry_subagent_execution(
     }
 
     let mut info = session.retry_info.lock().await.clone();
+
+    // Honor a model/provider switch at retry time (e.g. after 429 pause)
+    if let Some(m) = model.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        info.ctx.model = Some(m.to_string());
+    }
+    if let Some(pid) = provider_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let settings = crate::config::load_llm_settings(&info.ctx.repo_root).await.unwrap_or_default();
+        let model_id = info.ctx.model.clone().unwrap_or_else(|| settings.model.clone());
+        let (base_url, api_key) = settings.endpoint_for_pair(Some(pid), &model_id);
+        if !base_url.is_empty() {
+            info.ctx.base_url = Some(base_url);
+        }
+        if api_key.is_some() {
+            info.ctx.api_key = api_key;
+        }
+    }
 
     if let Some(msg) = additional_prompt {
         let trimmed = msg.trim();
@@ -2413,6 +2491,11 @@ pub async fn retry_subagent_execution(
     info.last_error = None;
     info.report = None;
 
+    // Revive the subagent: clear any stale abort so a previous manual Stop does not
+    // immediately re-kill the relaunched run (D3).
+    session.abort_handle.store(false, std::sync::atomic::Ordering::SeqCst);
+    info.ctx.abort_handle.store(false, std::sync::atomic::Ordering::SeqCst);
+
     {
         let mut session_info = session.retry_info.lock().await;
         *session_info = info.clone();
@@ -2425,7 +2508,8 @@ pub async fn retry_subagent_execution(
     let requested_tools = info.requested_tools.clone();
     let sub_id = resolved_id.clone();
 
-    tokio::spawn(async move {
+    // Re-register execution so Stop/Continue and parent waits keep working (D4).
+    let join_h = tokio::spawn(async move {
         let _ = run_inprocess_subagent(
             owned_ctx,
             title_s,
@@ -2435,6 +2519,45 @@ pub async fn retry_subagent_execution(
             Some(sub_id),
         ).await;
     });
+    *session.join_handle.lock().await = Some(join_h);
+
+    if let Some(ref app) = info.ctx.app_handle {
+        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            let root_str = info.ctx.repo_root.to_string_lossy().to_string();
+            let sub_summary = crate::agent::session_registry::AgentSessionSummary {
+                session_id: resolved_id.clone(),
+                task_id: resolved_id.clone(),
+                stage_id: None,
+                started_at: chrono::Utc::now().timestamp_millis() as u64,
+                status: crate::agent::session_registry::SessionStatus::Running,
+                project_path: Some(root_str),
+            };
+            state_ref.session_registry.register(
+                sub_summary.clone(),
+                Arc::clone(&session.abort_handle),
+                Arc::clone(&session.join_handle),
+            );
+            let _ = app.emit("agent:session_status", &sub_summary);
+            state_ref.register_active_agent(
+                &info.ctx.repo_root,
+                &resolved_id,
+                crate::commands::ActiveAgentHandle {
+                    abort_flag: Arc::clone(&session.abort_handle),
+                    join_handle: Arc::clone(&session.join_handle),
+                    steering: None,
+                    advance_aborted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                },
+            );
+        }
+        let _ = app.emit(
+            "subagent:status",
+            serde_json::json!({
+                "parentTaskId": parent_task_id.unwrap_or(&info.parent_task_id),
+                "subagentId": &resolved_id,
+                "status": "running",
+            }),
+        );
+    }
 
     Ok(())
 }

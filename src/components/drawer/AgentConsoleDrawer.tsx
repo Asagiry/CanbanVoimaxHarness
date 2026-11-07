@@ -319,6 +319,8 @@ export default function AgentConsoleDrawer() {
         if (!isSubagentABoardTask) {
           const resolvedSubagentId =
             useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+          const continueModel = useBoardStore.getState().tasks.find((t) => t.id === task.id)?.model ?? null;
+          const continueProvider = useBoardStore.getState().tasks.find((t) => t.id === task.id)?.providerId ?? null;
           setActiveAgentTask(activeSubagentId, true);
           setRunError(null);
           try {
@@ -327,6 +329,8 @@ export default function AgentConsoleDrawer() {
               parentTaskId: task.id,
               subagentId: resolvedSubagentId,
               message: null,
+              model: continueModel,
+              providerId: continueProvider,
             });
           } catch (err: any) {
             const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка перезапуска субагента');
@@ -372,10 +376,14 @@ export default function AgentConsoleDrawer() {
 
       try {
         const { invoke } = await import('@tauri-apps/api/core');
+        const steerModel = targetTask.model ?? null;
+        const steerProvider = targetTask.providerId ?? null;
         await invoke('retry_subagent', {
           parentTaskId: task.id,
           subagentId: resolvedSubagentId,
           message: mainText,
+          model: steerModel,
+          providerId: steerProvider,
         });
       } catch (err: any) {
         const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды субагенту');

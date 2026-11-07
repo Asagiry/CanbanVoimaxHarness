@@ -212,6 +212,8 @@ export interface SubagentStatusPayload {
   subagentId?: string;
   status?: string;
   parentTaskId?: string;
+  error?: string;
+  durationMs?: number;
 }
 
 export interface SubagentAbortedPayload {

@@ -610,6 +610,10 @@ export default function SubagentsSidebar({
                                   <Square className="h-2.5 w-2.5 fill-current shrink-0" />
                                 </button>
                               </>
+                            ) : sub.status === 'paused' ? (
+                              <span className="flex items-center justify-center h-5 w-5">
+                                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" title="Пауза: временная ошибка провайдера, ждёт Continue/Stop" />
+                              </span>
                             ) : sub.status === 'error' || sub.status === 'stopped' ? (
                               <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
@@ -755,6 +759,10 @@ export default function SubagentsSidebar({
                                   <Square className="h-2.5 w-2.5 fill-current shrink-0" />
                                 </button>
                               </>
+                            ) : sub.status === 'paused' ? (
+                              <span className="flex items-center justify-center h-5 w-5">
+                                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" title="Пауза: временная ошибка провайдера, ждёт Continue/Stop" />
+                              </span>
                             ) : sub.status === 'error' || sub.status === 'stopped' ? (
                               <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />

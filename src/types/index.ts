@@ -358,7 +358,7 @@ export interface GitImageDiff {
 }
 
 export type SubagentRole = 'explorer' | 'developer' | 'reviewer' | 'general' | string;
-export type SubagentStatus = 'running' | 'finished' | 'error' | 'stopped';
+export type SubagentStatus = 'running' | 'finished' | 'error' | 'stopped' | 'paused';
 
 export interface SubagentInfo {
   id: string;
