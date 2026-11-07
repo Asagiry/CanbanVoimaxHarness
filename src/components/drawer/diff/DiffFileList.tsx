@@ -270,8 +270,9 @@ export function DiffFileList({
   const filteredFiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return files.filter((f) => {
+      if (!f?.path) return true;
       if (statusFilter !== 'all' && f.status !== statusFilter) return false;
-      if (q && !f.path.toLowerCase().includes(q)) return false;
+      if (q && !(f.path ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
   }, [files, statusFilter, searchQuery]);

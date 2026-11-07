@@ -477,9 +477,28 @@ pub async fn execute_collect_subagent(
             remove_subagent_receiver(&mut reg, subagent_id)
         };
 
-        if let Some((resolved_id, rx)) = rx_opt {
+        if let Some((resolved_id, mut rx)) = rx_opt {
             let mut status_guard = task_id.map(|tid| TaskStatusGuard::new(ctx.app_handle.as_ref(), repo_root, tid));
-            match rx.await {
+            // Poll parent abort while waiting (D1): bare rx.await hangs forever on
+            // panic/abort of the subagent task — mirror execute_subagent's 200ms poll.
+            let wait_result = loop {
+                tokio::select! {
+                    res = &mut rx => break res,
+                    _ = tokio::time::sleep(Duration::from_millis(200)) => {
+                        if ctx.abort_handle.load(Ordering::SeqCst) {
+                            // Parent aborted: cascade-abort the subagent and bail.
+                            if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
+                                session.abort_handle.store(true, Ordering::SeqCst);
+                                if let Some(sender) = session.sender.lock().await.take() {
+                                    let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+                                }
+                            }
+                            break Ok("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+                        }
+                    }
+                }
+            };
+            match wait_result {
                 Ok(report) => {
                     if let Some(ref mut g) = status_guard {
                         g.disarm_to_running();

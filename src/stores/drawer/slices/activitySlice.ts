@@ -585,11 +585,12 @@ export const createActivitySlice: StateCreator<
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const rollbackVersion = get().streamRollbackVersions[taskId];
-      const items = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
+      let items = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
       if (rollbackVersion !== get().streamRollbackVersions[taskId]) {
         return get().loadTaskActivity(taskId);
       }
       if (items && Array.isArray(items)) {
+        items = items.filter((it): it is DrawerActivityItem => Boolean(it) && typeof it === 'object');
         let compactedTokens: number | undefined;
         for (let i = items.length - 1; i >= 0; i--) {
           const it = items[i];
@@ -1034,6 +1035,7 @@ export const createActivitySlice: StateCreator<
       await invoke('answer_agent_question', { taskId, questionId, answer });
     } catch (err) {
       console.error('Failed to invoke answer_agent_question:', err);
+      return false;
     }
 
     set((state) => {
@@ -1073,6 +1075,7 @@ export const createActivitySlice: StateCreator<
       };
     });
     scheduleActivitySave(taskId);
+    return true;
   },
 
   appendActivityItem: (taskId, item) => {

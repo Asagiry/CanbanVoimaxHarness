@@ -236,6 +236,7 @@ export default function AgentConsoleDrawer() {
   };
 
   const handleAbortAgent = async () => {
+    let abortError: string | null = null;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
 
@@ -243,7 +244,11 @@ export default function AgentConsoleDrawer() {
         // Granular abort: stop ONLY active subagent without killing parent task
         const resolvedSubagentId =
           useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
-        await invoke('abort_agent', { taskId: resolvedSubagentId });
+        try {
+          await invoke('abort_agent', { taskId: resolvedSubagentId });
+        } catch (err: any) {
+          abortError = err?.message || (typeof err === 'string' ? err : 'Не удалось остановить сабагента (backend)');
+        }
         setActiveAgentTask(activeSubagentId, false);
         setActiveAgentTask(resolvedSubagentId, false);
 
@@ -269,11 +274,16 @@ export default function AgentConsoleDrawer() {
             });
           }
         }
+        if (abortError) setRunError(abortError);
         return;
       }
 
       // Root task abort
-      await invoke('abort_agent', { taskId: task.id });
+      try {
+        await invoke('abort_agent', { taskId: task.id });
+      } catch (err: any) {
+        abortError = err?.message || (typeof err === 'string' ? err : 'Не удалось остановить агента (backend)');
+      }
       updateTask(task.id, { status: 'paused', isTimerRunning: false });
       setActiveAgentTask(task.id, false);
       const currTools = useDrawerStore.getState().toolExecutions[task.id] || [];
@@ -301,6 +311,7 @@ export default function AgentConsoleDrawer() {
           }
         }
       }
+      if (abortError) setRunError(abortError);
     } catch (err) {
       console.info('abort_agent invoke failed or web mode:', err);
     }
@@ -309,7 +320,7 @@ export default function AgentConsoleDrawer() {
   const handleSendPrompt = async (
     promptText: string,
     images: Array<{ id: string; name: string; dataUrl: string }>
-  ) => {
+  ): Promise<boolean> => {
     const trimmed = promptText.trim();
     if (!trimmed && images.length === 0) {
       if (activeSubagentId) {
@@ -332,19 +343,20 @@ export default function AgentConsoleDrawer() {
               model: continueModel,
               providerId: continueProvider,
             });
+            return true;
           } catch (err: any) {
             const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка перезапуска субагента');
             setRunError(errMsg);
             setActiveAgentTask(activeSubagentId, false);
             setActiveAgentTask(resolvedSubagentId, false);
+            return false;
           }
-          return;
         }
       }
 
-      if (isRunning) return;
+      if (isRunning) return false;
       await handleRunAgent();
-      return;
+      return true;
     }
 
     const imageUrls = images.map((img) => img.dataUrl);
@@ -385,13 +397,14 @@ export default function AgentConsoleDrawer() {
           model: steerModel,
           providerId: steerProvider,
         });
+        return true;
       } catch (err: any) {
         const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды субагенту');
         setRunError(errMsg);
         setActiveAgentTask(activeSubagentId, false);
         setActiveAgentTask(resolvedSubagentId, false);
+        return false;
       }
-      return;
     }
 
     // Append user steer message into feed immediately with attached images
@@ -418,7 +431,10 @@ export default function AgentConsoleDrawer() {
       }) as string;
       if (typeof steerResult === 'string' && (steerResult.includes('saved for stopped task') || steerResult.includes('Task completed'))) {
         setRunError('Steer сохранён, агент не запущен — задача завершена');
+        updateTask(targetId, { status: 'idle', isTimerRunning: false });
+        setActiveAgentTask(targetId, false);
       }
+      return true;
     } catch (err: any) {
       console.info('steer_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');
@@ -427,6 +443,7 @@ export default function AgentConsoleDrawer() {
         updateTask(targetId, { status: 'idle', isTimerRunning: false });
         setActiveAgentTask(targetId, false);
       }
+      return false;
     }
   };
 

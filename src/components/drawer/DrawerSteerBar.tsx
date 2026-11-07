@@ -24,7 +24,7 @@ export interface DrawerSteerBarProps {
   task: KanbanTask;
   isRunning: boolean;
   turns: number;
-  onSendPrompt: (promptText: string, attachedImages: Array<{ id: string; name: string; dataUrl: string }>) => Promise<void> | void;
+  onSendPrompt: (promptText: string, attachedImages: Array<{ id: string; name: string; dataUrl: string }>) => Promise<boolean> | boolean | void;
   onAbortAgent: () => Promise<void> | void;
   isToolAllowed: (toolName: string, stageId?: string) => boolean;
   selectableModels: string[];
@@ -292,17 +292,24 @@ export default function DrawerSteerBar({
     const currentImages = [...attachedImages];
     const textToSend = interactiveInput;
 
-    if (draftKey) {
-      useDrawerStore.getState().clearTaskDraft(draftKey);
-    }
-
-    setInteractiveInput('');
-    setAttachedImages([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    void onSendPrompt(textToSend, currentImages);
+    const result = onSendPrompt(textToSend, currentImages);
+    const clear = (ok: boolean) => {
+      if (!ok) return;
+      if (draftKey) {
+        useDrawerStore.getState().clearTaskDraft(draftKey);
+      }
+      setInteractiveInput('');
+      setAttachedImages([]);
+    };
+    if (result && typeof (result as Promise<boolean>).then === 'function') {
+      void (result as Promise<boolean>).then(clear);
+    } else if (result !== false) {
+      clear(true);
+    }
   };
 
   const hasContent = Boolean(interactiveInput.trim() || attachedImages.length > 0);

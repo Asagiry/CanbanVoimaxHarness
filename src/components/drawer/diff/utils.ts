@@ -163,7 +163,7 @@ export function formatFilesCount(count: number, lang: Language = 'en'): string {
 export const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico', 'avif']);
 
 export function isImageFile(filePath: string): boolean {
-  const ext = filePath.split('.').pop()?.toLowerCase();
+  const ext = (filePath ?? '').split('.').pop()?.toLowerCase();
   return ext ? IMAGE_EXTENSIONS.has(ext) : false;
 }
 

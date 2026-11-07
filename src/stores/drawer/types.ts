@@ -127,7 +127,7 @@ export interface ActivityActions {
       multiple?: boolean;
     }
   ) => void;
-  recordQuestionAnswer: (taskId: string, questionId: string, answer: string) => Promise<void>;
+  recordQuestionAnswer: (taskId: string, questionId: string, answer: string) => Promise<boolean>;
 }
 
 export type ActivitySlice = ActivityState & ActivityActions;

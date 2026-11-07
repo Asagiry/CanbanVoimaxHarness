@@ -2233,29 +2233,6 @@ Req chars: {}
         ));
 
         let synth_system_tokens = system_tokens;
-        let req = OpenAIChatRequest {
-            model: model.to_string(),
-            messages: sub_messages.clone(),
-            temperature,
-            stream: true,
-            tools: None,
-            reasoning_effort: reasoning_effort.clone(),
-            stream_options: Some(crate::llm::StreamOptions {
-                include_usage: true,
-            }),
-        };
-
-        let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
-        let cl = llm_client.clone();
-        let b_url = base_url.to_string();
-        let a_key = api_key.map(|s| s.to_string());
-
-        tokio::spawn(async move {
-            if let Err(e) = cl.stream_openai(&b_url, a_key.as_deref(), req, tx.clone()).await {
-                let _ = tx.send(StreamChunk::Error(format!("Subagent synthesis stream failed: {}", e))).await;
-            }
-        });
-
         let synth_opts = StreamConsumerOptions {
             model,
             turn: 999,
@@ -2267,8 +2244,107 @@ Req chars: {}
             emit_thoughts: false,
         };
 
-        let synth_res = subagent_engine.consume_turn_stream(&mut rx, &ctx.abort_handle, &synth_opts).await;
-        let synth_content = synth_res.content;
+        let mut synth_retries = 0;
+        let mut synth_content = String::new();
+        let mut synth_error: Option<String> = None;
+        loop {
+            let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
+            let cl = llm_client.clone();
+            let b_url = base_url.to_string();
+            let a_key = api_key.map(|s| s.to_string());
+            let req_clone = OpenAIChatRequest {
+                model: model.to_string(),
+                messages: sub_messages.clone(),
+                temperature,
+                stream: true,
+                tools: None,
+                reasoning_effort: reasoning_effort.clone(),
+                stream_options: Some(crate::llm::StreamOptions {
+                    include_usage: true,
+                }),
+            };
+            tokio::spawn(async move {
+                if let Err(e) = cl.stream_openai(&b_url, a_key.as_deref(), req_clone, tx.clone()).await {
+                    let _ = tx.send(StreamChunk::Error(format!("Subagent synthesis stream failed: {}", e))).await;
+                }
+            });
+
+            let synth_res = subagent_engine.consume_turn_stream(&mut rx, &ctx.abort_handle, &synth_opts).await;
+            if let Some(err) = synth_res.error {
+                let low = err.to_ascii_lowercase();
+                let retryable = low.contains("429")
+                    || low.contains("rate_limit")
+                    || low.contains("temporarily")
+                    || low.contains("overloaded")
+                    || low.contains("capacity")
+                    || low.contains("timeout")
+                    || low.contains("500")
+                    || low.contains("502")
+                    || low.contains("503")
+                    || low.contains("504");
+                if retryable && synth_retries < 2 && !ctx.abort_handle.load(Ordering::SeqCst) {
+                    synth_retries += 1;
+                    eprintln!(
+                        "CVH [agent]: Subagent [{}] synthesis turn got transient stream error (retry {}/2): {}",
+                        subagent_id, synth_retries, err
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(2000 * synth_retries as u64)).await;
+                    continue;
+                }
+                synth_error = Some(err);
+                break;
+            }
+            synth_content = synth_res.content;
+            break;
+        }
+        // If synthesis ultimately failed on a transient provider error, pause the
+        // subagent (not finished) so the user can Continue/Stop manually — mirrors
+        // the main turn-loop transient path.
+        if let Some(err_msg) = synth_error.clone() {
+            let low = err_msg.to_ascii_lowercase();
+            let is_transient = low.contains("429")
+                || low.contains("rate_limit")
+                || low.contains("temporarily")
+                || low.contains("overloaded")
+                || low.contains("capacity")
+                || low.contains("timeout")
+                || low.contains("500")
+                || low.contains("502")
+                || low.contains("503")
+                || low.contains("504");
+            if is_transient {
+                let duration_ms = start_instant.elapsed().as_millis() as f64;
+                if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+                    let mut info = session.retry_info.lock().await;
+                    info.status = "paused".to_string();
+                    info.last_error = Some(err_msg.clone());
+                    info.duration_ms = Some(duration_ms);
+                }
+                if let Some(ref app) = ctx.app_handle {
+                    if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                        state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Paused);
+                        if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                            let _ = app.emit("agent:session_status", &summary);
+                        }
+                    }
+                    let _ = app.emit(
+                        "subagent:status",
+                        serde_json::json!({
+                            "parentTaskId": &parent_id,
+                            "subagentId": &subagent_id,
+                            "status": "paused",
+                            "error": &err_msg,
+                            "durationMs": duration_ms,
+                        }),
+                    );
+                }
+                eprintln!(
+                    "CVH [agent]: Subagent [{}] paused on transient provider error (synthesis, awaiting user Continue/Stop): {}",
+                    subagent_id, err_msg
+                );
+                bail!("Subagent [{}] paused on transient provider error: {}", subagent_id, err_msg);
+            }
+        }
 
         if !synth_content.trim().is_empty() {
             final_sub_response = synth_content.trim().to_string();

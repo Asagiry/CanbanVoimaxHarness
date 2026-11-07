@@ -122,7 +122,10 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
     setIsSubmitting(true);
     setLocalAnswer(optionLabel);
     try {
-      await recordQuestionAnswer(taskId, questionId, optionLabel);
+      const ok = await recordQuestionAnswer(taskId, questionId, optionLabel);
+      if (!ok) {
+        setLocalAnswer(null);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -136,7 +139,10 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
     setIsSubmitting(true);
     setLocalAnswer(trimmed);
     try {
-      await recordQuestionAnswer(taskId, questionId, trimmed);
+      const ok = await recordQuestionAnswer(taskId, questionId, trimmed);
+      if (!ok) {
+        setLocalAnswer(null);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -148,7 +154,10 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
     setIsSubmitting(true);
     setLocalAnswer(combined);
     try {
-      await recordQuestionAnswer(taskId, questionId, combined);
+      const ok = await recordQuestionAnswer(taskId, questionId, combined);
+      if (!ok) {
+        setLocalAnswer(null);
+      }
     } finally {
       setIsSubmitting(false);
     }

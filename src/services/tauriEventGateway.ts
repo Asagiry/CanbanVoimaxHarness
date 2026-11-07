@@ -413,6 +413,15 @@ export function ensureTaskRunningOnBoard(taskId: string): void {
  * Initializes all typed Tauri IPC event listeners and manages streaming micro-batching.
  * Returns a synchronous cleanup function to unsubscribe all registered listeners and flush pending buffers.
  */
+export function failRunningToolsForTask(taskId: string, reason = 'Агент завершён'): void {
+  const ds = useDrawerStore.getState();
+  for (const tool of ds.toolExecutions[taskId] || []) {
+    if (tool.status === 'running') {
+      ds.updateToolExecution(taskId, tool.id, { status: 'failed', stderr: reason });
+    }
+  }
+}
+
 export function setupTauriEventGateway(): () => void {
   let isDisposed = false;
   const unlisteners: (() => void)[] = [];
@@ -650,6 +659,7 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, response } = payload || {};
         if (taskId) {
           useBoardStore.getState().clearActiveQuestion(taskId);
+          failRunningToolsForTask(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             const st = useDrawerStore.getState();
@@ -696,6 +706,7 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, error } = payload || {};
         if (taskId) {
           useBoardStore.getState().clearActiveQuestion(taskId);
+          failRunningToolsForTask(taskId, error || 'Ошибка агента');
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             if (error) useDrawerStore.getState().appendOutput(taskId, error, 'error');
@@ -720,6 +731,7 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, status } = payload || {};
         if (taskId && (status === 'finished' || status === 'aborted' || status === 'error' || status === 'idle')) {
           useBoardStore.getState().clearActiveQuestion(taskId);
+          failRunningToolsForTask(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
