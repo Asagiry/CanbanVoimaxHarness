@@ -15,7 +15,10 @@ function appendStreamChunk(
   content: string,
 ): Partial<DrawerState> {
   // Ignore chunks queued before an attempt was discarded or superseded.
-  if (taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return state;
+  if (taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) {
+    console.warn('[appendStreamChunk] dropping chunk streamId mismatch', { taskId, streamId, activeStreamId: state.activeStreamIds[taskId] });
+    return state;
+  }
   const id = `${streamId}:${type}`;
   const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
   const key = type === 'thought' ? 'thoughts' : 'outputs';

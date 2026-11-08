@@ -137,7 +137,7 @@ export function normalizeKanbanTask(
   if (status === 'waiting_subtask' && isTerminalTask) {
     status = 'done';
   }
-  if (effectiveWaitingForSubtaskId && status === 'idle') {
+  if (effectiveWaitingForSubtaskId && status === 'idle' && rawStatus === 'done') {
     status = 'done';
   }
   const rawStageDurations = raw.stageDurations ?? (raw as any).stage_durations;

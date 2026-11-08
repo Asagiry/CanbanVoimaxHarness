@@ -2,6 +2,7 @@ import { memo, useState, useEffect } from 'react';
 import { Paperclip } from 'lucide-react';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useTranslation, Language } from '../../stores/languageStore';
+import { useAgentSessionStore } from '../../stores/agentSessionStore';
 
 export function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -77,9 +78,11 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   isDone = false,
 }: CardTimerBadgeProps) {
   const { t } = useTranslation();
+  const isSessionRunning = useAgentSessionStore((s) => s.isSessionRunning(task.id));
+  const hasActiveSession = useAgentSessionStore((s) => s.hasActiveSession(task.id));
 
   const status: TaskStatus = task.status;
-  const isRunning = status === 'running';
+  const isRunning = status === 'running' || isSessionRunning;
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -92,13 +95,22 @@ export const CardTimerBadge = memo(function CardTimerBadge({
 
   const currentStageDuration = calculateStageDuration(task, isRunning);
 
-  if (status === 'running') {
+  if (isRunning) {
     return (
       <span
         className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33]"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
         <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
+      </span>
+    );
+  }
+
+  if (hasActiveSession && (status === 'paused' || status === 'waiting_subagent')) {
+    return (
+      <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+        <span>{t('status.waitingSubagent')}</span>
       </span>
     );
   }

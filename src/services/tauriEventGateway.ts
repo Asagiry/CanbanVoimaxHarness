@@ -306,7 +306,10 @@ export class TextBufferManager {
 
   private queue(taskId: string, type: 'thought' | 'output', text: string, streamId?: string): void {
     const state = useDrawerStore.getState();
-    if (streamId && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return;
+    if (streamId && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) {
+      console.warn('[TextBufferManager] dropping chunk streamId mismatch', { taskId, streamId, activeStreamId: state.activeStreamIds[taskId] });
+      return;
+    }
     state.setActiveAgentTask(taskId, true);
     if (state.generationStartTime[taskId] == null) state.setGenerationStartTime(taskId, Date.now());
     state.recordStreamedChars(taskId, text.length);
@@ -464,9 +467,6 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, thought, delta, streamId } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
-        if (!isTaskActiveInDrawer(taskId)) {
-          return;
-        }
         const text = thought || delta;
         if (text) {
           bufferManager.queueThought(taskId, text, streamId);
@@ -478,9 +478,6 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, output, content, token, streamId } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
-        if (!isTaskActiveInDrawer(taskId)) {
-          return;
-        }
         const text = output || content || token;
         if (text) {
           bufferManager.queueOutput(taskId, text, streamId);
@@ -492,9 +489,6 @@ export function setupTauriEventGateway(): () => void {
         const { taskId, id, name, arguments: args, batch, status = 'running' } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
-        if (!isTaskActiveInDrawer(taskId)) {
-          return;
-        }
         // Flush stream buffers before tool event to preserve chronological narrative ordering
         useDrawerStore.getState().setActiveAgentTask(taskId, true);
         bufferManager.flushTask(taskId);
@@ -538,9 +532,6 @@ export function setupTauriEventGateway(): () => void {
       await addListener('agent:tool_result', (payload) => {
         const { taskId, id, result, success, batch, durationMs } = payload || {};
         if (!taskId) return;
-        if (!isTaskActiveInDrawer(taskId)) {
-          return;
-        }
         bufferManager.flushTask(taskId);
         if (id) {
           const outStr = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
@@ -695,7 +686,7 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
           }
           const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (currentTask && currentTask.status === 'running') {
+          if (currentTask && currentTask.status === 'running' && !useAgentSessionStore.getState().isSessionRunning(taskId)) {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
         }
@@ -718,7 +709,7 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
           }
           const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (currentTask && currentTask.status === 'running') {
+          if (currentTask && currentTask.status === 'running' && !useAgentSessionStore.getState().isSessionRunning(taskId)) {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
         } else {
@@ -744,7 +735,7 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
           }
           const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (currentTask && currentTask.status !== 'done') {
+          if (currentTask && currentTask.status !== 'done' && !useAgentSessionStore.getState().isSessionRunning(taskId)) {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
         } else if (taskId && status === 'waiting_subagent') {
@@ -807,18 +798,17 @@ export function setupTauriEventGateway(): () => void {
       const handleTaskActivity = (payload: { taskId?: string; item?: any }) => {
         const { taskId, item } = payload || {};
         if (taskId && item) {
-          if (item.id && seenItemIds.has(item.id)) return;
-          if (item.id) {
-            seenItemIds.add(item.id);
+          const dedupKey = item.id ? `${taskId}:${item.id}` : null;
+          if (dedupKey && seenItemIds.has(dedupKey)) return;
+          if (dedupKey) {
+            seenItemIds.add(dedupKey);
             if (seenItemIds.size > 200) {
               const first = seenItemIds.values().next().value;
               if (first) seenItemIds.delete(first);
             }
           }
-          if (isTaskActiveInDrawer(taskId)) {
-            bufferManager.flushTask(taskId);
-            useDrawerStore.getState().appendActivityItem(taskId, item);
-          }
+          bufferManager.flushTask(taskId);
+          useDrawerStore.getState().appendActivityItem(taskId, item);
         }
       };
       await addListener('task:activity', handleTaskActivity);
