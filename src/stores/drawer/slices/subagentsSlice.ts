@@ -60,11 +60,42 @@ export const createSubagentsSlice: StateCreator<
       }
     }
 
+    let resolvedPrompt = prompt;
+    if (!resolvedPrompt && state.activeTaskId) {
+      const known = state.subagents[state.activeTaskId] || [];
+      const storeSub = known.find(
+        (s) => s.id === resolvedSubagentId || s.id === subagentId || s.toolCallId === resolvedSubagentId || s.toolCallId === subagentId
+      );
+      if (storeSub?.prompt) {
+        resolvedPrompt = storeSub.prompt;
+      } else {
+        const tools = state.toolExecutions[state.activeTaskId] || [];
+        const spawnTool = tools.find(
+          (t) =>
+            (t.toolName === 'subagent' || t.toolName === 'subagent_bg') &&
+            (t.id === resolvedSubagentId ||
+              t.id === subagentId ||
+              (t.params as Record<string, unknown> | undefined)?.subagent_id === resolvedSubagentId ||
+              (t.params as Record<string, unknown> | undefined)?.subagent_id === subagentId ||
+              state.toolIdToSubagentId[t.id] === resolvedSubagentId ||
+              state.toolIdToSubagentId[t.id] === subagentId)
+        );
+        const toolPrompt = (spawnTool?.params as Record<string, unknown> | undefined)?.prompt;
+        if (typeof toolPrompt === 'string' && toolPrompt) {
+          resolvedPrompt = toolPrompt;
+        } else {
+          const feed = state.activityFeed[resolvedSubagentId] || state.activityFeed[subagentId] || [];
+          const promptItem = feed.find((i) => i.type === 'prompt' && i.content);
+          if (promptItem?.content) resolvedPrompt = promptItem.content;
+        }
+      }
+    }
+
     set({
       activeSubagentId: resolvedSubagentId,
       activeSubagentTitle: title,
       activeSubagentRole: role,
-      activeSubagentPrompt: prompt,
+      activeSubagentPrompt: resolvedPrompt,
       toolIdToSubagentId:
         resolvedSubagentId !== subagentId
           ? { ...state.toolIdToSubagentId, [subagentId]: resolvedSubagentId }
