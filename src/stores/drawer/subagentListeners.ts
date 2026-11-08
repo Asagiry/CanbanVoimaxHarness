@@ -72,7 +72,25 @@ export async function initSubagentListeners(store: typeof useDrawerStore = useDr
       const streamed = typeof activity.id === 'string' ? activity.id.match(/^(.+):(thought|output)$/) : null;
       if (streamed && subagentId in state.activeStreamIds && state.activeStreamIds[subagentId] !== streamed[1]) return;
       const existingFeed = state.activityFeed[subagentId] || [];
-      const existingIdx = existingFeed.findIndex((i) => i.id === activity.id);
+      let existingIdx = existingFeed.findIndex((i) => i.id === activity.id);
+      if (
+        existingIdx < 0 &&
+        (activity.type === 'user' || activity.type === 'steer') &&
+        activity.content
+      ) {
+        const trimmedContent = String(activity.content).trim();
+        const searchStart = Math.max(0, existingFeed.length - 3);
+        for (let idx = existingFeed.length - 1; idx >= searchStart; idx--) {
+          const item = existingFeed[idx];
+          if (
+            (item.type === 'user' || item.type === 'steer') &&
+            (item.content || '').trim() === trimmedContent
+          ) {
+            existingIdx = idx;
+            break;
+          }
+        }
+      }
       let nextFeed: DrawerActivityItem[];
       if (existingIdx >= 0) {
         nextFeed = [...existingFeed];

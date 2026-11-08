@@ -63,7 +63,7 @@ Every modular rule file in `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md`
    # Rule Title...
    ```
 2. **Dynamic JIT Prompt Integration**: The backend automatically extracts frontmatter descriptions to populate the `load_rule` tool instructions in system prompts, giving agents full awareness of what each rule governs without burning context on full bodies.
-3. **English-Only Content Invariant**: All rule files MUST be authored 100% in clear, concise, authoritative English.
+3. **English-First Content & Bilingual Metadata Invariant**: Core rule files and system prompt invariants MUST be authored in clear, concise, authoritative English (or Russian where domain-appropriate), while bilingual (English/Russian) descriptions and titles are explicitly permitted in `boards.json` and UI-facing metadata.
 4. **Timeless Contract Invariant**: Rules represent eternal architectural standards. NEVER record transient bug histories, commit messages, or task changelogs in rule files.
 
 ---

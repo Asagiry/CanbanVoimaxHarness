@@ -1,231 +1,23 @@
 //! Task Pipeline Transitions & Stage Progression Subsystem (§ 2.2, § 2.6, § 2.7, § 2.27)
 //! Extracted from commands/tasks.rs per ub-mode Clean Code principles.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::HashSet;
+use std::path::Path;
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::agent::Task;
 use crate::commands::dialogs::append_task_dialog_activity;
-use crate::commands::git::apply_worktree_from_hook_stdout;
 use crate::commands::state::AppState;
 use crate::config::{load_boards_config, load_pipeline_config, resolve_actual_repo_root};
-use crate::git::create_worktree;
-use crate::hooks::{execute_hook, HookContext};
 use super::healing::{stage_id_matches, task_id_matches};
-use super::lifecycle::{
-    internal_create_subtask_with_hook_states, normalize_hook_type, record_task_hook_result,
-};
+use super::lifecycle::internal_create_subtask_with_hook_states;
 use super::runner::internal_abort_agent;
-use super::storage::{
-    get_next_subtask_index, load_tasks_from_disk, save_tasks_to_disk,
-};
+use super::storage::{get_next_subtask_index, load_tasks_from_disk};
 
-#[allow(clippy::too_many_arguments)]
-pub async fn trigger_column_on_enter_script(
-    col: &crate::config::PipelineColumn,
-    task: &mut Task,
-    target_stage_id: &str,
-    verdict: Option<&str>,
-    root: &Path,
-    app_handle: Option<&AppHandle>,
-) {
-    if let Some(ref script_str) = col.on_enter_script {
-        let trimmed = script_str.trim();
-        if trimmed.is_empty() {
-            return;
-        }
-
-        let script_buf = PathBuf::from(trimmed);
-        let script_path = if script_buf.is_absolute() {
-            script_buf
-        } else {
-            root.join(&script_buf)
-        };
-
-        if !script_path.exists() {
-            eprintln!(
-                "CVH [on_enter_script]: Hook script does not exist at {:?}",
-                script_path
-            );
-            if let Some(app) = app_handle {
-                let _ = app.emit("hook:finish", serde_json::json!({
-                    "taskId": task.id,
-                    "stageId": target_stage_id,
-                    "hookType": "on_enter",
-                    "success": false,
-                    "exitCode": None::<i32>,
-                    "stdout": "",
-                    "stderr": format!("Script not found: {}", script_path.display()),
-                    "error": format!("Script not found: {}", script_path.display()),
-                    "hookName": trimmed,
-                }));
-            }
-            return;
-        }
-
-        let wt_path = task
-            .worktree_path
-            .as_deref()
-            .map(PathBuf::from)
-            .filter(|p| p.exists())
-            .unwrap_or_else(|| root.to_path_buf());
-
-        let ctx = HookContext {
-            task_id: task.id.clone(),
-            task_title: task.title.clone(),
-            worktree_path: task.worktree_path.clone().unwrap_or_default(),
-            branch: task.branch.clone().unwrap_or_default(),
-            verdict: verdict.map(|v| v.to_string()).or_else(|| task.verdict.clone()),
-            stage_id: Some(target_stage_id.to_string()),
-            board_id: task.board_id.clone(),
-            extra_env: HashMap::new(),
-        };
-
-        println!(
-            "CVH [on_enter_script]: Executing hook {:?} for task {} entering stage {}",
-            script_path, task.id, target_stage_id
-        );
-
-        if let Some(app) = app_handle {
-            let _ = app.emit("hook:start", serde_json::json!({
-                "taskId": task.id,
-                "stageId": target_stage_id,
-                "hookType": "on_enter",
-                "hookName": trimmed,
-                "description": "on_enter_script hook",
-            }));
-        }
-        let hook_started_at = chrono::Utc::now().timestamp_millis();
-
-        match execute_hook(&script_path, &wt_path, &ctx, None).await {
-            Ok(res) => {
-                let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
-                record_task_hook_result(
-                    task,
-                    target_stage_id,
-                    "on_enter",
-                    trimmed,
-                    hook_started_at,
-                    duration_ms,
-                    res.success,
-                    res.exit_code,
-                    &res.stdout,
-                    &res.stderr,
-                    if res.success { None } else { Some(res.stderr.as_str()) },
-                );
-                if let Some(app) = app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": target_stage_id,
-                        "hookType": "on_enter",
-                        "success": res.success,
-                        "exitCode": res.exit_code,
-                        "stdout": res.stdout,
-                        "stderr": res.stderr,
-                    }));
-                    let _ = crate::db::db_upsert_task(root, task);
-                }
-                if res.success {
-                    println!(
-                        "CVH [on_enter_script]: Hook {:?} succeeded for task {} in stage {} (exit code {:?}):
-STDOUT: {}",
-                        script_path, task.id, target_stage_id, res.exit_code, res.stdout
-                    );
-                } else {
-                    eprintln!(
-                        "CVH [on_enter_script]: Hook {:?} failed for task {} in stage {} (exit code {:?}):
-STDOUT: {}
-STDERR: {}",
-                        script_path, task.id, target_stage_id, res.exit_code, res.stdout, res.stderr
-                    );
-                }
-            }
-            Err(e) => {
-                let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
-                let err = e.to_string();
-                record_task_hook_result(
-                    task,
-                    target_stage_id,
-                    "on_enter",
-                    trimmed,
-                    hook_started_at,
-                    duration_ms,
-                    false,
-                    None,
-                    "",
-                    &err,
-                    Some(&err),
-                );
-                if let Some(app) = app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": target_stage_id,
-                        "hookType": "on_enter",
-                        "success": false,
-                        "exitCode": None::<i32>,
-                        "stdout": "",
-                        "stderr": &err,
-                        "error": &err,
-                    }));
-                    let _ = crate::db::db_upsert_task(root, task);
-                }
-                eprintln!(
-                    "CVH [on_enter_script]: Error executing hook {:?} for task {}: {}",
-                    script_path, task.id, e
-                );
-            }
-        }
-    }
-}
-
-/// Allocates an isolated git worktree for a task if not already provisioned (§ 3.1 & § 3.2).
-pub async fn ensure_task_worktree(root: &Path, task: &mut Task) -> Result<(), String> {
-    if task.skip_worktree.unwrap_or(false) {
-        return Ok(());
-    }
-    if let Some(ref wt) = task.worktree_path {
-        let trimmed = wt.trim();
-        if !trimmed.is_empty() {
-            let p = Path::new(trimmed);
-            let abs_p = if p.is_absolute() { p.to_path_buf() } else { root.join(p) };
-            if abs_p.exists() {
-                return Ok(());
-            }
-        }
-    }
-    let slug = task.id.to_lowercase();
-    match create_worktree(root, &slug, "HEAD").await {
-        Ok(wt_abs) => {
-            let rel = wt_abs.strip_prefix(root).unwrap_or(&wt_abs);
-            let rel_str = rel.to_string_lossy().replace('\\', "/");
-            task.worktree_path = Some(rel_str);
-            if task.branch.as_deref().map(|b| b.trim().is_empty()).unwrap_or(true) {
-                task.branch = Some(format!("feat/{}", slug));
-            }
-            crate::logger::cvh_log(
-                Some(root),
-                "INFO",
-                "WORKTREE",
-                &format!(
-                    "Allocated worktree {:?} on branch {:?} for task '{}'",
-                    task.worktree_path, task.branch, task.id
-                ),
-            );
-            Ok(())
-        }
-        Err(e) => {
-            crate::logger::cvh_log(
-                Some(root),
-                "WARN",
-                "WORKTREE",
-                &format!("Failed to allocate worktree for task '{}': {}", task.id, e),
-            );
-            Ok(())
-        }
-    }
-}
+#[path = "transition_hooks.rs"]
+pub mod transition_hooks;
+pub use transition_hooks::*;
 
 #[derive(Debug, Default)]
 pub struct ParentAdvanceResult {
@@ -233,6 +25,7 @@ pub struct ParentAdvanceResult {
     pub created_tasks: Vec<Task>,
     pub autorun_task_ids: Vec<String>,
     pub hook_finish_events: Vec<serde_json::Value>,
+    pub mutated_task_ids: Vec<String>,
 }
 
 /// Propagates advancement of completed/terminal subtasks up the hierarchy to parent tasks (§ 2.2 & § 2.7).
@@ -250,6 +43,7 @@ pub fn propagate_parent_subtask_advance(
     let mut created_tasks = Vec::new();
     let mut autorun_task_ids = Vec::new();
     let mut hook_finish_events = Vec::new();
+    let mut mutated_task_ids = Vec::new();
 
     let mut current_child_id = completed_subtask_id.to_string();
     let mut current_source_stage = subtask_source_stage.to_string();
@@ -261,6 +55,7 @@ pub fn propagate_parent_subtask_advance(
             tasks[sub_idx].completed_at = Some(Utc::now().timestamp_millis());
         }
         tasks[sub_idx].updated_at = Utc::now().timestamp_millis();
+        mutated_task_ids.push(tasks[sub_idx].id.clone());
     }
 
     while let Some(parent_idx) = tasks.iter().position(|t| {
@@ -334,6 +129,7 @@ pub fn propagate_parent_subtask_advance(
             tasks[parent_idx].status = Some("done".to_string());
             tasks[parent_idx].completed_at = Some(Utc::now().timestamp_millis());
             tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+            mutated_task_ids.push(parent_id.clone());
 
             // Also mark any child subtasks of this parent as done so they collapse into parent (§ 3)
             for sub in tasks.iter_mut() {
@@ -343,6 +139,7 @@ pub fn propagate_parent_subtask_advance(
                         sub.completed_at = Some(Utc::now().timestamp_millis());
                     }
                     sub.updated_at = Utc::now().timestamp_millis();
+                    mutated_task_ids.push(sub.id.clone());
                 }
             }
 
@@ -369,6 +166,7 @@ pub fn propagate_parent_subtask_advance(
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
             tasks[parent_idx].status = Some("done".to_string());
             tasks[parent_idx].updated_at = now;
+            mutated_task_ids.push(parent_id.clone());
 
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
             let subtask_status = if has_autorun { "running" } else { "idle" };
@@ -389,10 +187,7 @@ pub fn propagate_parent_subtask_advance(
                 id: new_subtask_id.clone(),
                 title: format!("{} ({})", parent_title, next_col.title),
                 description: format!(
-                    "### Подзадача этапа: {}
-Родительская задача: {}
-
-{}",
+                    "### Подзадача этапа: {}\nРодительская задача: {}\n\n{}",
                     next_col.title, parent_id, tasks[parent_idx].description
                 ),
                 stage_id: next_col.id.clone(),
@@ -488,606 +283,7 @@ pub fn propagate_parent_subtask_advance(
         created_tasks,
         autorun_task_ids,
         hook_finish_events,
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-/// Unifies stage transition lifecycle execution (§ 2.2, § 2.6, § 2.7, § 2.27):
-/// 1. `on_leave` / `on_exit` hook of the source column.
-/// 2. `on_enter` hook of the target column.
-/// 3. Unified rejection handling and event broadcasting.
-pub struct TaskTransitionPipeline<'a> {
-    pub root: &'a Path,
-    pub source_col: Option<&'a crate::config::PipelineColumn>,
-    pub target_col: &'a crate::config::PipelineColumn,
-    pub is_source_intake: bool,
-    pub verdict: Option<String>,
-    pub emit_task_moved: bool,
-    pub app_handle: Option<&'a AppHandle>,
-}
-
-impl<'a> TaskTransitionPipeline<'a> {
-    pub fn new(
-        root: &'a Path,
-        source_col: Option<&'a crate::config::PipelineColumn>,
-        target_col: &'a crate::config::PipelineColumn,
-        is_source_intake: bool,
-        verdict: Option<String>,
-        emit_task_moved: bool,
-        app_handle: Option<&'a AppHandle>,
-    ) -> Self {
-        Self {
-            root,
-            source_col,
-            target_col,
-            is_source_intake,
-            verdict,
-            emit_task_moved,
-            app_handle,
-        }
-    }
-
-    /// Step: Rejection and failure handling with state persistence and event broadcast.
-    pub async fn handle_rejection(
-        &self,
-        task: &mut Task,
-        steer_content: &str,
-        error_msg: String,
-        reason_details: &str,
-    ) -> Result<(), String> {
-        let _ = append_task_dialog_activity(
-            self.root,
-            &task.id,
-            "steer",
-            steer_content,
-            self.app_handle,
-        )
-        .await;
-
-        let scol_has_autorun = self
-            .source_col
-            .map(|c| c.persona.is_some() || c.auto_run == Some(true))
-            .unwrap_or(false);
-
-        task.verdict = Some("CHANGES_REQUESTED".to_string());
-        task.status = if scol_has_autorun {
-            Some("running".to_string())
-        } else {
-            Some("idle".to_string())
-        };
-        task.updated_at = Utc::now().timestamp_millis();
-
-        let failed_task = task.clone();
-        let _ = crate::db::db_upsert_task(self.root, &failed_task);
-
-        let mut tasks = load_tasks_from_disk(self.root).await;
-        if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
-            t.verdict = failed_task.verdict.clone();
-            t.status = failed_task.status.clone();
-            t.updated_at = failed_task.updated_at;
-        }
-        let _ = save_tasks_to_disk(self.root, &tasks).await;
-
-        if let Some(app) = self.app_handle {
-            let project_path_str = self.root.to_string_lossy().to_string();
-            if let Some(state_ref) = app.try_state::<AppState>() {
-                if state_ref.get_root() == self.root {
-                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                        if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
-                            t.verdict = failed_task.verdict.clone();
-                            t.status = failed_task.status.clone();
-                            t.updated_at = failed_task.updated_at;
-                        }
-                    }
-                }
-            }
-            if self.emit_task_moved {
-                let _ = app.emit("task:moved", serde_json::json!({
-                    "task": &failed_task,
-                    "rejected": true,
-                    "reason": reason_details,
-                    "projectPath": &project_path_str,
-                }));
-            }
-            let _ = app.emit("task:updated", serde_json::json!({
-                "taskId": failed_task.id,
-                "task": &failed_task,
-                "projectPath": &project_path_str,
-            }));
-            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
-
-            if scol_has_autorun {
-                let _ = app.emit("agent:autorun", serde_json::json!({
-                    "taskId": failed_task.id,
-                    "prompt": steer_content,
-                    "projectPath": &project_path_str,
-                }));
-            }
-        }
-
-        Err(error_msg)
-    }
-
-    /// Step: Execute source column `on_finish` / `on_leave` / `on_exit` hook.
-    pub async fn run_on_leave(&self, task: &mut Task) -> Result<(), String> {
-        let sc = match self.source_col {
-            Some(c) => c,
-            None => return Ok(()),
-        };
-        let (hook_key, hook_cfg) = if let Some(cfg) = sc.hooks.get("on_finish") {
-            ("on_finish", cfg)
-        } else if let Some(cfg) = sc.hooks.get("on_leave") {
-            ("on_leave", cfg)
-        } else if let Some(cfg) = sc.hooks.get("on_exit") {
-            ("on_exit", cfg)
-        } else {
-            return Ok(());
-        };
-
-        let emit_hook_type = normalize_hook_type(hook_key);
-        let hook_rel = hook_cfg.script();
-        let hook_desc = hook_cfg.description();
-        let hook_path = crate::config::resolve_hook_path(self.root, sc.persona.as_deref(), hook_rel);
-        if !hook_path.exists() {
-            if let Some(app) = self.app_handle {
-                let _ = app.emit("hook:finish", serde_json::json!({
-                    "taskId": task.id,
-                    "stageId": sc.id,
-                    "hookType": emit_hook_type,
-                    "success": false,
-                    "exitCode": None::<i32>,
-                    "stdout": "",
-                    "stderr": format!("Script not found: {}", hook_path.display()),
-                    "error": format!("Script not found: {}", hook_path.display()),
-                    "hookName": hook_rel,
-                }));
-            }
-            return Ok(());
-        }
-
-        if let Some(app) = self.app_handle {
-            let _ = app.emit("hook:start", serde_json::json!({
-                "taskId": task.id,
-                "stageId": sc.id,
-                "hookType": emit_hook_type,
-                "hookName": hook_rel,
-                "description": hook_desc,
-            }));
-        }
-
-        let hook_started_at = chrono::Utc::now().timestamp_millis();
-        let ctx = HookContext {
-            task_id: task.id.clone(),
-            task_title: task.title.clone(),
-            worktree_path: task.worktree_path.clone().unwrap_or_default(),
-            branch: task.branch.clone().unwrap_or_default(),
-            verdict: self.verdict.clone().or_else(|| task.verdict.clone()),
-            stage_id: Some(sc.id.clone()),
-            board_id: task.board_id.clone(),
-            extra_env: HashMap::new(),
-        };
-
-        let hook_res = execute_hook(&hook_path, self.root, &ctx, None).await;
-        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
-
-        match hook_res {
-            Ok(res) => {
-                if !res.success {
-                    let err_details = if !res.stderr.trim().is_empty() {
-                        res.stderr.trim().to_string()
-                    } else if !res.stdout.trim().is_empty() {
-                        res.stdout.trim().to_string()
-                    } else {
-                        format!("Exit code {:?}", res.exit_code)
-                    };
-
-                    record_task_hook_result(
-                        task,
-                        &sc.id,
-                        hook_key,
-                        hook_rel,
-                        hook_started_at,
-                        duration_ms,
-                        false,
-                        res.exit_code,
-                        &res.stdout,
-                        &res.stderr,
-                        Some(&err_details),
-                    );
-
-                    if let Some(app) = self.app_handle {
-                        let _ = app.emit("hook:finish", serde_json::json!({
-                            "taskId": task.id,
-                            "stageId": sc.id,
-                            "hookType": emit_hook_type,
-                            "success": false,
-                            "exitCode": res.exit_code,
-                            "stdout": res.stdout,
-                            "stderr": res.stderr,
-                            "error": &err_details
-                        }));
-                    }
-
-                    // on_finish is best-effort (GUIDE.md § 3.2): failure does NOT block transition
-                    if hook_key == "on_finish" {
-                        crate::logger::cvh_log(
-                            Some(self.root),
-                            "WARN",
-                            "HOOK",
-                            &format!("Best-effort on_finish hook '{}' failed for task '{}' (code {:?}): {}", hook_rel, task.id, res.exit_code, err_details),
-                        );
-                        apply_worktree_from_hook_stdout(task, &res.stdout);
-                        let _ = crate::db::db_upsert_task(self.root, task);
-                        return Ok(());
-                    }
-
-                    let steer_content = format!(
-                        "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук на выходе из колонки '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
-                        hook_rel, sc.id, res.exit_code, err_details
-                    );
-                    let err_msg = format!(
-                        "Хук {} '{}' отклонил переход (Exit code: {:?}):\n{}",
-                        hook_key, hook_rel, res.exit_code, err_details
-                    );
-                    return self.handle_rejection(task, &steer_content, err_msg, &err_details).await;
-                }
-
-                record_task_hook_result(
-                    task,
-                    &sc.id,
-                    hook_key,
-                    hook_rel,
-                    hook_started_at,
-                    duration_ms,
-                    true,
-                    res.exit_code,
-                    &res.stdout,
-                    &res.stderr,
-                    None,
-                );
-
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": sc.id,
-                        "hookType": emit_hook_type,
-                        "success": true,
-                        "exitCode": res.exit_code,
-                        "stdout": res.stdout,
-                        "stderr": res.stderr
-                    }));
-                }
-
-                apply_worktree_from_hook_stdout(task, &res.stdout);
-                let _ = crate::db::db_upsert_task(self.root, task);
-                if let Some(app) = self.app_handle {
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == self.root {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                    t.worktree_path = task.worktree_path.clone();
-                                    t.branch = task.branch.clone();
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => {
-                let err_details = e.to_string();
-                record_task_hook_result(
-                    task,
-                    &sc.id,
-                    hook_key,
-                    hook_rel,
-                    hook_started_at,
-                    duration_ms,
-                    false,
-                    None,
-                    "",
-                    &err_details,
-                    Some(&err_details),
-                );
-
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": sc.id,
-                        "hookType": emit_hook_type,
-                        "success": false,
-                        "exitCode": None::<i32>,
-                        "stdout": "",
-                        "stderr": &err_details,
-                        "error": &err_details
-                    }));
-                }
-
-                if hook_key == "on_finish" {
-                    crate::logger::cvh_log(
-                        Some(self.root),
-                        "WARN",
-                        "HOOK",
-                        &format!("Best-effort on_finish hook '{}' error for task '{}': {}", hook_rel, task.id, err_details),
-                    );
-                    return Ok(());
-                }
-
-                let steer_content = format!(
-                    "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука на выходе из колонки '{}': {}\n\nИсправь указанную ошибку.",
-                    hook_rel, sc.id, err_details
-                );
-                let err_msg = format!("Хук {} '{}' ошибка исполнения: {}", hook_key, hook_rel, err_details);
-                self.handle_rejection(task, &steer_content, err_msg, &err_details).await
-            }
-        }
-    }
-
-    /// Step: Execute target column `on_enter` hook, or builtin:create_worktree, or backlog worktree allocation.
-    pub async fn run_on_enter(&self, task: &mut Task) -> Result<(), String> {
-        let hook_cfg_opt = self.target_col.hooks.get("on_enter").cloned();
-        let is_builtin = hook_cfg_opt.as_ref().map(|cfg| {
-            let s = cfg.script();
-            s == "builtin:create_worktree" || s.starts_with("builtin:create_worktree")
-        }).unwrap_or(false);
-
-        let is_backlog_col = self.target_col.is_intake == Some(true)
-            || stage_id_matches(&self.target_col.id, "backlog");
-
-        // Worktree allocation: if target stage has builtin:create_worktree or backlog entry (§ 3.1 & § 3.2)
-        if is_builtin || is_backlog_col {
-            let wt_empty = task.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true);
-            if wt_empty && !task.skip_worktree.unwrap_or(false) {
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:start", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": self.target_col.id,
-                        "hookType": "on_enter",
-                        "hookName": "builtin:create_worktree",
-                        "description": "Allocate isolated git worktree",
-                    }));
-                }
-                let started_at = chrono::Utc::now().timestamp_millis();
-                let wt_res = ensure_task_worktree(self.root, task).await;
-                let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at).max(0) as u64;
-                let success = wt_res.is_ok();
-                let wt_stdout = task.worktree_path.clone().unwrap_or_default();
-                let wt_stderr = if let Err(ref e) = wt_res { e.clone() } else { String::new() };
-                record_task_hook_result(
-                    task,
-                    &self.target_col.id,
-                    "on_enter",
-                    "builtin:create_worktree",
-                    started_at,
-                    duration_ms,
-                    success,
-                    if success { Some(0) } else { Some(1) },
-                    &wt_stdout,
-                    &wt_stderr,
-                    if !wt_stderr.is_empty() { Some(&wt_stderr) } else { None },
-                );
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": self.target_col.id,
-                        "hookType": "on_enter",
-                        "success": success,
-                        "exitCode": if success { Some(0) } else { Some(1) },
-                        "stdout": task.worktree_path.as_deref().unwrap_or(""),
-                        "stderr": if let Err(ref e) = wt_res { e.as_str() } else { "" },
-                    }));
-                }
-                let _ = crate::db::db_upsert_task(self.root, task);
-                if let Some(app) = self.app_handle {
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == self.root {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                    t.worktree_path = task.worktree_path.clone();
-                                    t.branch = task.branch.clone();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if is_builtin {
-                return Ok(());
-            }
-        }
-
-        let hook_cfg = match hook_cfg_opt {
-            Some(cfg) => cfg,
-            None => return Ok(()),
-        };
-
-        let hook_rel = hook_cfg.script().to_string();
-        let hook_desc = hook_cfg.description().map(str::to_string);
-        let hook_path = crate::config::resolve_hook_path(
-            self.root,
-            self.target_col.persona.as_deref(),
-            &hook_rel,
-        );
-        if !hook_path.exists() {
-            if let Some(app) = self.app_handle {
-                let _ = app.emit("hook:finish", serde_json::json!({
-                    "taskId": task.id,
-                    "stageId": self.target_col.id,
-                    "hookType": "on_enter",
-                    "success": false,
-                    "exitCode": None::<i32>,
-                    "stdout": "",
-                    "stderr": format!("Script not found: {}", hook_path.display()),
-                    "error": format!("Script not found: {}", hook_path.display()),
-                    "hookName": &hook_rel,
-                }));
-            }
-            return Ok(());
-        }
-
-        if let Some(app) = self.app_handle {
-            let _ = app.emit("hook:start", serde_json::json!({
-                "taskId": task.id,
-                "stageId": self.target_col.id,
-                "hookType": "on_enter",
-                "hookName": &hook_rel,
-                "description": hook_desc,
-            }));
-        }
-
-        let hook_started_at = chrono::Utc::now().timestamp_millis();
-        let ctx = HookContext {
-            task_id: task.id.clone(),
-            task_title: task.title.clone(),
-            worktree_path: task.worktree_path.clone().unwrap_or_default(),
-            branch: task.branch.clone().unwrap_or_default(),
-            verdict: self.verdict.clone().or_else(|| task.verdict.clone()),
-            stage_id: Some(self.target_col.id.clone()),
-            board_id: task.board_id.clone(),
-            extra_env: HashMap::new(),
-        };
-
-        let hook_res = execute_hook(&hook_path, self.root, &ctx, None).await;
-        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
-
-        match hook_res {
-            Ok(res) => {
-                if !res.success {
-                    let err_details = if !res.stderr.trim().is_empty() {
-                        res.stderr.trim().to_string()
-                    } else if !res.stdout.trim().is_empty() {
-                        res.stdout.trim().to_string()
-                    } else {
-                        format!("Exit code {:?}", res.exit_code)
-                    };
-
-                    record_task_hook_result(
-                        task,
-                        &self.target_col.id,
-                        "on_enter",
-                        &hook_rel,
-                        hook_started_at,
-                        duration_ms,
-                        false,
-                        res.exit_code,
-                        &res.stdout,
-                        &res.stderr,
-                        Some(&err_details),
-                    );
-
-                    if let Some(app) = self.app_handle {
-                        let _ = app.emit("hook:finish", serde_json::json!({
-                            "taskId": task.id,
-                            "stageId": self.target_col.id,
-                            "hookType": "on_enter",
-                            "success": false,
-                            "exitCode": res.exit_code,
-                            "stdout": res.stdout,
-                            "stderr": res.stderr,
-                            "error": &err_details
-                        }));
-                    }
-
-                    let steer_content = format!(
-                        "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук на входе в колонку '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
-                        hook_rel, self.target_col.id, res.exit_code, err_details
-                    );
-                    let err_msg = format!(
-                        "Хук on_enter '{}' целевой колонки '{}' отклонил переход (Exit code: {:?}):\n{}",
-                        hook_rel, self.target_col.id, res.exit_code, err_details
-                    );
-                    return self.handle_rejection(task, &steer_content, err_msg, &err_details).await;
-                }
-
-                record_task_hook_result(
-                    task,
-                    &self.target_col.id,
-                    "on_enter",
-                    &hook_rel,
-                    hook_started_at,
-                    duration_ms,
-                    true,
-                    res.exit_code,
-                    &res.stdout,
-                    &res.stderr,
-                    None,
-                );
-
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": self.target_col.id,
-                        "hookType": "on_enter",
-                        "success": true,
-                        "exitCode": res.exit_code,
-                        "stdout": res.stdout,
-                        "stderr": res.stderr
-                    }));
-                }
-
-                apply_worktree_from_hook_stdout(task, &res.stdout);
-                let _ = crate::db::db_upsert_task(self.root, task);
-                if let Some(app) = self.app_handle {
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == self.root {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                    t.worktree_path = task.worktree_path.clone();
-                                    t.branch = task.branch.clone();
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => {
-                let err_details = e.to_string();
-                record_task_hook_result(
-                    task,
-                    &self.target_col.id,
-                    "on_enter",
-                    &hook_rel,
-                    hook_started_at,
-                    duration_ms,
-                    false,
-                    None,
-                    "",
-                    &err_details,
-                    Some(&err_details),
-                );
-
-                if let Some(app) = self.app_handle {
-                    let _ = app.emit("hook:finish", serde_json::json!({
-                        "taskId": task.id,
-                        "stageId": self.target_col.id,
-                        "hookType": "on_enter",
-                        "success": false,
-                        "exitCode": None::<i32>,
-                        "stdout": "",
-                        "stderr": &err_details,
-                        "error": &err_details
-                    }));
-                }
-
-                let steer_content = format!(
-                    "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука на входе в колонку '{}': {}\n\nИсправь указанную ошибку.",
-                    hook_rel, self.target_col.id, err_details
-                );
-                let err_msg = format!(
-                    "Хук on_enter '{}' целевой колонки '{}' ошибка исполнения: {}",
-                    hook_rel, self.target_col.id, err_details
-                );
-                self.handle_rejection(task, &steer_content, err_msg, &err_details).await
-            }
-        }
-    }
-
-    /// Master execution: run `on_leave` -> `on_enter`.
-    pub async fn execute(&self, task: &mut Task) -> Result<(), String> {
-        self.run_on_leave(task).await?;
-        self.run_on_enter(task).await?;
-        Ok(())
+        mutated_task_ids,
     }
 }
 
@@ -1115,23 +311,23 @@ pub async fn internal_move_task_stage(
         ),
         Some(&format!("actual_root='{}'", root.display())),
     );
-    let mut tasks = load_tasks_from_disk(root).await;
+    let mut initial_tasks = load_tasks_from_disk(root).await;
 
     // In-memory fallback: if task was just created and not yet on disk,
     // or if memory has tasks not yet on disk, retrieve from AppState (§ 2.22).
-    if !tasks.iter().any(|t| task_id_matches(&t.id, task_id)) {
+    if !initial_tasks.iter().any(|t| task_id_matches(&t.id, task_id)) {
         crate::logger::cvh_log(
             Some(root),
             "WARN",
             "MOVE_STAGE",
-            &format!("Task '{}' not found in {} disk tasks. Checking in-memory AppState tasks...", task_id, tasks.len()),
+            &format!("Task '{}' not found in {} disk tasks. Checking in-memory AppState tasks...", task_id, initial_tasks.len()),
         );
         if let Some(app) = app_handle {
             if let Some(state) = app.try_state::<AppState>() {
                 if let Ok(guard) = state.tasks.lock() {
                     for mem_t in guard.iter() {
-                        if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
-                            tasks.push(mem_t.clone());
+                        if !initial_tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
+                            initial_tasks.push(mem_t.clone());
                         }
                     }
                 }
@@ -1139,10 +335,10 @@ pub async fn internal_move_task_stage(
         }
     }
 
-    let task_idx = match tasks.iter().position(|t| task_id_matches(&t.id, task_id)) {
-        Some(idx) => idx,
+    let mut moving_task = match initial_tasks.iter().find(|t| task_id_matches(&t.id, task_id)).cloned() {
+        Some(t) => t,
         None => {
-            let disk_ids: Vec<String> = tasks.iter().map(|t| t.id.clone()).collect();
+            let disk_ids: Vec<String> = initial_tasks.iter().map(|t| t.id.clone()).collect();
             let err_msg = format!("Task {} not found", task_id);
             crate::logger::cvh_log_with_details(
                 Some(root),
@@ -1154,13 +350,12 @@ pub async fn internal_move_task_stage(
             return Err(err_msg);
         }
     };
-
-    let current_task = &mut tasks[task_idx];
+    drop(initial_tasks);
 
     // --- Board resolution & fallback (support alias and fallback when board_id missing/stale) ---
     // ZERO INVISIBLE TASKS (§ 2.18):
     // 1. If explicit board_id_override is provided and contains target stage, stay on it.
-    // 2. Otherwise if current_task.board_id contains target stage, preserve it (NO accidental board hopping!).
+    // 2. Otherwise if moving_task.board_id contains target stage, preserve it (NO accidental board hopping!).
     // 3. Otherwise if active_board contains target stage, use active_board.
     // 4. Only if no priority board contains the stage, search any other board with matching target stage.
     let boards_cfg = load_boards_config(root).await.ok();
@@ -1171,7 +366,7 @@ pub async fn internal_move_task_stage(
         let override_board = board_id_override.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
         });
-        let current_board = current_task.board_id.as_deref().and_then(|bid| {
+        let current_board = moving_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
         });
 
@@ -1183,7 +378,7 @@ pub async fn internal_move_task_stage(
         if let Some(ref ob) = override_board {
             if board_has_target(ob) {
                 effective_board = Some(ob.clone());
-                current_task.board_id = Some(ob.id.clone());
+                moving_task.board_id = Some(ob.id.clone());
             }
         }
 
@@ -1192,7 +387,7 @@ pub async fn internal_move_task_stage(
             if let Some(ref cb) = current_board {
                 if board_has_target(cb) {
                     effective_board = Some(cb.clone());
-                    // Keep current_task.board_id intact!
+                    // Keep moving_task.board_id intact!
                 }
             }
         }
@@ -1202,7 +397,7 @@ pub async fn internal_move_task_stage(
             if let Some(ref ab) = active_board {
                 if board_has_target(ab) {
                     effective_board = Some(ab.clone());
-                    current_task.board_id = Some(ab.id.clone());
+                    moving_task.board_id = Some(ab.id.clone());
                 }
             }
         }
@@ -1212,20 +407,20 @@ pub async fn internal_move_task_stage(
             let any_with_target = bc.boards.iter().find(|b| board_has_target(b)).cloned();
             if let Some(ref b) = any_with_target {
                 effective_board = Some(b.clone());
-                current_task.board_id = Some(b.id.clone());
+                moving_task.board_id = Some(b.id.clone());
             } else {
                 effective_board = active_board.or_else(|| bc.boards.first().cloned());
                 if let Some(ref b) = effective_board {
-                    current_task.board_id = Some(b.id.clone());
+                    moving_task.board_id = Some(b.id.clone());
                 } else {
-                    current_task.board_id = Some(bc.active_board_id.clone());
+                    moving_task.board_id = Some(bc.active_board_id.clone());
                 }
             }
         }
     }
 
     // --- on_finish / on_leave hooks of source column ---
-    let source_stage_id = current_task.stage_id.clone();
+    let source_stage_id = moving_task.stage_id.clone();
     let source_col: Option<crate::config::PipelineStage> = {
         let from_board = effective_board.as_ref().and_then(|b| {
             b.stages.iter().find(|c| stage_id_matches(&c.id, &source_stage_id)).cloned()
@@ -1316,7 +511,7 @@ pub async fn internal_move_task_stage(
         target_col.auto_run == Some(true)
             || (target_col.auto_run.is_none() && target_col.persona.is_some())
     );
-    let was_running = current_task.status.as_deref() == Some("running");
+    let was_running = moving_task.status.as_deref() == Some("running");
 
     // Immediate Cancellation (§ 2 specifications):
     if !is_autonomous_advance && (is_backlog || !target_has_autorun || was_running) {
@@ -1354,12 +549,12 @@ pub async fn internal_move_task_stage(
         true, // emit_task_moved
         app_handle,
     );
-    pipeline.execute(current_task).await?;
+    pipeline.execute(&mut moving_task).await?;
 
     // Trigger on_enter_script if configured on target column
     trigger_column_on_enter_script(
         &target_col,
-        current_task,
+        &mut moving_task,
         &canonical_target_stage_id,
         verdict.as_deref(),
         root,
@@ -1367,39 +562,68 @@ pub async fn internal_move_task_stage(
     )
     .await;
 
-    // Update task
-    let old_stage = current_task.stage_id.clone();
-    current_task.stage_id = canonical_target_stage_id.clone();
-    if verdict.is_some() {
-        current_task.verdict = verdict.clone();
+    // --- LOST UPDATE FIX ---
+    // Re-load the fresh task list from SQLite AFTER all async hooks complete so that
+    // any concurrent updates to other tasks (or to this task's todos/metadata) are preserved.
+    let mut tasks = load_tasks_from_disk(root).await;
+    if !tasks.iter().any(|t| task_id_matches(&t.id, &moving_task.id)) {
+        if let Some(app) = app_handle {
+            if let Some(state) = app.try_state::<AppState>() {
+                if let Ok(guard) = state.tasks.lock() {
+                    for mem_t in guard.iter() {
+                        if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
+                            tasks.push(mem_t.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if !tasks.iter().any(|t| task_id_matches(&t.id, &moving_task.id)) {
+            tasks.push(moving_task.clone());
+        }
     }
-    if let Some(summary) = handover_summary {
-        current_task.handover_summary = Some(summary);
-    }
-    let is_terminal_col = target_col.terminal == Some(true)
-        || stage_id_matches(&canonical_target_stage_id, "ready")
-        || stage_id_matches(&canonical_target_stage_id, "done");
-    if is_backlog {
-        current_task.status = Some("idle".to_string());
-    } else if let Some(st) = status_override {
-        current_task.status = Some(st);
-    } else if is_terminal_col {
-        current_task.status = Some("done".to_string());
-    } else if target_has_autorun {
-        current_task.status = Some("running".to_string());
-    } else {
-        current_task.status = Some("idle".to_string());
-    }
-    if is_terminal_col {
-        current_task.completed_at = Some(Utc::now().timestamp_millis());
-        current_task.waiting_for_subtask_id = None;
-    } else {
-        current_task.completed_at = None;
-    }
-    auto_complete_task_todos(root, current_task, app_handle);
-    current_task.updated_at = Utc::now().timestamp_millis();
-    if old_stage != canonical_target_stage_id || current_task.stage_entered_at.is_none() {
-        current_task.stage_entered_at = Some(Utc::now().timestamp_millis());
+
+    let task_idx = tasks
+        .iter()
+        .position(|t| task_id_matches(&t.id, &moving_task.id))
+        .ok_or_else(|| format!("Task {} not found after stage transition hooks", task_id))?;
+
+    let old_stage = source_stage_id.clone();
+    {
+        let current_task = &mut tasks[task_idx];
+        current_task.board_id = moving_task.board_id.clone();
+        current_task.worktree_path = moving_task.worktree_path.clone();
+        current_task.branch = moving_task.branch.clone();
+        current_task.hook_states = moving_task.hook_states.clone();
+        current_task.stage_id = canonical_target_stage_id.clone();
+        if verdict.is_some() {
+            current_task.verdict = verdict.clone();
+        }
+        if let Some(summary) = handover_summary {
+            current_task.handover_summary = Some(summary);
+        }
+        if is_backlog {
+            current_task.status = Some("idle".to_string());
+        } else if let Some(st) = status_override {
+            current_task.status = Some(st);
+        } else if is_terminal_col {
+            current_task.status = Some("done".to_string());
+        } else if target_has_autorun {
+            current_task.status = Some("running".to_string());
+        } else {
+            current_task.status = Some("idle".to_string());
+        }
+        if is_terminal_col {
+            current_task.completed_at = Some(Utc::now().timestamp_millis());
+            current_task.waiting_for_subtask_id = None;
+        } else {
+            current_task.completed_at = None;
+        }
+        auto_complete_task_todos(root, current_task, app_handle);
+        current_task.updated_at = Utc::now().timestamp_millis();
+        if old_stage != canonical_target_stage_id || current_task.stage_entered_at.is_none() {
+            current_task.stage_entered_at = Some(Utc::now().timestamp_millis());
+        }
     }
 
     if old_stage != canonical_target_stage_id {
@@ -1414,8 +638,19 @@ pub async fn internal_move_task_stage(
         tasks[task_idx].position = Some(0.0);
     }
 
+    let mut mutated_ids: HashSet<String> = HashSet::new();
+    mutated_ids.insert(tasks[task_idx].id.clone());
+
+    if let Err(e) = upsert_single_task(root, &mut tasks[task_idx]) {
+        crate::logger::cvh_log(
+            Some(root),
+            "ERROR",
+            "MOVE_STAGE",
+            &format!("Failed to upsert moved task '{}' to SQLite: {}", task_id, e),
+        );
+        return Err(e);
+    }
     let updated = tasks[task_idx].clone();
-    let _ = crate::db::db_upsert_task(root, &updated);
     let parent_id_opt = updated.parent_id.clone();
 
     // If a top-level parent task moves to terminal, ensure all child subtasks are also marked done (§ 3)
@@ -1430,6 +665,8 @@ pub async fn internal_move_task_stage(
                 }
                 t.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, t, app_handle);
+                let _ = upsert_single_task(root, t);
+                mutated_ids.insert(t.id.clone());
             }
             if t.parent_id.as_deref() == Some(&cur_id) {
                 t.status = Some("done".to_string());
@@ -1438,6 +675,8 @@ pub async fn internal_move_task_stage(
                 }
                 t.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, t, app_handle);
+                let _ = upsert_single_task(root, t);
+                mutated_ids.insert(t.id.clone());
             }
         }
     }
@@ -1459,6 +698,8 @@ pub async fn internal_move_task_stage(
                     tasks[parent_idx].verdict = Some("CHANGES_REQUESTED".to_string());
                     tasks[parent_idx].waiting_for_subtask_id = None;
                     tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+                    let _ = upsert_single_task(root, &mut tasks[parent_idx]);
+                    mutated_ids.insert(tasks[parent_idx].id.clone());
                     let parent_clone = tasks[parent_idx].clone();
                     parent_moved_events.push(serde_json::json!({
                         "taskId": pid,
@@ -1491,40 +732,32 @@ pub async fn internal_move_task_stage(
         parent_autorun_ids = parent_res.autorun_task_ids;
         parent_hook_events = parent_res.hook_finish_events;
 
+        for mid in parent_res.mutated_task_ids {
+            mutated_ids.insert(mid);
+        }
+
         for t in tasks.iter_mut() {
-            if t.status.as_deref() == Some("done") {
-                auto_complete_task_todos(root, t, app_handle);
-            }
-        }
-    }
-
-    if let Some(app) = app_handle {
-        if let Some(state_ref) = app.try_state::<AppState>() {
-            if state_ref.get_root().as_path() == root {
-                if let Ok(mut guard) = state_ref.tasks.lock() {
-                    for mem_t in guard.iter() {
-                        if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
-                            tasks.push(mem_t.clone());
-                        }
-                    }
-                    *guard = tasks.clone();
+            if mutated_ids.contains(&t.id) {
+                if t.status.as_deref() == Some("done") {
+                    auto_complete_task_todos(root, t, app_handle);
                 }
+                let _ = upsert_single_task(root, t);
             }
         }
     }
-    for ctask in &parent_created_tasks {
-        let _ = crate::db::db_upsert_task(root, ctask);
+
+    for ctask in &mut parent_created_tasks {
+        let _ = upsert_single_task(root, ctask);
+        mutated_ids.insert(ctask.id.clone());
     }
 
-    if let Err(e) = save_tasks_to_disk(root, &tasks).await {
-        crate::logger::cvh_log(
-            Some(root),
-            "ERROR",
-            "MOVE_STAGE",
-            &format!("Failed to save tasks to disk after moving task '{}': {}", task_id, e),
-        );
-        return Err(e);
+    // Update only the mutated/created tasks in AppState without overwriting concurrent updates to other tasks
+    for t in &tasks {
+        if mutated_ids.contains(&t.id) {
+            sync_single_task_in_app_state(root, t, app_handle);
+        }
     }
+
     crate::logger::cvh_log_with_details(
         Some(root),
         "INFO",
@@ -1705,18 +938,11 @@ pub async fn reorder_task(
         if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, tid)) {
             t.position = Some(new_pos);
             t.updated_at = now;
-            let _ = crate::db::db_upsert_task(&root, t);
+            upsert_single_task(&root, t)?;
+            sync_single_task_in_app_state(&root, t, Some(&app_handle));
             if task_id_matches(&t.id, &task_id) {
                 updated_task = Some(t.clone());
             }
-        }
-    }
-
-    save_tasks_to_disk(&root, &tasks).await?;
-
-    if state.get_root() == root {
-        if let Ok(mut guard) = state.tasks.lock() {
-            *guard = tasks.clone();
         }
     }
 
@@ -1738,88 +964,6 @@ pub async fn internal_advance_task(
     internal_advance_task_to_stage(root, task_id, None, summary, app_handle).await
 }
 
-/// Fallback: auto-completes any unfinished task todos (status != 'completed')
-/// when advancing or completing a task, updating SQLite, memory, and emitting UI events.
-/// Returns true if any todos were modified/completed, false if already completed or absent.
-pub fn auto_complete_task_todos(
-    root: &Path,
-    task: &mut Task,
-    app_handle: Option<&AppHandle>,
-) -> bool {
-    let memory_had_unfinished = task.todos.as_ref().is_some_and(|tds| {
-        tds.iter().any(|td| td.status != "completed")
-    });
-    let db_had_unfinished = if memory_had_unfinished {
-        true
-    } else {
-        crate::db::db_has_unfinished_todos(root, &task.id).unwrap_or(true)
-    };
-
-    if !memory_had_unfinished && !db_had_unfinished {
-        return false;
-    }
-
-    let mut completed_count = 0usize;
-    if let Some(ref mut todos) = task.todos {
-        for td in todos.iter_mut() {
-            if td.status != "completed" {
-                td.status = "completed".to_string();
-                completed_count += 1;
-            }
-        }
-    }
-    if completed_count > 0 {
-        crate::logger::cvh_log(
-            Some(root),
-            "INFO",
-            "AUTO_COMPLETE_TODOS",
-            &format!("Auto-completed {} unfinished TODO item(s) for task {}", completed_count, task.id),
-        );
-    }
-
-    match crate::db::db_complete_all_todos(root, &task.id) {
-        Ok(Some(db_todos)) => {
-            if task.todos.is_none() {
-                task.todos = Some(db_todos);
-            }
-        }
-        Ok(None) => {}
-        Err(e) => {
-            crate::logger::cvh_log(
-                Some(root),
-                "WARN",
-                "AUTO_COMPLETE_TODOS",
-                &format!("db_complete_all_todos error for task {}: {}", task.id, e),
-            );
-        }
-    }
-
-    task.updated_at = Utc::now().timestamp_millis();
-    let _ = crate::db::db_upsert_task(root, task);
-
-    if let Some(app) = app_handle {
-        if let Some(state_ref) = app.try_state::<AppState>() {
-            if state_ref.get_root().as_path() == root {
-                if let Ok(mut guard) = state_ref.tasks.lock() {
-                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                        t.todos = task.todos.clone();
-                        t.updated_at = task.updated_at;
-                    }
-                }
-            }
-        }
-        let project_path_str = root.to_string_lossy().to_string();
-        let _ = app.emit("task:updated", serde_json::json!({
-            "taskId": &task.id,
-            "todos": &task.todos,
-            "task": &task,
-            "projectPath": &project_path_str,
-        }));
-    }
-
-    true
-}
-
 pub async fn internal_advance_task_to_stage(
     root: &Path,
     task_id: &str,
@@ -1829,12 +973,13 @@ pub async fn internal_advance_task_to_stage(
 ) -> Result<String, String> {
     let root_resolved = resolve_actual_repo_root(root);
     let root = &root_resolved;
-    let tasks = load_tasks_from_disk(root).await;
-    let mut current_task = tasks
+    let initial_tasks = load_tasks_from_disk(root).await;
+    let mut current_task = initial_tasks
         .iter()
         .find(|t| task_id_matches(&t.id, task_id))
         .cloned()
         .ok_or_else(|| format!("Task {} not found", task_id))?;
+    drop(initial_tasks);
 
     let boards_cfg = load_boards_config(root).await.ok();
 
@@ -1971,7 +1116,7 @@ pub async fn internal_advance_task_to_stage(
         app_handle,
     );
     pipeline.execute(&mut current_task).await?;
-    let _ = crate::db::db_upsert_task(root, &current_task);
+    let _ = upsert_single_task(root, &mut current_task);
     auto_complete_task_todos(root, &mut current_task, app_handle);
 
     // Mirror internal_move_task_stage: run the legacy on_enter_script
@@ -1989,6 +1134,9 @@ pub async fn internal_advance_task_to_stage(
     )
     .await;
 
+    // Reload fresh tasks from SQLite after all async hooks complete
+    let mut tasks = load_tasks_from_disk(root).await;
+
     if let Some(ref pid) = current_task.parent_id {
         // CASE A: The task calling advance_task is a child subtask (e.g. CVH-009.1)
         let subtask_id = current_task.id.clone();
@@ -2002,7 +1150,6 @@ pub async fn internal_advance_task_to_stage(
 
         if is_terminal {
             // 1. Mark this subtask as done
-            let mut tasks = load_tasks_from_disk(root).await;
             if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                 sub.status = Some("done".to_string());
                 if sub.verdict.is_none() && effective_verdict.is_some() {
@@ -2013,22 +1160,8 @@ pub async fn internal_advance_task_to_stage(
                 }
                 sub.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, sub, app_handle);
-                let _ = crate::db::db_upsert_task(root, sub);
-            }
-            if let Some(app) = app_handle {
-                if let Some(state_ref) = app.try_state::<AppState>() {
-                    if state_ref.get_root().as_path() == root {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                                sub.status = Some("done".to_string());
-                                if sub.completed_at.is_none() {
-                                    sub.completed_at = Some(Utc::now().timestamp_millis());
-                                }
-                                sub.updated_at = Utc::now().timestamp_millis();
-                            }
-                        }
-                    }
-                }
+                let _ = upsert_single_task(root, sub);
+                sync_single_task_in_app_state(root, sub, app_handle);
             }
             if let Some(app) = app_handle {
                 let project_path_str = root.to_string_lossy().to_string();
@@ -2037,9 +1170,10 @@ pub async fn internal_advance_task_to_stage(
                 }
             }
 
-            let sub_summary_content = format!(
-                "### Саммари этапа {}: {}\n\n{}",
-                current_task.stage_id, current_task.title, summary
+            let sub_summary_content = format_stage_summary_activity(
+                &current_task.stage_id,
+                Some(&current_task.title),
+                summary,
             );
             let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
@@ -2070,7 +1204,8 @@ pub async fn internal_advance_task_to_stage(
                     }
                     t.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, t, app_handle);
-                    let _ = crate::db::db_upsert_task(root, t);
+                    let _ = upsert_single_task(root, t);
+                    sync_single_task_in_app_state(root, t, app_handle);
                 }
                 if t.parent_id.as_deref() == Some(&parent_id) {
                     t.status = Some("done".to_string());
@@ -2079,18 +1214,11 @@ pub async fn internal_advance_task_to_stage(
                     }
                     t.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, t, app_handle);
-                    let _ = crate::db::db_upsert_task(root, t);
+                    let _ = upsert_single_task(root, t);
+                    sync_single_task_in_app_state(root, t, app_handle);
                 }
             }
-            let _ = save_tasks_to_disk(root, &final_tasks).await;
             if let Some(app) = app_handle {
-                if let Some(state_ref) = app.try_state::<AppState>() {
-                    if state_ref.get_root().as_path() == root {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            *guard = final_tasks.clone();
-                        }
-                    }
-                }
                 let project_path_str = root.to_string_lossy().to_string();
                 if let Some(parent) = final_tasks.iter().find(|t| task_id_matches(&t.id, &parent_id)) {
                     let _ = app.emit("task:updated", serde_json::json!({ "task": parent, "projectPath": &project_path_str }));
@@ -2118,7 +1246,6 @@ pub async fn internal_advance_task_to_stage(
                 updated_parent.status.as_deref().unwrap_or("done")
             ));
         } else {
-            let mut tasks = load_tasks_from_disk(root).await;
             let existing_target_sub = tasks
                 .iter()
                 .filter(|t| {
@@ -2142,7 +1269,8 @@ pub async fn internal_advance_task_to_stage(
                     }
                     sub.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, sub, app_handle);
-                    let _ = crate::db::db_upsert_task(root, sub);
+                    let _ = upsert_single_task(root, sub);
+                    sync_single_task_in_app_state(root, sub, app_handle);
                 }
 
                 // 2. Update parent task waiting_for_subtask_id
@@ -2153,7 +1281,8 @@ pub async fn internal_advance_task_to_stage(
                         parent.completed_at = Some(Utc::now().timestamp_millis());
                     }
                     parent.updated_at = Utc::now().timestamp_millis();
-                    let _ = crate::db::db_upsert_task(root, parent);
+                    let _ = upsert_single_task(root, parent);
+                    sync_single_task_in_app_state(root, parent, app_handle);
                 }
 
                 // 3. Reactivate existing target subtask
@@ -2163,30 +1292,18 @@ pub async fn internal_advance_task_to_stage(
                     target_sub.completed_at = None;
                     target_sub.handover_summary = Some(summary.to_string());
                     target_sub.updated_at = Utc::now().timestamp_millis();
-                    let _ = crate::db::db_upsert_task(root, target_sub);
+                    let _ = upsert_single_task(root, target_sub);
+                    sync_single_task_in_app_state(root, target_sub, app_handle);
                 }
 
-                let _ = save_tasks_to_disk(root, &tasks).await;
-                if let Some(app) = app_handle {
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root().as_path() == root {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                *guard = tasks.clone();
-                            }
-                        }
-                    }
-                }
-
-                let sub_summary_content = format!(
-                    "### Саммари этапа {}: {}\n\n{}",
-                    current_task.stage_id, current_task.title, summary
+                let sub_summary_content = format_stage_summary_activity(
+                    &current_task.stage_id,
+                    Some(&current_task.title),
+                    summary,
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
-                let handover_prompt = format!(
-                    "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
-                    summary
-                );
+                let handover_prompt = format_handover_steer_prompt(summary);
                 if !target_has_autorun {
                     let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
                 }
@@ -2238,22 +1355,8 @@ pub async fn internal_advance_task_to_stage(
                     }
                     sub.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, sub, app_handle);
-                    let _ = crate::db::db_upsert_task(root, sub);
-                }
-                if let Some(app) = app_handle {
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root().as_path() == root {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                                    sub.status = Some("done".to_string());
-                                    if sub.completed_at.is_none() {
-                                        sub.completed_at = Some(Utc::now().timestamp_millis());
-                                    }
-                                    sub.updated_at = Utc::now().timestamp_millis();
-                                }
-                            }
-                        }
-                    }
+                    let _ = upsert_single_task(root, sub);
+                    sync_single_task_in_app_state(root, sub, app_handle);
                 }
                 if let Some(app) = app_handle {
                     let project_path_str = root.to_string_lossy().to_string();
@@ -2262,9 +1365,10 @@ pub async fn internal_advance_task_to_stage(
                     }
                 }
 
-                let sub_summary_content = format!(
-                    "### Саммари этапа {}: {}\n\n{}",
-                    current_task.stage_id, current_task.title, summary
+                let sub_summary_content = format_stage_summary_activity(
+                    &current_task.stage_id,
+                    Some(&current_task.title),
+                    summary,
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
@@ -2320,9 +1424,10 @@ pub async fn internal_advance_task_to_stage(
                             task_id, existing_sub_id, existing_sub.status
                         ),
                     );
-                    let parent_summary_content = format!(
-                        "### Саммари этапа {}: {}\n\n{}",
-                        current_task.stage_id, current_task.title, summary
+                    let parent_summary_content = format_stage_summary_activity(
+                        &current_task.stage_id,
+                        Some(&current_task.title),
+                        summary,
                     );
                     let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2368,7 +1473,6 @@ pub async fn internal_advance_task_to_stage(
             let target_has_autorun = target_col.persona.is_some() || target_col.auto_run == Some(true);
             let next_status = if target_has_autorun { "running" } else { "idle" };
 
-            let mut tasks = load_tasks_from_disk(root).await;
             if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
                 parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
                 parent.status = Some("done".to_string());
@@ -2377,7 +1481,8 @@ pub async fn internal_advance_task_to_stage(
                 }
                 parent.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, parent, app_handle);
-                let _ = crate::db::db_upsert_task(root, parent);
+                let _ = upsert_single_task(root, parent);
+                sync_single_task_in_app_state(root, parent, app_handle);
             }
 
             if let Some(target_sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
@@ -2385,30 +1490,18 @@ pub async fn internal_advance_task_to_stage(
                 target_sub.verdict = None;
                 target_sub.handover_summary = Some(summary.to_string());
                 target_sub.updated_at = Utc::now().timestamp_millis();
-                let _ = crate::db::db_upsert_task(root, target_sub);
+                let _ = upsert_single_task(root, target_sub);
+                sync_single_task_in_app_state(root, target_sub, app_handle);
             }
 
-            let _ = save_tasks_to_disk(root, &tasks).await;
-            if let Some(app) = app_handle {
-                if let Some(state_ref) = app.try_state::<AppState>() {
-                    if state_ref.get_root().as_path() == root {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            *guard = tasks.clone();
-                        }
-                    }
-                }
-            }
-
-            let parent_summary_content = format!(
-                "### Саммари этапа {}: {}\n\n{}",
-                current_task.stage_id, current_task.title, summary
+            let parent_summary_content = format_stage_summary_activity(
+                &current_task.stage_id,
+                Some(&current_task.title),
+                summary,
             );
             let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
-            let handover_prompt = format!(
-                "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
-                summary
-            );
+            let handover_prompt = format_handover_steer_prompt(summary);
             if !target_has_autorun {
                 let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
             }
@@ -2463,9 +1556,10 @@ pub async fn internal_advance_task_to_stage(
 
         let subtask_id = subtask.id.clone();
 
-        let parent_summary_content = format!(
-            "### Саммари этапа {}: {}\n\n{}",
-            current_task.stage_id, current_task.title, summary
+        let parent_summary_content = format_stage_summary_activity(
+            &current_task.stage_id,
+            Some(&current_task.title),
+            summary,
         );
         let _ = append_task_dialog_activity(
             root,
@@ -2510,7 +1604,7 @@ pub async fn internal_advance_task_to_stage(
     )
     .await?;
 
-    let summary_content = format!("### Саммари этапа: {}\n\n{}", target_col.title, summary);
+    let summary_content = format_stage_summary_activity(&target_col.title, None, summary);
     let _ = append_task_dialog_activity(
         root,
         task_id,
@@ -2540,7 +1634,8 @@ pub async fn internal_advance_task_to_stage(
         target_col.id,
         target_col.title,
         updated_task.status.as_deref().unwrap_or("done")
-    ))}
+    ))
+}
 
 pub async fn advance_task(
     task_id: String,
@@ -2550,4 +1645,128 @@ pub async fn advance_task(
 ) -> Result<String, String> {
     let root = state.get_root();
     internal_advance_task(&root, &task_id, &summary, Some(&app)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_task(id: &str, stage_id: &str, status: &str) -> Task {
+        Task {
+            id: id.to_string(),
+            title: format!("Title {}", id),
+            description: format!("Desc {}", id),
+            stage_id: stage_id.to_string(),
+            board_id: Some("default".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some(status.to_string()),
+            model: None,
+            provider_id: None,
+            reasoning_effort: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 1000,
+            updated_at: 1000,
+            stage_entered_at: Some(1000),
+            completed_at: None,
+            position: Some(1000.0),
+            hook_states: None,
+            project_path: None,
+            stage_durations: None,
+            total_elapsed: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn move_task_stage_preserves_concurrent_task_updates_during_on_enter_hook() {
+        let root_buf = std::env::temp_dir().join(format!("cvh_transitions_lost_update_{}", uuid::Uuid::new_v4()));
+        let root = root_buf.as_path();
+        std::fs::create_dir_all(root.join(".cvh")).expect("create .cvh");
+
+        // Create an on_enter script that concurrently updates CVH-002 in SQLite while CVH-001's hook is running
+        #[cfg(windows)]
+        let script_name = "concurrent_update.ps1";
+        #[cfg(not(windows))]
+        let script_name = "concurrent_update.sh";
+
+        let script_path = root.join(".cvh").join(script_name);
+        #[cfg(windows)]
+        std::fs::write(
+            &script_path,
+            "Start-Sleep -Milliseconds 200\r\nWrite-Output 'hook-ran'\r\n",
+        )
+        .expect("write hook");
+        #[cfg(not(windows))]
+        std::fs::write(&script_path, "#!/bin/sh\nsleep 0.2\necho 'hook-ran'\n").expect("write hook");
+
+        let pipeline_json = serde_json::json!({
+            "stages": [
+                { "id": "backlog", "title": "Backlog", "isIntake": true },
+                { "id": "dev", "title": "Dev", "onEnterScript": format!(".cvh/{}", script_name) },
+                { "id": "ready", "title": "Ready", "terminal": true }
+            ]
+        });
+        std::fs::write(
+            root.join(".cvh").join("pipeline.json"),
+            serde_json::to_string_pretty(&pipeline_json).unwrap(),
+        )
+        .expect("write pipeline.json");
+
+        let mut task1 = sample_task("CVH-001", "backlog", "idle");
+        let mut task2 = sample_task("CVH-002", "dev", "running");
+        upsert_single_task(root, &mut task1).expect("upsert task1");
+        upsert_single_task(root, &mut task2).expect("upsert task2");
+
+        let root_for_concurrent = root.to_path_buf();
+        let concurrent_writer = async move {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            task2.status = Some("done".to_string());
+            task2.stage_id = "ready".to_string();
+            task2.handover_summary = Some("Concurrent completion summary".to_string());
+            upsert_single_task(&root_for_concurrent, &mut task2).expect("concurrent upsert task2");
+        };
+
+        let (move_res, _) = tokio::join!(
+            internal_move_task_stage(
+                root,
+                "CVH-001",
+                "dev",
+                None,
+                None,
+                None,
+                None,
+                false,
+                None,
+            ),
+            concurrent_writer
+        );
+
+        let moved = move_res.expect("move CVH-001 to dev");
+
+        assert_eq!(moved.stage_id, "dev");
+
+        let final_tasks = load_tasks_from_disk(root).await;
+        let t2 = final_tasks
+            .iter()
+            .find(|t| t.id == "CVH-002")
+            .expect("CVH-002 present");
+        assert_eq!(t2.stage_id, "ready");
+        assert_eq!(t2.status.as_deref(), Some("done"));
+        assert_eq!(
+            t2.handover_summary.as_deref(),
+            Some("Concurrent completion summary")
+        );
+    }
 }

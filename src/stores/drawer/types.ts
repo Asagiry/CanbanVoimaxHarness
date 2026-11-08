@@ -5,6 +5,7 @@ import {
   ActivityType,
   SubagentInfo,
   SubagentStatus,
+  ReasoningEffort,
 } from '../../types';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
@@ -140,6 +141,7 @@ export interface SubagentsState {
   toolIdToSubagentId: Record<string, string>;
   subagentIdToToolId: Record<string, string>;
   subagents: Record<string, SubagentInfo[]>;
+  subagentConfigs: Record<string, { model?: string; providerId?: string; reasoningEffort?: ReasoningEffort }>;
 }
 
 export interface SubagentsActions {
@@ -151,6 +153,10 @@ export interface SubagentsActions {
   registerSubagent: (parentTaskId: string, subagent: SubagentInfo) => void;
   updateSubagentStatus: (subagentId: string, status: SubagentStatus, error?: string) => void;
   recordSubagentStep: (subagentId: string, activity?: DrawerActivityItem) => void;
+  updateSubagentConfig: (
+    subagentId: string,
+    config: { model?: string; providerId?: string; reasoningEffort?: ReasoningEffort }
+  ) => void;
 }
 
 export type SubagentsSlice = SubagentsState & SubagentsActions;

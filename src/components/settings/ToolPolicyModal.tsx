@@ -1,354 +1,23 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS, getToolTranslationKey, type ToolMeta } from '../../stores/toolPolicyStore';
+import { useToolPolicyStore, AVAILABLE_TOOLS, getToolTranslationKey } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
-import { X, ChevronDown, Trash2 } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
 import { useTranslation, type TranslationKey } from '../../stores/languageStore';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
-
-interface CustomTool {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  command: string;
-}
-
-function Toggle({
-  enabled,
-  onToggle,
-  title,
-  disabled,
-}: {
-  enabled: boolean;
-  onToggle: () => void;
-  title: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!disabled) onToggle();
-      }}
-      disabled={disabled}
-      aria-label={title}
-      aria-pressed={enabled}
-      className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer shrink-0 ${
-        enabled ? 'bg-[#171717] dark:bg-[#f4f4f5]' : 'bg-[#e4e4e7] dark:bg-[#2c2c33]'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white dark:bg-[#111114] shadow transition-all ${
-          enabled ? 'left-[18px]' : 'left-0.5'
-        }`}
-      />
-    </button>
-  );
-}
-
-function ToolParamRow({
-  toolId,
-  param,
-}: {
-  toolId: string;
-  param: {
-    key: string;
-    label: string;
-    defaultValue: number;
-    min: number;
-    max: number;
-    step: number;
-    unit: string;
-  };
-}) {
-  const { toolSettings, setToolSetting } = useToolPolicyStore();
-  const { t } = useTranslation();
-  const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
-  const [draft, setDraft] = useState(String(currentValue));
-
-  const paramLabelKey = `toolParam.${param.key}.label` as TranslationKey;
-  const paramUnitKey = `toolParam.${param.key}.unit` as TranslationKey;
-  const paramLabel = t(paramLabelKey) !== paramLabelKey ? t(paramLabelKey) : param.label;
-  const paramUnit = t(paramUnitKey) !== paramUnitKey ? t(paramUnitKey) : param.unit;
-
-  useEffect(() => {
-    setDraft(String(currentValue));
-  }, [currentValue]);
-
-  const commitValue = (val: number) => {
-    const clamped = Math.max(param.min, Math.min(param.max, val));
-    setDraft(String(clamped));
-    setToolSetting(toolId, param.key, clamped);
-  };
-
-  const handleStep = (delta: number) => {
-    commitValue(currentValue + delta);
-  };
-
-  const handleBlur = () => {
-    const parsed = parseInt(draft, 10);
-    if (isNaN(parsed)) {
-      setDraft(String(currentValue));
-    } else {
-      commitValue(parsed);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      (e.target as HTMLInputElement).blur();
-    }
-    if (e.key === 'Escape') {
-      setDraft(String(currentValue));
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-between gap-3 text-xs">
-      <div className="min-w-0 flex-1">
-        <span className="text-[11px] font-mono text-[#171717] dark:text-[#f4f4f5] block">
-          {paramLabel}
-        </span>
-        <span className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono block">
-          {t('toolPolicy.rangeStep', { min: param.min, max: param.max, step: param.step })}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-1.5 shrink-0">
-        <button
-          type="button"
-          disabled={currentValue <= param.min}
-          onClick={() => handleStep(-param.step)}
-          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label={t('toolPolicy.decreaseBy', { step: param.step })}
-        >
-          -
-        </button>
-
-        <input
-          type="number"
-          min={param.min}
-          max={param.max}
-          step={param.step}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
-        />
-
-        <button
-          type="button"
-          disabled={currentValue >= param.max}
-          onClick={() => handleStep(param.step)}
-          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label={t('toolPolicy.increaseBy', { step: param.step })}
-        >
-          +
-        </button>
-
-        <span className="text-[10px] text-[#666666] dark:text-[#71717a] font-mono min-w-[42px] text-left">
-          {paramUnit}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ToolParamsEditor({ toolId }: { toolId: string }) {
-  const paramDefs = TOOL_PARAM_DEFS[toolId];
-  const { t } = useTranslation();
-
-  if (!paramDefs || paramDefs.length === 0) return null;
-
-  return (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9fb] dark:bg-[#0b0b0e] space-y-2 select-none"
-    >
-      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#71717a] font-semibold border-b border-[#ebebeb] dark:border-[#212126] pb-1.5">
-        <span>{t('toolPolicy.toolParams')}</span>
-        <span className="text-[9px] text-[#8f8f8f] dark:text-[#52525b] lowercase font-normal">
-          {t('toolPolicy.savedInPolicies')}
-        </span>
-      </div>
-      {paramDefs.map((param) => (
-        <ToolParamRow key={param.key} toolId={toolId} param={param} />
-      ))}
-    </div>
-  );
-}
-
-function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
-  const { toolCustomSchemas, setToolCustomSchema, resetToolCustomSchema } = useToolPolicyStore();
-
-  const defaultSchema = useMemo(() => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters || { type: 'object', properties: {} },
-    },
-  }), [tool.name, tool.description, tool.parameters]);
-
-  const defaultJsonString = useMemo(() => {
-    return JSON.stringify(defaultSchema, null, 2);
-  }, [defaultSchema]);
-
-  const customSchema = toolCustomSchemas[tool.id];
-  const isCustomized = customSchema !== undefined;
-
-  const activeJsonString = useMemo(() => {
-    if (customSchema !== undefined) {
-      try {
-        return typeof customSchema === 'string'
-          ? JSON.stringify(JSON.parse(customSchema), null, 2)
-          : JSON.stringify(customSchema, null, 2);
-      } catch {
-        return typeof customSchema === 'string' ? customSchema : JSON.stringify(customSchema, null, 2);
-      }
-    }
-    return defaultJsonString;
-  }, [customSchema, defaultJsonString]);
-
-  const [jsonText, setJsonText] = useState(activeJsonString);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [savedFeedback, setSavedFeedback] = useState(false);
-
-  useEffect(() => {
-    setJsonText(activeJsonString);
-    setParseError(null);
-  }, [activeJsonString]);
-
-  const handleFormat = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const parsed = JSON.parse(jsonText);
-      const formatted = JSON.stringify(parsed, null, 2);
-      setJsonText(formatted);
-      setParseError(null);
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const parsed = JSON.parse(jsonText);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        setParseError('JSON должен быть объектом { "type": "function", "function": { ... } }');
-        return;
-      }
-      setToolCustomSchema(tool.id, parsed);
-      setParseError(null);
-      setSavedFeedback(true);
-      setTimeout(() => setSavedFeedback(false), 2000);
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const handleReset = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    resetToolCustomSchema(tool.id);
-    setJsonText(defaultJsonString);
-    setParseError(null);
-  };
-
-  return (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9fb] dark:bg-[#0b0b0e] space-y-2 select-none"
-    >
-      <div className="flex items-center justify-between gap-2 border-b border-[#ebebeb] dark:border-[#212126] pb-1.5 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#71717a] font-semibold">
-            Схема инструмента (JSON)
-          </span>
-          {isCustomized && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-              Кастомная схема
-            </span>
-          )}
-          {savedFeedback && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse">
-              Сохранено
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handleFormat}
-            className="px-2 py-0.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] text-[10px] font-mono hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
-          >
-            Форматировать
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-2 py-0.5 rounded border border-[#171717] dark:border-[#f4f4f5] bg-[#171717] dark:bg-[#f4f4f5] text-white dark:text-[#111114] text-[10px] font-mono font-medium hover:opacity-90 transition cursor-pointer"
-          >
-            Сохранить JSON
-          </button>
-          {isCustomized && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-2 py-0.5 rounded border border-[#fecaca] dark:border-[#da3633]/40 bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] text-[10px] font-mono hover:opacity-90 transition cursor-pointer"
-            >
-              Сбросить по умолчанию
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="pt-1 space-y-1.5">
-        <textarea
-          value={jsonText}
-          onChange={(e) => {
-            setJsonText(e.target.value);
-            if (parseError) setParseError(null);
-          }}
-          rows={11}
-          spellCheck={false}
-          className="w-full rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#24292f] dark:text-[#a1a1aa] font-mono text-xs p-2.5 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] leading-relaxed resize-y select-text"
-          placeholder='{ "type": "function", "function": { ... } }'
-        />
-
-        {parseError && (
-          <p className="text-[11px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded px-2.5 py-1.5">
-            Ошибка: {parseError}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-const NAME_PATTERN = /^[a-z0-9_]+$/;
-
-const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
-  'orchestration',
-  'interactive',
-  'workflow',
-  'system',
-  'fs',
-  'web',
-  'agent',
-];
-
-const getCategoryLabel = (catKey: string, t: (key: TranslationKey) => string) => {
-  const catTransKey = `toolPolicy.category.${catKey}` as TranslationKey;
-  const label = t(catTransKey);
-  return label !== catTransKey ? label : catKey;
-};
+import ToolParamsEditor, { PolicyToggle } from './tool-policy/ToolParamsEditor';
+import ToolSchemaEditor from './tool-policy/ToolSchemaEditor';
+import CustomToolForm, { CustomToolRows } from './tool-policy/CustomToolForm';
+import {
+  CATEGORY_ORDER,
+  getCategoryLabel,
+  buildAgentMatrix,
+  applyAgentToolToggle,
+  fetchCustomToolsIpc,
+  deleteCustomToolIpc,
+  type CustomTool,
+} from './tool-policy/toolPolicyConstants';
 
 export default function ToolPolicyModal() {
   const { zoom } = useUiZoom();
@@ -361,80 +30,24 @@ export default function ToolPolicyModal() {
     toolCustomSchemas,
   } = useToolPolicyStore();
   const { t } = useTranslation();
-
   const { agentPersonas, loadAgentPersonas } = useCortexStore();
   const { columns } = useBoardStore();
 
-  interface AgentMatrixItem {
-    role: string;
-    icon?: string;
-    color?: string;
-    isBuiltin: boolean;
-  }
-
-  const agents = useMemo<AgentMatrixItem[]>(() => {
-    const map = new Map<string, AgentMatrixItem>();
-
-    // 1. Персоны из реестра CortexStore
-    for (const p of agentPersonas) {
-      if (p.role) {
-        map.set(p.role, {
-          role: p.role,
-          icon: p.icon,
-          color: p.color,
-          isBuiltin: p.role === 'cvh-dev' || Boolean(p.isBuiltin),
-        });
-      }
-    }
-
-    // 2. Персоны, назначенные на колонки досок
-    for (const col of columns) {
-      if (col.persona && !map.has(col.persona)) {
-        map.set(col.persona, {
-          role: col.persona,
-          icon: col.icon,
-          color: col.color,
-          isBuiltin: col.persona === 'cvh-dev',
-        });
-      }
-    }
-
-    // 3. Fallback, если реестр пуст
-    if (map.size === 0) {
-      map.set('cvh-dev', { role: 'cvh-dev', icon: 'Cpu', isBuiltin: true });
-    }
-
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.isBuiltin && !b.isBuiltin) return -1;
-      if (!a.isBuiltin && b.isBuiltin) return 1;
-      return a.role.localeCompare(b.role);
-    });
-  }, [agentPersonas, columns]);
+  const agents = useMemo(() => buildAgentMatrix(agentPersonas, columns), [agentPersonas, columns]);
 
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
-
   const [customTools, setCustomTools] = useState<CustomTool[]>([]);
   const [customLoading, setCustomLoading] = useState(false);
   const [customListError, setCustomListError] = useState<string | null>(null);
-
-  const [customName, setCustomName] = useState('');
-  const [customDescription, setCustomDescription] = useState('');
-  const [customCommand, setCustomCommand] = useState('');
-  const [customParamsText, setCustomParamsText] = useState('{}');
   const [customFormError, setCustomFormError] = useState<string | null>(null);
-  const [customSaving, setCustomSaving] = useState(false);
 
-  const toggleExpanded = (id: string) => {
-    setExpandedToolId((prev) => (prev === id ? null : id));
-  };
+  const toggleExpanded = (id: string) => setExpandedToolId((prev) => (prev === id ? null : id));
 
   const loadCustomTools = useCallback(async () => {
     setCustomLoading(true);
     setCustomListError(null);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const list = await invoke<CustomTool[]>('list_custom_tools');
-      setCustomTools(Array.isArray(list) ? list : []);
+      setCustomTools(await fetchCustomToolsIpc());
     } catch (err) {
       setCustomTools([]);
       setCustomListError(err instanceof Error ? err.message : String(err));
@@ -452,63 +65,11 @@ export default function ToolPolicyModal() {
     }
   }, [isModalOpen, loadCustomTools, loadAgentPersonas]);
 
-  const handleAddCustomTool = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomFormError(null);
-
-    const name = customName.trim();
-    const description = customDescription.trim();
-    const command = customCommand.trim();
-    const paramsRaw = customParamsText.trim() === '' ? '{}' : customParamsText.trim();
-
-    if (!NAME_PATTERN.test(name)) {
-      setCustomFormError(t('toolPolicy.errNamePattern'));
-      return;
-    }
-    if (!description) {
-      setCustomFormError(t('toolPolicy.errDescRequired'));
-      return;
-    }
-    if (!command) {
-      setCustomFormError(t('toolPolicy.errCommandRequired'));
-      return;
-    }
-    let parameters: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(paramsRaw);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        setCustomFormError(t('toolPolicy.errParamsObject'));
-        return;
-      }
-      parameters = parsed as Record<string, unknown>;
-    } catch (err) {
-      setCustomFormError(t('toolPolicy.errParamsJson', { error: err instanceof Error ? err.message : String(err) }));
-      return;
-    }
-
-    setCustomSaving(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke<string>('save_custom_tool', { name, description, parameters, command });
-      setCustomName('');
-      setCustomDescription('');
-      setCustomCommand('');
-      setCustomParamsText('{}');
-      await loadCustomTools();
-    } catch (err) {
-      setCustomFormError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCustomSaving(false);
-    }
-  };
-
   const handleDeleteCustomTool = async (name: string) => {
-    const confirmed = window.confirm(t('toolPolicy.deleteToolConfirm', { name }));
-    if (!confirmed) return;
+    if (!window.confirm(t('toolPolicy.deleteToolConfirm', { name }))) return;
     setCustomFormError(null);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_custom_tool', { name });
+      await deleteCustomToolIpc(name);
       await loadCustomTools();
     } catch (err) {
       setCustomFormError(err instanceof Error ? err.message : String(err));
@@ -523,12 +84,8 @@ export default function ToolPolicyModal() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] px-4 py-3 bg-white dark:bg-[#111114]">
           <div>
-            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">
-              {t('toolPolicy.modalTitle')}
-            </h2>
-            <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-mono mt-0.5">
-              {t('toolPolicy.modalSubtitle')}
-            </p>
+            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">{t('toolPolicy.modalTitle')}</h2>
+            <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-mono mt-0.5">{t('toolPolicy.modalSubtitle')}</p>
           </div>
           <button
             onClick={closeModal}
@@ -572,16 +129,13 @@ export default function ToolPolicyModal() {
 
               <tbody className="divide-y divide-[#ebebeb] dark:divide-[#212126]">
                 {CATEGORY_ORDER.map((catKey) => {
-                  const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
+                  const toolsInCat = AVAILABLE_TOOLS.filter((tool) => tool.category === catKey);
                   if (toolsInCat.length === 0) return null;
 
                   return (
                     <Fragment key={`cat-grp-${catKey}`}>
                       <tr className="bg-[#f4f4f5]/90 dark:bg-[#17171b] border-y border-[#ebebeb] dark:border-[#212126]">
-                        <td
-                          colSpan={2 + agents.length}
-                          className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#71717a] uppercase tracking-wider"
-                        >
+                        <td colSpan={2 + agents.length} className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#71717a] uppercase tracking-wider">
                           {getCategoryLabel(catKey, t)}
                         </td>
                       </tr>
@@ -593,11 +147,7 @@ export default function ToolPolicyModal() {
 
                         return (
                           <Fragment key={tool.id}>
-                            <tr
-                              className={`hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition text-[#171717] dark:text-[#f4f4f5] ${
-                                isChild ? 'bg-[#fafafc] dark:bg-[#0b0b0e]' : ''
-                              }`}
-                            >
+                            <tr className={`hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition text-[#171717] dark:text-[#f4f4f5] ${isChild ? 'bg-[#fafafc] dark:bg-[#0b0b0e]' : ''}`}>
                               <td className={`py-2 px-3 align-middle ${isChild ? 'pl-7' : ''}`}>
                                 <div className="flex items-start gap-1.5 text-left w-full">
                                   {isChild && (
@@ -605,21 +155,11 @@ export default function ToolPolicyModal() {
                                       {tool.id === 'subagent_list' ? '└──' : '├──'}
                                     </span>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpanded(tool.id)}
-                                    className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
-                                  >
-                                    <ChevronDown
-                                      className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                    />
+                                  <button type="button" onClick={() => toggleExpanded(tool.id)} className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group">
+                                    <ChevronDown className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span
-                                          className={`font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2 ${
-                                            tool.isSubagentMaster ? 'font-semibold' : ''
-                                          }`}
-                                        >
+                                        <span className={`font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
                                           {toolLabel}
                                         </span>
                                         {toolCustomSchemas[tool.id] !== undefined ? (
@@ -632,9 +172,7 @@ export default function ToolPolicyModal() {
                                           </span>
                                         ) : null}
                                       </div>
-                                      <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono leading-tight mt-0.5">
-                                        {tool.name}
-                                      </div>
+                                      <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono leading-tight mt-0.5">{tool.name}</div>
                                     </div>
                                   </button>
                                 </div>
@@ -645,52 +183,30 @@ export default function ToolPolicyModal() {
                               </td>
 
                               {agents.map((agent) => {
-                                const isMasterAllowed = isChild && tool.parentTool
-                                  ? isToolAllowed(tool.parentTool, agent.role)
-                                  : true;
+                                const isMasterAllowed = isChild && tool.parentTool ? isToolAllowed(tool.parentTool, agent.role) : true;
                                 const isAllowed = isToolAllowed(tool.id, agent.role);
                                 const isDisabled = isChild && !isMasterAllowed;
-                                const masterLabel = tool.parentTool
-                                  ? (t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) !== getToolTranslationKey(tool.parentTool, 'label')
-                                      ? t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey)
-                                      : tool.parentTool)
-                                  : '';
+                                const masterKey = tool.parentTool ? (getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) : null;
+                                const masterLabel = masterKey && t(masterKey) !== masterKey ? t(masterKey) : tool.parentTool || '';
 
                                 return (
                                   <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#212126] align-middle">
-                                    {isDisabled ? (
-                                      <span className="inline-flex justify-center opacity-40 pt-0.5">
-                                        <Toggle
-                                          enabled={false}
-                                          disabled={true}
-                                          onToggle={() => {}}
-                                          title={t('toolPolicy.masterDisabledNotice', {
-                                            tool: toolLabel,
-                                            master: masterLabel,
-                                            agent: agent.role,
-                                          })}
-                                        />
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex justify-center pt-0.5">
-                                        <Toggle
-                                          enabled={isAllowed}
-                                          onToggle={() => {
-                                            setStageTool(agent.role, tool.id, !isAllowed);
-                                            for (const col of columns) {
-                                              if (col.persona === agent.role && col.id !== agent.role) {
-                                                setStageTool(col.id, tool.id, !isAllowed);
-                                              }
-                                            }
-                                          }}
-                                          title={t('toolPolicy.toolAgentStatus', {
-                                            tool: toolLabel,
-                                            agent: agent.role,
-                                            status: isAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
-                                          })}
-                                        />
-                                      </span>
-                                    )}
+                                    <span className={`inline-flex justify-center pt-0.5 ${isDisabled ? 'opacity-40' : ''}`}>
+                                      <PolicyToggle
+                                        enabled={!isDisabled && isAllowed}
+                                        disabled={isDisabled}
+                                        onToggle={() => applyAgentToolToggle(agent.role, tool.id, !isAllowed, columns, setStageTool)}
+                                        title={
+                                          isDisabled
+                                            ? t('toolPolicy.masterDisabledNotice', { tool: toolLabel, master: masterLabel, agent: agent.role })
+                                            : t('toolPolicy.toolAgentStatus', {
+                                                tool: toolLabel,
+                                                agent: agent.role,
+                                                status: isAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
+                                              })
+                                        }
+                                      />
+                                    </span>
                                   </td>
                                 );
                               })}
@@ -712,184 +228,27 @@ export default function ToolPolicyModal() {
                   );
                 })}
 
-                {customTools.map((customTool) => {
-                  const customId = `custom:${customTool.name}`;
-                  const isExpanded = expandedToolId === customId;
-
-                  return (
-                    <Fragment key={customId}>
-                      <tr className="hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition text-[#171717] dark:text-[#f4f4f5]">
-                        <td className="py-2 px-3 align-middle">
-                          <div className="flex items-start gap-1.5 text-left w-full">
-                            <button
-                              type="button"
-                              onClick={() => toggleExpanded(customId)}
-                              className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
-                            >
-                              <ChevronDown
-                                className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2">
-                                    {customTool.name}
-                                  </span>
-                                  <span className="rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#71717a] align-middle">
-                                    {t('toolPolicy.customBadge')}
-                                  </span>
-                                </div>
-                                <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono leading-tight mt-0.5 truncate">
-                                  {customTool.description}
-                                </div>
-                              </div>
-                            </button>
-                          </div>
-                        </td>
-
-                        <td className="py-2 px-2 text-right text-[#8f8f8f] tabular-nums text-[11px] align-middle">
-                          —
-                        </td>
-
-                        {agents.map((agent) => {
-                          const isCustomAllowed = isToolAllowed(customTool.name, agent.role);
-
-                          return (
-                            <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#212126] align-middle">
-                              <span className="inline-flex justify-center pt-0.5">
-                                <Toggle
-                                  enabled={isCustomAllowed}
-                                  onToggle={() => {
-                                    setStageTool(agent.role, customTool.name, !isCustomAllowed);
-                                    for (const col of columns) {
-                                      if (col.persona === agent.role && col.id !== agent.role) {
-                                        setStageTool(col.id, customTool.name, !isCustomAllowed);
-                                      }
-                                    }
-                                  }}
-                                  title={t('toolPolicy.toolAgentStatus', {
-                                    tool: customTool.name,
-                                    agent: agent.role,
-                                    status: isCustomAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
-                                  })}
-                                />
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-
-                      {isExpanded && (
-                        <tr className="bg-[#f9f9fb] dark:bg-[#0b0b0e] border-b border-[#ebebeb] dark:border-[#212126]">
-                          <td colSpan={2 + agents.length} className="p-3">
-                            <div className="space-y-1.5 text-xs font-mono">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[#666666] dark:text-[#71717a]">{t('toolPolicy.commandPrefix')} <code className="bg-[#f4f4f5] dark:bg-[#232328] px-1 py-0.5 rounded">{customTool.command}</code></span>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDeleteCustomTool(customTool.name)}
-                                  className="px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                  {t('common.delete')}
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                <CustomToolRows
+                  customTools={customTools}
+                  agents={agents}
+                  columns={columns}
+                  expandedToolId={expandedToolId}
+                  onToggleExpanded={toggleExpanded}
+                  isToolAllowed={isToolAllowed}
+                  setStageTool={setStageTool}
+                  onDeleteCustomTool={handleDeleteCustomTool}
+                />
               </tbody>
             </table>
           </div>
 
-          {/* Custom Tools Creation Form */}
-          <div className="pt-2">
-            <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
-              {t('toolPolicy.customTools')}
-            </h3>
-
-            {customLoading && (
-              <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-sans mt-2">{t('common.loading')}</p>
-            )}
-            {customListError && (
-              <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
-                {customListError}
-              </p>
-            )}
-
-            <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#17171b] space-y-2.5">
-              <p className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] font-sans">
-                {t('toolPolicy.addTool')}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
-                    {t('toolPolicy.nameLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="my_tool"
-                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs transition"
-                  />
-                </div>
-                <div>
-                  <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
-                    {t('toolPolicy.commandLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    value={customCommand}
-                    onChange={(e) => setCustomCommand(e.target.value)}
-                    placeholder="my-script --input {args}"
-                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs transition"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
-                  {t('toolPolicy.descLabel')}
-                </label>
-                <input
-                  type="text"
-                  value={customDescription}
-                  onChange={(e) => setCustomDescription(e.target.value)}
-                  placeholder={t('toolPolicy.descPlaceholder')}
-                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-sans text-xs transition"
-                />
-              </div>
-              <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
-                  {t('toolPolicy.paramsLabel')}
-                </label>
-                <textarea
-                  rows={3}
-                  value={customParamsText}
-                  onChange={(e) => setCustomParamsText(e.target.value)}
-                  placeholder={'{"type": "object", "properties": {}}'}
-                  spellCheck={false}
-                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs resize-y transition"
-                />
-              </div>
-              {customFormError && (
-                <p className="text-[11px] font-sans text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
-                  {customFormError}
-                </p>
-              )}
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={customSaving}
-                  className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
-                >
-                  {customSaving ? t('common.saving') : t('toolPolicy.add')}
-                </button>
-              </div>
-            </form>
-          </div>
+          <CustomToolForm
+            customLoading={customLoading}
+            customListError={customListError}
+            customFormError={customFormError}
+            setCustomFormError={setCustomFormError}
+            onToolSaved={loadCustomTools}
+          />
         </div>
 
         {/* Footer */}

@@ -1089,30 +1089,7 @@ pub async fn find_subagent_session(
     None
 }
 
-/// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
-/// Rotates the log to `.cvh/llm_debug.log.1` if size exceeds 10MB.
-pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
-    let cvh_dir = repo_root.join(".cvh");
-    let _ = tokio::fs::create_dir_all(&cvh_dir).await;
-    let log_path = cvh_dir.join("llm_debug.log");
-    const MAX_BYTES: u64 = 10 * 1024 * 1024; // 10MB
-    if let Ok(meta) = tokio::fs::metadata(&log_path).await {
-        if meta.len() >= MAX_BYTES {
-            let rot_path = cvh_dir.join("llm_debug.log.1");
-            let _ = tokio::fs::remove_file(&rot_path).await;
-            let _ = tokio::fs::rename(&log_path, &rot_path).await;
-        }
-    }
-    if let Ok(mut file) = tokio::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path)
-        .await
-    {
-        use tokio::io::AsyncWriteExt;
-        let _ = file.write_all(text.as_bytes()).await;
-    }
-}
+// append_llm_debug_log extracted to crate::agent::telemetry
 
 /// Helper to look up a completed subagent's report from SQLite dialog_items.
 pub fn find_subagent_report_from_db(
@@ -1558,6 +1535,8 @@ You are an in-process subagent executing an atomic subtask.
 Allowed Tools: {:?}
 Invariants:
 - Do not attempt to move kanban stages or spawn nested subagents.
+- Working Directory Invariant: All file tools and execute_command ALREADY run inside the working directory. NEVER prepend 'cd /d <path> &&' or 'cd <path> &&' to execute_command.
+- Search Invariant: Prefer native 'grep', 'glob', and 'read_file' tools over shell 'findstr' or 'grep' via execute_command.
 - Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
 - Execute the task thoroughly and verify results.
 - When done, output your comprehensive final report.",
@@ -1568,7 +1547,7 @@ Invariants:
 
     let initial_user_prompt = format!(
         "# Context
-Working directory: {}
+Working directory: {} (already active for all file tools and execute_command — do NOT prepend 'cd /d')
 Task Title: {}
 
 # Objective: {}
@@ -1586,8 +1565,8 @@ Task Title: {}
         ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
     ];
 
-    let base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1");
-    let resolved_model = match ctx
+    let mut base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1").to_string();
+    let mut resolved_model = match ctx
         .model
         .as_deref()
         .map(str::trim)
@@ -1606,11 +1585,10 @@ Task Title: {}
             }
         }
     };
-    let model = resolved_model.as_str();
-    let api_key = ctx.api_key.as_deref();
+    let mut api_key = ctx.api_key.clone();
     let temperature = ctx.temperature.or(Some(0.2));
     // A subagent's own `setting` wins over the parent-inherited effort.
-    let reasoning_effort = crate::config::normalize_reasoning_effort(
+    let mut reasoning_effort = crate::config::normalize_reasoning_effort(
         subagent_setting.reasoning_effort.as_deref(),
     )
     .or_else(|| ctx.reasoning_effort.clone());
@@ -1627,21 +1605,49 @@ Task Title: {}
         tool_call_id: tool_call_id.clone(),
         repo_root: ctx.repo_root.to_path_buf(),
         worktree_dir: ctx.worktree_dir.to_path_buf(),
-        model: model.to_string(),
+        model: resolved_model.clone(),
         app_handle: ctx.app_handle.clone(),
     });
     let subagent_engine = ReActEngine::new(subagent_driver);
     let mut stream_retries = 0;
+    let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
+    let sub_context_window = subagent_setting.context_window.unwrap_or(128_000) as usize;
 
     loop {
         sub_turn += 1;
+        if sub_turn > MAX_SUBAGENT_TURNS {
+            eprintln!(
+                "CVH [agent]: Subagent [{}] reached MAX_SUBAGENT_TURNS ({}), breaking to force final synthesis.",
+                subagent_id, MAX_SUBAGENT_TURNS
+            );
+            break;
+        }
         if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
             let mut info = session.retry_info.lock().await;
             info.steps = sub_turn;
+            if let Some(ref m) = info.ctx.model {
+                if !m.trim().is_empty() {
+                    resolved_model = m.trim().to_string();
+                }
+            }
+            if let Some(ref b) = info.ctx.base_url {
+                if !b.trim().is_empty() {
+                    base_url = b.trim().to_string();
+                }
+            }
+            if info.ctx.api_key.is_some() {
+                api_key = info.ctx.api_key.clone();
+            }
+            if info.ctx.reasoning_effort.is_some() {
+                reasoning_effort = info.ctx.reasoning_effort.clone();
+            }
         }
+        let model = resolved_model.as_str();
         if ctx.abort_handle.load(Ordering::SeqCst) {
             break;
         }
+
+        maybe_compact_messages(&mut sub_messages, sub_context_window);
 
         let req_tools = if active_sub_tool_defs.is_empty() {
             None
@@ -1662,43 +1668,23 @@ Task Title: {}
             }),
         };
 
-        // Log raw request for complete transparency & debugging (§ llm_debug.log)
-        {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-            let req_tokens_est = compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref());
-            let req_chars: usize = sub_messages.iter().map(|m| m.content.as_ref().map(|c| match c {
-                crate::llm::MessageContent::Text(t) => t.len(),
-                crate::llm::MessageContent::Parts(parts) => parts.iter().map(|p| match p {
-                    crate::llm::ContentPart::Text { text } => text.len(),
-                    _ => 0,
-                }).sum(),
-            }).unwrap_or(0)).sum();
-            let mut req_log = format!(
-                "[{}] [{}] Subagent Turn {} Request:
-Model: {}
-Messages count: {}
-Req tokens (est): {}
-Req chars: {}
-",
-                ts, subagent_id, sub_turn, model, sub_messages.len(), req_tokens_est, req_chars
-            );
-            if let Some(first) = sub_messages.first() {
-                if first.role == Role::System {
-                    req_log.push_str(&format!("System prompt:
-{}
-", first.content.as_deref().unwrap_or("")));
-                }
-            }
-            req_log.push_str(&format!("Tool calls requested ({}): {:?}
-
-", effective_sub_tools.len(), effective_sub_tools));
-            append_llm_debug_log(&ctx.repo_root, &req_log).await;
-        }
+        telemetry::log_turn_request(
+            &ctx.repo_root,
+            &subagent_id,
+            sub_turn,
+            true,
+            model,
+            &sub_messages,
+            req_tools.as_deref(),
+            &effective_sub_tools,
+            None,
+        )
+        .await;
 
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
         let cl = llm_client.clone();
-        let b_url = base_url.to_string();
-        let a_key = api_key.map(|s| s.to_string());
+        let b_url = base_url.clone();
+        let a_key = api_key.clone();
 
         tokio::spawn(async move {
             if let Err(e) = cl.stream_openai(&b_url, a_key.as_deref(), req, tx.clone()).await {
@@ -1727,17 +1713,7 @@ Req chars: {}
         if let Some(err) = stream_res.error {
             // Transient provider overload (429 rate-limit, 5xx, timeouts): retry the turn
             // instead of instantly bricking the subagent (Ponytail: 2 backoff retries).
-            let low = err.to_ascii_lowercase();
-            let retryable = low.contains("429")
-                || low.contains("rate_limit")
-                || low.contains("temporarily")
-                || low.contains("overloaded")
-                || low.contains("capacity")
-                || low.contains("timeout")
-                || low.contains("500")
-                || low.contains("502")
-                || low.contains("503")
-                || low.contains("504");
+            let retryable = react_engine::is_transient_llm_error(&err);
             if retryable && stream_retries < 2 && !ctx.abort_handle.load(Ordering::SeqCst) {
                 stream_retries += 1;
                 eprintln!(
@@ -1759,41 +1735,16 @@ Req chars: {}
         let turn_thoughts = stream_res.thoughts;
         let turn_tool_calls = stream_res.tool_calls;
 
-        // Log raw response for complete transparency & debugging (§ llm_debug.log)
-        {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-            let mut resp_log = format!(
-                "[{}] [{}] Subagent Turn {} Response:
-",
-                ts, subagent_id, sub_turn
-            );
-            if !turn_thoughts.trim().is_empty() {
-                resp_log.push_str(&format!("Thoughts:
-{}
-", turn_thoughts.trim()));
-            }
-            if !turn_content.trim().is_empty() {
-                resp_log.push_str(&format!("Content:
-{}
-", turn_content.trim()));
-            }
-            if !turn_tool_calls.is_empty() {
-                resp_log.push_str(&format!("Tool calls received ({}):
-", turn_tool_calls.len()));
-                for tc in &turn_tool_calls {
-                    resp_log.push_str(&format!("  - {} (id: {}): {}
-", tc.function.name, tc.id, tc.function.arguments));
-                }
-            } else {
-                resp_log.push_str("Tool calls received: None (terminal response)
-");
-            }
-            resp_log.push_str("
---------------------------------------------------------------------------------
-
-");
-            append_llm_debug_log(&ctx.repo_root, &resp_log).await;
-        }
+        telemetry::log_turn_response(
+            &ctx.repo_root,
+            &subagent_id,
+            sub_turn,
+            true,
+            &turn_thoughts,
+            &turn_content,
+            &turn_tool_calls,
+        )
+        .await;
 
         if turn_tool_calls.is_empty() {
             final_sub_response = turn_content.clone();
@@ -2022,16 +1973,31 @@ Req chars: {}
                 task_id: Some(&subagent_id),
                 agent_allowed_tools: Some(&effective_sub_tools),
                 app_handle: ctx.app_handle.clone(),
-                base_url: ctx.base_url.as_deref(),
-                api_key: ctx.api_key.as_deref(),
+                base_url: Some(base_url.as_str()),
+                api_key: api_key.as_deref(),
                 model: Some(model),
                 
                 temperature: ctx.temperature,
-                reasoning_effort: ctx.reasoning_effort.as_deref(),
+                reasoning_effort: reasoning_effort.as_deref(),
                 call_id: Some(&tc.id),
             };
 
-            let exec_res = execute_tool(&sub_tool_ctx, &tc.function.name, &parsed_args).await;
+            let exec_res = if let Some(cb_msg) = detect_degenerate_command_or_loop(
+                &tc.function.name,
+                &tc.function.arguments,
+                &recent_tool_calls,
+            ) {
+                Err(anyhow::anyhow!("{}", cb_msg))
+            } else {
+                execute_tool(&sub_tool_ctx, &tc.function.name, &parsed_args).await
+            };
+            recent_tool_calls.push(normalize_tool_call_for_circuit_breaker(
+                &tc.function.name,
+                &tc.function.arguments,
+            ));
+            if recent_tool_calls.len() > 16 {
+                recent_tool_calls.remove(0);
+            }
             if ctx.abort_handle.load(Ordering::SeqCst) {
                 let duration_ms = (chrono::Utc::now().timestamp_millis() - start_time) as f64;
                 let tool_exec_aborted = serde_json::json!({
@@ -2144,19 +2110,7 @@ Req chars: {}
         // Transient provider errors (429 rate-limit, 5xx, timeouts): the subagent is NOT
         // finished. Park it as paused — the parent channel stays pending, and the user
         // can Continue (with model switch) or manually Stop (abort). Never auto-complete.
-        let is_transient = {
-            let low = err_msg.to_ascii_lowercase();
-            low.contains("429")
-                || low.contains("rate_limit")
-                || low.contains("temporarily")
-                || low.contains("overloaded")
-                || low.contains("capacity")
-                || low.contains("timeout")
-                || low.contains("500")
-                || low.contains("502")
-                || low.contains("503")
-                || low.contains("504")
-        };
+        let is_transient = react_engine::is_transient_llm_error(&err_msg);
 
         if is_transient {
             if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
@@ -2233,6 +2187,7 @@ Req chars: {}
             "Предоставь краткий и исчерпывающий финальный отчет о результатах выполненной работы и найденных данных (Provide a concise, comprehensive final report summarizing your findings and work done)."
         ));
 
+        let model = resolved_model.as_str();
         let synth_system_tokens = system_tokens;
         let synth_opts = StreamConsumerOptions {
             model,
@@ -2251,8 +2206,8 @@ Req chars: {}
         loop {
             let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
             let cl = llm_client.clone();
-            let b_url = base_url.to_string();
-            let a_key = api_key.map(|s| s.to_string());
+            let b_url = base_url.clone();
+            let a_key = api_key.clone();
             let req_clone = OpenAIChatRequest {
                 model: model.to_string(),
                 messages: sub_messages.clone(),
@@ -2272,17 +2227,7 @@ Req chars: {}
 
             let synth_res = subagent_engine.consume_turn_stream(&mut rx, &ctx.abort_handle, &synth_opts).await;
             if let Some(err) = synth_res.error {
-                let low = err.to_ascii_lowercase();
-                let retryable = low.contains("429")
-                    || low.contains("rate_limit")
-                    || low.contains("temporarily")
-                    || low.contains("overloaded")
-                    || low.contains("capacity")
-                    || low.contains("timeout")
-                    || low.contains("500")
-                    || low.contains("502")
-                    || low.contains("503")
-                    || low.contains("504");
+                let retryable = react_engine::is_transient_llm_error(&err);
                 if retryable && synth_retries < 2 && !ctx.abort_handle.load(Ordering::SeqCst) {
                     synth_retries += 1;
                     eprintln!(
@@ -2302,17 +2247,7 @@ Req chars: {}
         // subagent (not finished) so the user can Continue/Stop manually — mirrors
         // the main turn-loop transient path.
         if let Some(err_msg) = synth_error.clone() {
-            let low = err_msg.to_ascii_lowercase();
-            let is_transient = low.contains("429")
-                || low.contains("rate_limit")
-                || low.contains("temporarily")
-                || low.contains("overloaded")
-                || low.contains("capacity")
-                || low.contains("timeout")
-                || low.contains("500")
-                || low.contains("502")
-                || low.contains("503")
-                || low.contains("504");
+            let is_transient = react_engine::is_transient_llm_error(&err_msg);
             if is_transient {
                 let duration_ms = start_instant.elapsed().as_millis() as f64;
                 if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
@@ -2477,6 +2412,57 @@ Subagent [{}] '{}' report:
     })
 }
 
+/// Updates an in-process subagent session's model, provider endpoint, or reasoning effort in place.
+/// Returns `true` if a matching subagent session was found and updated.
+pub async fn update_subagent_session_model_or_effort(
+    repo_root: &Path,
+    subagent_id: &str,
+    model: Option<&str>,
+    provider_id: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> bool {
+    let parent_hint = subagent_id
+        .split(".sub-")
+        .next()
+        .filter(|p| *p != subagent_id);
+    let found = match find_subagent_session(None, subagent_id).await {
+        Some(res) => Some(res),
+        None => match parent_hint {
+            Some(pid) => find_subagent_session(Some(pid), subagent_id).await,
+            None => None,
+        },
+    };
+    let Some((_, session)) = found else {
+        return false;
+    };
+
+    let mut info = session.retry_info.lock().await;
+    if let Some(m) = model.map(str::trim).filter(|s| !s.is_empty()) {
+        info.ctx.model = Some(m.to_string());
+    }
+    if let Some(pid) = provider_id.map(str::trim).filter(|s| !s.is_empty()) {
+        let settings = crate::config::load_llm_settings(repo_root)
+            .await
+            .unwrap_or_default();
+        let model_id = info
+            .ctx
+            .model
+            .clone()
+            .unwrap_or_else(|| settings.model.clone());
+        let (base_url, api_key) = settings.endpoint_for_pair(Some(pid), &model_id);
+        if !base_url.is_empty() {
+            info.ctx.base_url = Some(base_url);
+        }
+        if api_key.is_some() {
+            info.ctx.api_key = api_key;
+        }
+    }
+    if let Some(eff) = reasoning_effort.map(str::trim).filter(|s| !s.is_empty()) {
+        info.ctx.reasoning_effort = crate::config::normalize_reasoning_effort(Some(eff));
+    }
+    true
+}
+
 pub async fn retry_subagent_execution(
     parent_task_id: Option<&str>,
     subagent_id: &str,
@@ -2534,24 +2520,37 @@ pub async fn retry_subagent_execution(
             } else {
                 resolved_id.clone()
             };
-            let user_item = ActivityItem {
-                id: format!(
-                    "sub-user-{}-{}",
-                    sub_dialog_id.replace(':', "-"),
-                    chrono::Utc::now().timestamp_millis()
-                ),
-                item_type: "user".to_string(),
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                content: Some(trimmed.to_string()),
-                tool: None,
-                duration_ms: None,
-                images: None,
+            let existing_user_item = crate::db::load_dialog_items(&info.ctx.repo_root, &sub_dialog_id)
+                .ok()
+                .and_then(|items| {
+                    items.into_iter().rev().find(|it| {
+                        (it.item_type == "user" || it.item_type == "steer")
+                            && it.content.as_deref().map(str::trim) == Some(trimmed)
+                    })
+                });
+            let user_item = if let Some(existing) = existing_user_item {
+                existing
+            } else {
+                let item = ActivityItem {
+                    id: format!(
+                        "sub-user-{}-{}",
+                        sub_dialog_id.replace(':', "-"),
+                        chrono::Utc::now().timestamp_millis()
+                    ),
+                    item_type: "user".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: Some(trimmed.to_string()),
+                    tool: None,
+                    duration_ms: None,
+                    images: None,
+                };
+                let _ = crate::db::append_dialog_items(
+                    &info.ctx.repo_root,
+                    &sub_dialog_id,
+                    std::slice::from_ref(&item),
+                );
+                item
             };
-            let _ = crate::db::append_dialog_items(
-                &info.ctx.repo_root,
-                &sub_dialog_id,
-                std::slice::from_ref(&user_item),
-            );
             if let Some(ref app) = info.ctx.app_handle {
                 let _ = app.emit(
                     "subagent:activity",
@@ -3597,6 +3596,7 @@ where
     let mut context_revision = local_compaction_rev;
     const MAX_COMPLETION_NUDGES: usize = 3;
     let mut completion_nudges: usize = 0;
+    let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
 
     // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
     // через терминальный ответ модели (текст без тул-коллов), abort_flag
@@ -3835,43 +3835,18 @@ where
             stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
         };
 
-        // Log raw request for complete transparency & debugging (§ llm_debug.log)
-        {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-            let req_tokens_est = compactor::estimate_request_tokens(&messages, tools.as_deref());
-            let req_chars: usize = messages.iter().map(|m| m.content.as_ref().map(|c| match c {
-                crate::llm::MessageContent::Text(t) => t.len(),
-                crate::llm::MessageContent::Parts(parts) => parts.iter().map(|p| match p {
-                    crate::llm::ContentPart::Text { text } => text.len(),
-                    _ => 0,
-                }).sum(),
-            }).unwrap_or(0)).sum();
-            let mut req_log = format!(
-                "[{}] [{}] Turn {} Request:
-Model: {}
-Messages count: {}
-Req tokens (est): {}
-Req chars: {}
-Session: {}
-Endpoint: {}
-",
-                ts, config.task_id, turn, config.model, messages.len(), req_tokens_est, req_chars,
-                crate::llm::cache::opencode_session_header(&config.base_url, &format!("{}:{}", config.repo_root.display(), config.task_id)).unwrap_or_else(|| "n/a".to_string()),
-                config.base_url
-            );
-            if let Some(first) = messages.first() {
-                if first.role == Role::System {
-                    req_log.push_str(&format!("System prompt:
-{}
-", first.content.as_deref().unwrap_or("")));
-                }
-            }
-            let tool_names: Vec<String> = active_tools.iter().map(|t| t.function.name.clone()).collect();
-            req_log.push_str(&format!("Tool calls requested ({}): {:?}
-
-", tool_names.len(), tool_names));
-            append_llm_debug_log(&config.repo_root, &req_log).await;
-        }
+        telemetry::log_turn_request(
+            &config.repo_root,
+            &config.task_id,
+            turn,
+            false,
+            &config.model,
+            &messages,
+            tools.as_deref(),
+            &active_tool_names,
+            Some(&config.base_url),
+        )
+        .await;
 
         let mut final_stream_res = None;
         let mut turn_stream_retry = 0;
@@ -3951,41 +3926,16 @@ Endpoint: {}
         let turn_thoughts = stream_res.thoughts;
         let turn_tool_calls = stream_res.tool_calls;
 
-        // Log raw response for complete transparency & debugging (§ llm_debug.log)
-        {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-            let mut resp_log = format!(
-                "[{}] [{}] Turn {} Response:
-",
-                ts, config.task_id, turn
-            );
-            if !turn_thoughts.trim().is_empty() {
-                resp_log.push_str(&format!("Thoughts:
-{}
-", turn_thoughts.trim()));
-            }
-            if !turn_content.trim().is_empty() {
-                resp_log.push_str(&format!("Content:
-{}
-", turn_content.trim()));
-            }
-            if !turn_tool_calls.is_empty() {
-                resp_log.push_str(&format!("Tool calls received ({}):
-", turn_tool_calls.len()));
-                for tc in &turn_tool_calls {
-                    resp_log.push_str(&format!("  - {} (id: {}): {}
-", tc.function.name, tc.id, tc.function.arguments));
-                }
-            } else {
-                resp_log.push_str("Tool calls received: None (terminal turn)
-");
-            }
-            resp_log.push_str("
---------------------------------------------------------------------------------
-
-");
-            append_llm_debug_log(&config.repo_root, &resp_log).await;
-        }
+        telemetry::log_turn_response(
+            &config.repo_root,
+            &config.task_id,
+            turn,
+            false,
+            &turn_thoughts,
+            &turn_content,
+            &turn_tool_calls,
+        )
+        .await;
 
         // If no tool calls, terminal response reached
         if turn_tool_calls.is_empty() {
@@ -4231,12 +4181,27 @@ Endpoint: {}
             call_tool_ctx.call_id = Some(&tc.id);
 
             let tool_start = std::time::Instant::now();
-            let exec_result = execute_tool(
-                &call_tool_ctx,
+            let exec_result = if let Some(cb_msg) = detect_degenerate_command_or_loop(
                 &tc.function.name,
-                &parsed_args,
-            )
-            .await;
+                &tc.function.arguments,
+                &recent_tool_calls,
+            ) {
+                Err(anyhow::anyhow!("{}", cb_msg))
+            } else {
+                execute_tool(
+                    &call_tool_ctx,
+                    &tc.function.name,
+                    &parsed_args,
+                )
+                .await
+            };
+            recent_tool_calls.push(normalize_tool_call_for_circuit_breaker(
+                &tc.function.name,
+                &tc.function.arguments,
+            ));
+            if recent_tool_calls.len() > 16 {
+                recent_tool_calls.remove(0);
+            }
             let duration_ms = tool_start.elapsed().as_secs_f64() * 1000.0;
 
             if abort_flag.load(Ordering::SeqCst) {

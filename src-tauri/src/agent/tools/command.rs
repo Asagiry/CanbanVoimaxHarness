@@ -1,11 +1,106 @@
 //! Command Execution Tool Handlers (execute_command, custom tools)
 //! Extracted from agent.rs per ub-mode Clean Code & Command Pattern principles.
 
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use anyhow::{bail, Context, Result};
 
 use crate::agent::{load_custom_tools, run_scoped_command, ToolContext};
+
+/// Parses a leading `cd [/d] <path> && <rest>` or `cd [/d] <path> & <rest>` segment,
+/// returning `Some((target_path, rest_command))`.
+pub fn parse_leading_cd(cmd: &str) -> Option<(&str, &str)> {
+    let trimmed = cmd.trim_start();
+    if trimmed.len() < 3 || !trimmed[..2].eq_ignore_ascii_case("cd") {
+        return None;
+    }
+    let after_cd = &trimmed[2..];
+    if !after_cd.starts_with([' ', '\t']) {
+        return None;
+    }
+    let mut s = after_cd.trim_start();
+
+    // Optional /d or -d switch
+    if s.len() >= 2 && (s[..2].eq_ignore_ascii_case("/d") || s[..2].eq_ignore_ascii_case("-d")) {
+        let after_flag = &s[2..];
+        if after_flag.starts_with([' ', '\t', '"', '\'']) {
+            s = after_flag.trim_start();
+        }
+    }
+
+    if s.is_empty() {
+        return None;
+    }
+
+    let (target, after_target) = if let Some(rest_quoted) = s.strip_prefix('"') {
+        let end_quote = rest_quoted.find('"')?;
+        (&rest_quoted[..end_quote], &rest_quoted[end_quote + 1..])
+    } else if let Some(rest_quoted) = s.strip_prefix('\'') {
+        let end_quote = rest_quoted.find('\'')?;
+        (&rest_quoted[..end_quote], &rest_quoted[end_quote + 1..])
+    } else {
+        let end_idx = s.find([' ', '\t', '&'])?;
+        (&s[..end_idx], &s[end_idx..])
+    };
+
+    let after_ws = after_target.trim_start();
+    let after_sep = if let Some(r) = after_ws.strip_prefix("&&") {
+        r
+    } else if let Some(r) = after_ws.strip_prefix('&') {
+        r
+    } else {
+        return None;
+    };
+
+    let rest = after_sep.trim_start();
+    if rest.is_empty() {
+        return None;
+    }
+
+    Some((target.trim(), rest))
+}
+
+/// Strips any leading `cd [/d] <path> &&` prefix regardless of target directory.
+pub fn strip_any_leading_cd(cmd: &str) -> &str {
+    let mut current = cmd.trim_start();
+    while let Some((_, rest)) = parse_leading_cd(current) {
+        current = rest;
+    }
+    current
+}
+
+fn normalize_path_for_cmp(p: &str) -> String {
+    let s = p.trim().trim_matches(['"', '\'']).replace('\\', "/");
+    let s = s.strip_prefix("//?/").unwrap_or(&s);
+    s.trim_end_matches('/').to_ascii_lowercase()
+}
+
+/// Strips a redundant leading `cd /d "<path>" && `, `cd /d <path> && `, `cd "<path>" && `,
+/// or `cd <path> && ` when `<path>` points to `worktree_dir`.
+pub fn strip_redundant_worktree_cd<'a>(cmd: &'a str, worktree_dir: &Path) -> &'a str {
+    let norm_wt = normalize_path_for_cmp(&worktree_dir.to_string_lossy());
+    let wt_marker = norm_wt.rfind("/worktrees/").map(|idx| &norm_wt[idx..]);
+    let mut current = cmd;
+
+    while let Some((target, rest)) = parse_leading_cd(current) {
+        let norm_target = normalize_path_for_cmp(target);
+        let is_same_worktree = norm_target == "."
+            || norm_target == "./"
+            || (!norm_wt.is_empty() && norm_target == norm_wt)
+            || match wt_marker {
+                Some(marker) if marker.len() > "/worktrees/".len() => norm_target.ends_with(marker),
+                _ => false,
+            };
+        if is_same_worktree {
+            current = rest;
+        } else {
+            break;
+        }
+    }
+
+    current
+}
 
 pub async fn execute_command(
     ctx: &ToolContext<'_>,
@@ -20,6 +115,7 @@ pub async fn execute_command(
         .or_else(|| args.get("cmd"))
         .and_then(|v| v.as_str())
         .context("Missing required parameter 'command'")?;
+    let cleaned_command = strip_redundant_worktree_cd(command_str, worktree_dir);
     let default_timeout = ctx
         .tool_policy
         .tool_settings
@@ -34,7 +130,7 @@ pub async fn execute_command(
 
     let res = run_scoped_command(
         worktree_dir,
-        command_str,
+        cleaned_command,
         Duration::from_secs(timeout_secs),
         Arc::clone(abort_handle),
         Some(repo_root),
@@ -81,5 +177,45 @@ pub async fn execute_custom_tool(
         ))
     } else {
         bail!("Unknown tool: {}", custom_tool);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_strip_redundant_worktree_cd_variants() {
+        let wt = Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\worktrees\CVH-057");
+
+        assert_eq!(
+            strip_redundant_worktree_cd(
+                r#"cd /d "C:\Users\VibeCode\CanbanVoimaxHarness\worktrees\CVH-057" && findstr /n "foo" bar.rs"#,
+                wt
+            ),
+            r#"findstr /n "foo" bar.rs"#
+        );
+
+        assert_eq!(
+            strip_redundant_worktree_cd(
+                r"cd /d C:\Users\VibeCode\CanbanVoimaxHarness\worktrees\CVH-057 && cargo check",
+                wt
+            ),
+            "cargo check"
+        );
+
+        assert_eq!(
+            strip_redundant_worktree_cd(
+                "cd \"c:/users/vibecode/canbanvoimaxharness/worktrees/cvh-057/\" && pnpm test",
+                wt
+            ),
+            "pnpm test"
+        );
+
+        assert_eq!(
+            strip_redundant_worktree_cd("cd src-tauri && cargo check", wt),
+            "cd src-tauri && cargo check"
+        );
     }
 }

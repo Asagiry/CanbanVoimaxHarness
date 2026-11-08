@@ -330,8 +330,12 @@ export default function AgentConsoleDrawer() {
         if (!isSubagentABoardTask) {
           const resolvedSubagentId =
             useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
-          const continueModel = useBoardStore.getState().tasks.find((t) => t.id === task.id)?.model ?? null;
-          const continueProvider = useBoardStore.getState().tasks.find((t) => t.id === task.id)?.providerId ?? null;
+          const subCfg =
+            useDrawerStore.getState().subagentConfigs?.[activeSubagentId] ||
+            useDrawerStore.getState().subagentConfigs?.[resolvedSubagentId];
+          const parentTaskItem = useBoardStore.getState().tasks.find((t) => t.id === task.id);
+          const continueModel = subCfg?.model ?? parentTaskItem?.model ?? task.model ?? null;
+          const continueProvider = subCfg?.providerId ?? parentTaskItem?.providerId ?? task.providerId ?? null;
           setActiveAgentTask(activeSubagentId, true);
           setRunError(null);
           try {
@@ -383,13 +387,13 @@ export default function AgentConsoleDrawer() {
         appendOutput(resolvedSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
       }
 
-      // Persist to SQLite immediately under canonical key {parent_id}:sub:{subagent_id}
-      void useDrawerStore.getState().saveTaskActivity(activeSubagentId);
-
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const steerModel = targetTask.model ?? null;
-        const steerProvider = targetTask.providerId ?? null;
+        const subCfg =
+          useDrawerStore.getState().subagentConfigs?.[activeSubagentId] ||
+          useDrawerStore.getState().subagentConfigs?.[resolvedSubagentId];
+        const steerModel = subCfg?.model ?? targetTask.model ?? null;
+        const steerProvider = subCfg?.providerId ?? targetTask.providerId ?? null;
         await invoke('retry_subagent', {
           parentTaskId: task.id,
           subagentId: resolvedSubagentId,
@@ -523,10 +527,84 @@ export default function AgentConsoleDrawer() {
                 isToolAllowed={isToolAllowed}
                 selectableModels={selectableModels}
                 onSelectEffort={(effort) => {
+                  if (activeSubagentId) {
+                    const isSubBoardTask = subtasks.some((s) => s.id === activeSubagentId);
+                    const resolvedSubId =
+                      useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+                    if (isSubBoardTask) {
+                      updateTask(activeSubagentId, { reasoningEffort: effort });
+                    } else {
+                      useDrawerStore.getState().updateSubagentConfig(activeSubagentId, { reasoningEffort: effort });
+                      void (async () => {
+                        try {
+                          const { invoke } = await import('@tauri-apps/api/core');
+                          await invoke('update_task', {
+                            taskId: resolvedSubId,
+                            model: null,
+                            providerId: null,
+                            reasoningEffort: effort,
+                            title: null,
+                            description: null,
+                            status: null,
+                            verdict: null,
+                          });
+                        } catch {
+                          // ignore in web mode
+                        }
+                      })();
+                    }
+                    useDrawerStore.getState().appendOutput(activeSubagentId, `Effort изменён на ${effort}`, 'system');
+                    if (resolvedSubId !== activeSubagentId) {
+                      useDrawerStore.getState().appendOutput(resolvedSubId, `Effort изменён на ${effort}`, 'system');
+                    }
+                    return;
+                  }
                   updateTask(task.id, { reasoningEffort: effort });
                   useDrawerStore.getState().appendOutput(task.id, `Effort изменён на ${effort}`, 'system');
                 }}
                 onSelectPair={(providerId, m) => {
+                  if (activeSubagentId) {
+                    const isSubBoardTask = subtasks.some((s) => s.id === activeSubagentId);
+                    const resolvedSubId =
+                      useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+                    const subBoardTask = subtasks.find((s) => s.id === activeSubagentId);
+                    const subCfg =
+                      useDrawerStore.getState().subagentConfigs?.[activeSubagentId] ||
+                      useDrawerStore.getState().subagentConfigs?.[resolvedSubId];
+                    const prevSubModel = subBoardTask?.model || subCfg?.model || task.model || effectiveModel;
+                    if (isSubBoardTask) {
+                      updateTask(activeSubagentId, { model: m, providerId });
+                    } else {
+                      useDrawerStore.getState().updateSubagentConfig(activeSubagentId, { model: m, providerId });
+                      void (async () => {
+                        try {
+                          const { invoke } = await import('@tauri-apps/api/core');
+                          await invoke('update_task', {
+                            taskId: resolvedSubId,
+                            model: m,
+                            providerId,
+                            reasoningEffort: null,
+                            title: null,
+                            description: null,
+                            status: null,
+                            verdict: null,
+                          });
+                        } catch {
+                          // ignore in web mode
+                        }
+                      })();
+                    }
+                    if (prevSubModel !== m) {
+                      const prov = useSettingsStore.getState().providers.find((p) => p.id === providerId);
+                      const display = prov?.models.find((model) => model.id === m)?.displayName || m;
+                      const label = prov ? `${prov.name} / ${display}` : display;
+                      useDrawerStore.getState().appendOutput(activeSubagentId, `Модель изменена на ${label}`, 'system');
+                      if (resolvedSubId !== activeSubagentId) {
+                        useDrawerStore.getState().appendOutput(resolvedSubId, `Модель изменена на ${label}`, 'system');
+                      }
+                    }
+                    return;
+                  }
                   const prevModel = task.model || effectiveModel;
                   updateTask(task.id, { model: m, providerId });
                   void (async () => {

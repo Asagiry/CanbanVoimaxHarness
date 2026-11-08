@@ -41,9 +41,16 @@ describe('Antigravity Dark Tokens Migration for SettingsModal and ToolPolicyModa
     expect(content).toContain('dark:bg-[#232328]');
   });
 
-  it('ToolPolicyModal.tsx contains 0 legacy dark tokens and uses Antigravity Dark palette', () => {
-    const filePath = path.resolve(__dirname, '../ToolPolicyModal.tsx');
-    const content = fs.readFileSync(filePath, 'utf-8');
+  it('ToolPolicyModal.tsx and tool-policy/* subcomponents contain 0 legacy dark tokens and use Antigravity Dark palette', () => {
+    const files = [
+      '../ToolPolicyModal.tsx',
+      '../tool-policy/ToolSchemaEditor.tsx',
+      '../tool-policy/ToolParamsEditor.tsx',
+      '../tool-policy/CustomToolForm.tsx',
+    ];
+    const content = files
+      .map((rel) => fs.readFileSync(path.resolve(__dirname, rel), 'utf-8'))
+      .join('\n');
 
     for (const token of legacyDarkTokens) {
       expect(content).not.toContain(token);

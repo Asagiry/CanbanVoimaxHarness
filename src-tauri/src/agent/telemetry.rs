@@ -2,7 +2,9 @@
 //! Adheres to ub-mode (Dryer & Zero-Risk Pure Extraction) and Telemetry Accuracy Invariants.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::time::Instant;
+use crate::llm::{ChatMessage, Role, ToolCall, ToolDefinition};
 
 /// Snapshot of turn telemetry metrics (cache hit rate and tokens per second).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -80,6 +82,136 @@ pub fn calculate_turn_telemetry(
         cache_hit_rate: compute_cache_hit_rate(cache_read_tokens, total_input),
         tps: compute_tps(duration_secs, output_tokens),
     }
+}
+
+/// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
+/// Rotates the log to `.cvh/llm_debug.log.1` if size exceeds 10MB.
+pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
+    let cvh_dir = repo_root.join(".cvh");
+    let _ = tokio::fs::create_dir_all(&cvh_dir).await;
+    let log_path = cvh_dir.join("llm_debug.log");
+    const MAX_BYTES: u64 = 10 * 1024 * 1024; // 10MB
+    if let Ok(meta) = tokio::fs::metadata(&log_path).await {
+        if meta.len() >= MAX_BYTES {
+            let rot_path = cvh_dir.join("llm_debug.log.1");
+            let _ = tokio::fs::remove_file(&rot_path).await;
+            let _ = tokio::fs::rename(&log_path, &rot_path).await;
+        }
+    }
+    if let Ok(mut file) = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .await
+    {
+        use tokio::io::AsyncWriteExt;
+        let _ = file.write_all(text.as_bytes()).await;
+    }
+}
+
+/// Appends formatted turn request metadata and system prompt to `.cvh/llm_debug.log`.
+#[allow(clippy::too_many_arguments)]
+pub async fn log_turn_request(
+    repo_root: &Path,
+    session_id: &str,
+    turn: usize,
+    is_subagent: bool,
+    model: &str,
+    messages: &[ChatMessage],
+    tools: Option<&[ToolDefinition]>,
+    tool_names: &[String],
+    base_url: Option<&str>,
+) {
+    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+    let req_tokens_est = crate::agent::compactor::estimate_request_tokens(messages, tools);
+    let req_chars: usize = messages
+        .iter()
+        .map(|m| {
+            m.content
+                .as_ref()
+                .map(|c| match c {
+                    crate::llm::MessageContent::Text(t) => t.len(),
+                    crate::llm::MessageContent::Parts(parts) => parts
+                        .iter()
+                        .map(|p| match p {
+                            crate::llm::ContentPart::Text { text } => text.len(),
+                            _ => 0,
+                        })
+                        .sum(),
+                })
+                .unwrap_or(0)
+        })
+        .sum();
+    let label = if is_subagent { "Subagent Turn" } else { "Turn" };
+    let mut req_log = format!(
+        "[{}] [{}] {} {} Request:\nModel: {}\nMessages count: {}\nReq tokens (est): {}\nReq chars: {}\n",
+        ts,
+        session_id,
+        label,
+        turn,
+        model,
+        messages.len(),
+        req_tokens_est,
+        req_chars
+    );
+    if let Some(url) = base_url {
+        let session_hdr = crate::llm::cache::opencode_session_header(
+            url,
+            &format!("{}:{}", repo_root.display(), session_id),
+        )
+        .unwrap_or_else(|| "n/a".to_string());
+        req_log.push_str(&format!("Session: {}\nEndpoint: {}\n", session_hdr, url));
+    }
+    if let Some(first) = messages.first() {
+        if first.role == Role::System {
+            req_log.push_str(&format!(
+                "System prompt:\n{}\n",
+                first.content.as_deref().unwrap_or("")
+            ));
+        }
+    }
+    req_log.push_str(&format!(
+        "Tool calls requested ({}): {:?}\n\n",
+        tool_names.len(),
+        tool_names
+    ));
+    append_llm_debug_log(repo_root, &req_log).await;
+}
+
+/// Appends formatted turn response (thoughts, content, tool calls) to `.cvh/llm_debug.log`.
+pub async fn log_turn_response(
+    repo_root: &Path,
+    session_id: &str,
+    turn: usize,
+    is_subagent: bool,
+    turn_thoughts: &str,
+    turn_content: &str,
+    turn_tool_calls: &[ToolCall],
+) {
+    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+    let label = if is_subagent { "Subagent Turn" } else { "Turn" };
+    let mut resp_log = format!("[{}] [{}] {} {} Response:\n", ts, session_id, label, turn);
+    if !turn_thoughts.trim().is_empty() {
+        resp_log.push_str(&format!("Thoughts:\n{}\n", turn_thoughts.trim()));
+    }
+    if !turn_content.trim().is_empty() {
+        resp_log.push_str(&format!("Content:\n{}\n", turn_content.trim()));
+    }
+    if !turn_tool_calls.is_empty() {
+        resp_log.push_str(&format!("Tool calls received ({}):\n", turn_tool_calls.len()));
+        for tc in turn_tool_calls {
+            resp_log.push_str(&format!(
+                "  - {} (id: {}): {}\n",
+                tc.function.name, tc.id, tc.function.arguments
+            ));
+        }
+    } else if is_subagent {
+        resp_log.push_str("Tool calls received: None (terminal response)\n");
+    } else {
+        resp_log.push_str("Tool calls received: None (terminal turn)\n");
+    }
+    resp_log.push_str("\n--------------------------------------------------------------------------------\n\n");
+    append_llm_debug_log(repo_root, &resp_log).await;
 }
 
 #[cfg(test)]

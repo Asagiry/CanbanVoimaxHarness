@@ -57,6 +57,7 @@ export default function DrawerSteerBar({
     : task?.id;
   const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
   const storeSubagents = useDrawerStore((s) => s.subagents);
+  const subagentConfigs = useDrawerStore((s) => s.subagentConfigs);
   const toolExecutions = useDrawerStore((s) => s.toolExecutions);
   const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
 
@@ -112,13 +113,34 @@ export default function DrawerSteerBar({
   // dispatches crouton), so it is NOT in this chain — same rule the
   // backend resolver uses (pair > agent setting > col > project > crouton).
   const providers = useSettingsStore((s) => s.providers) ?? [];
-  const pairModel = task.providerId ? task.model : null;
   const defaultModel = useSettingsStore.getState().settings?.model || (useSettingsStore.getState() as any).model || 'default';
-  const modelId = pairModel || matchedPersona?.model || defaultModel;
-  const pairProvider =
-    (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
-    (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
-    null;
+  const activeBoardSubtask = isBoardSubtask ? boardTasks.find((t) => t.id === activeSubagentId) : undefined;
+  const resolvedSubId = activeSubagentId ? (toolIdToSubagentId[activeSubagentId] || activeSubagentId) : null;
+  const subConfig = activeSubagentId
+    ? activeBoardSubtask
+      ? {
+          model: activeBoardSubtask.model,
+          providerId: activeBoardSubtask.providerId ?? undefined,
+          reasoningEffort: activeBoardSubtask.reasoningEffort as ReasoningEffort | undefined,
+        }
+      : (subagentConfigs?.[activeSubagentId] || (resolvedSubId ? subagentConfigs?.[resolvedSubId] : undefined))
+    : undefined;
+
+  const modelId = activeSubagentId
+    ? (subConfig?.model || matchedPersona?.model || task.model || defaultModel)
+    : (task.model || matchedPersona?.model || defaultModel);
+
+  const pairProvider = activeSubagentId
+    ? ((subConfig?.providerId ? providers.find((p) => p.id === subConfig.providerId) : undefined) ||
+        (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
+        (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
+        providers.find((p) => p.models.some((m) => m.id === modelId)) ||
+        null)
+    : ((task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
+        (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
+        providers.find((p) => p.models.some((m) => m.id === modelId)) ||
+        null);
+
   const modelDisplay =
     pairProvider?.models.find((m) => m.id === modelId)?.displayName ||
     modelId;
@@ -438,7 +460,7 @@ export default function DrawerSteerBar({
                   <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
                 </button>
                 <EffortSelector
-                  taskEffort={task.reasoningEffort}
+                  taskEffort={activeSubagentId ? (subConfig?.reasoningEffort ?? task.reasoningEffort) : task.reasoningEffort}
                   personaEffort={personaEffort}
                   onSelectEffort={onSelectEffort}
                   onOpen={() => setIsModelMenuOpen(false)}

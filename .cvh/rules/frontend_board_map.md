@@ -23,11 +23,20 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | `src/components/board/StageHookBadge.tsx` | Transition script and gatekeeper sensor status. |
 | `src/components/board/ColumnContextMenu.tsx` | Backward-compatible alias for `StageContextMenu.tsx`. |
 | `src/components/board/ColumnHookBadge.tsx` | Backward-compatible alias for `StageHookBadge.tsx`. |
-| `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona selection. |
+| `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona and catalog model selection. |
 | `src/components/board/modals/CreateColumnModal.tsx` | Column creation modal with hook configuration. |
 | `src/components/board/CreateBoardModal.tsx` | Board creation modal with preset templates. |
 | `src/components/board/modals/ImageLightboxModal.tsx` | Full-screen image preview for board attachments. |
-| `src/stores/board/taskNormalizer.ts` | Dynamic persona mapping for terminal/working stages. |
-| `src/stores/slices/tasksCrudSlice.ts` | Backend-authoritative task CRUD, monotonic IDs. |
-| `src/stores/slices/boardMetaSlice.ts` | Active board, board switching, column layout. |
+| `src/hooks/useContextMenuPosition.ts` | Viewport-clamped positioning and outside-click/Escape dismissal for context menus. |
+| `src/stores/boardStore.ts` | Composed Zustand board store (`useBoardStore`) and domain re-exports. |
+| `src/stores/board/boardConstants.ts` | `CANONICAL_BOARD_STAGES`, `CANONICAL_BOARD_COLUMNS`, and `DEFAULT_BOARD`. |
+| `src/stores/board/boardHelpers.ts` | Task position sorting, terminal stage detection (`isDoneStageDef`), completion sorting. |
+| `src/stores/board/hookStorage.ts` | `localStorage` hydration and persistence for task hook execution states (`cvh_task_hook_states`). |
+| `src/stores/board/taskNormalizer.ts` | Dynamic persona mapping for terminal/working stages, foreign-project filtering (`isTaskForeign`). |
+| `src/stores/board/taskSync.ts` | `syncTasksBackend` payload serialization and deduplicated `triggerRunAgent` invocation. |
+| `src/stores/slices/tasksCrudSlice.ts` | Backend-authoritative task CRUD, stage transitions, and monotonic IDs. |
+| `src/stores/slices/boardMetaSlice.ts` | Active board, board switching, stage/column layout management. |
 | `src/stores/slices/taskTimersSlice.ts` | Active task step timers and execution stopwatch. |
+| `src/stores/slices/taskHooksSlice.ts` | Per-task `on_enter`/`on_leave` hook start, finish, and clear state transitions. |
+| `src/stores/slices/taskQuestionsSlice.ts` | Root-family deduplicated interactive clarifying question state (`activeQuestions`). |
+| `src/stores/slices/types.ts` | Slice state and action interfaces (`BoardState`, `BoardMetaSlice`, `TasksCrudSlice`, `TaskHooksSlice`, `TaskQuestionsSlice`). |

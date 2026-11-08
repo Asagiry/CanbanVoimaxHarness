@@ -376,4 +376,7 @@ export interface SubagentInfo {
   isBg?: boolean;
   finishedAt?: number;
   isBoardSubtask?: boolean;
+  model?: string;
+  providerId?: string;
+  reasoningEffort?: ReasoningEffort;
 }

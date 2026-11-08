@@ -11,6 +11,11 @@ import {
   formatDurationCompact,
 } from './shared';
 
+function formatCommandPreview(cmd: string): string {
+  const stripped = cmd.trim().replace(/^cd(?:\s+\/d)?\s+(?:"[^"]+"|'[^']+'|\S+)\s*(?:&&|&)\s*/i, '');
+  return stripped || cmd.trim();
+}
+
 export default function CommandToolCard({ tool }: ToolCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -32,7 +37,8 @@ export default function CommandToolCard({ tool }: ToolCardProps) {
     '';
 
   const fullTarget = command;
-  const target = command.length > 60 ? `${command.slice(0, 57)}…` : command;
+  const previewCommand = formatCommandPreview(command);
+  const target = previewCommand.length > 60 ? `${previewCommand.slice(0, 57)}…` : previewCommand;
 
   let extraInfo: string | null = null;
   if (tool.status === 'success') {

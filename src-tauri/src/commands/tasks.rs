@@ -88,6 +88,8 @@ pub async fn create_subtask(
 pub async fn update_task(
     task_id: String,
     model: Option<String>,
+    provider_id: Option<String>,
+    reasoning_effort: Option<String>,
     title: Option<String>,
     description: Option<String>,
     status: Option<String>,
@@ -98,6 +100,8 @@ pub async fn update_task(
     lifecycle::update_task(
         task_id,
         model,
+        provider_id,
+        reasoning_effort,
         title,
         description,
         status,

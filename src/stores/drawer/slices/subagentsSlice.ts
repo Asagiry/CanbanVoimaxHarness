@@ -19,6 +19,7 @@ export const createSubagentsSlice: StateCreator<
   toolIdToSubagentId: {},
   subagentIdToToolId: {},
   subagents: {},
+  subagentConfigs: {},
 
   registerSubagentMapping: (toolId, subagentId) => {
     if (!toolId || !subagentId) return;
@@ -312,6 +313,41 @@ export const createSubagentsSlice: StateCreator<
         nextSubagents[taskId] = listChanged ? updatedList : list;
       }
       return changed ? { subagents: nextSubagents } : state;
+    });
+  },
+
+  updateSubagentConfig: (subagentId, config) => {
+    if (!subagentId) return;
+    set((state) => {
+      const resolvedId = state.toolIdToSubagentId[subagentId] || subagentId;
+      const mappedToolId =
+        state.subagentIdToToolId[resolvedId] ||
+        (resolvedId !== subagentId ? subagentId : undefined);
+      const baseCfg = {
+        ...(mappedToolId ? state.subagentConfigs[mappedToolId] : undefined),
+        ...state.subagentConfigs[subagentId],
+        ...state.subagentConfigs[resolvedId],
+        ...config,
+      };
+      const nextConfigs = {
+        ...state.subagentConfigs,
+        [subagentId]: baseCfg,
+        [resolvedId]: baseCfg,
+        ...(mappedToolId ? { [mappedToolId]: baseCfg } : {}),
+      };
+      const nextSubagents: Record<string, SubagentInfo[]> = {};
+      for (const [taskId, rawList] of Object.entries(state.subagents)) {
+        const list = (Array.isArray(rawList) ? rawList : []) as SubagentInfo[];
+        nextSubagents[taskId] = list.map((s) =>
+          s.id === subagentId || s.id === resolvedId || s.toolCallId === subagentId
+            ? { ...s, ...config }
+            : s
+        );
+      }
+      return {
+        subagentConfigs: nextConfigs,
+        subagents: nextSubagents,
+      };
     });
   },
 });

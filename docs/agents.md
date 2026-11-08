@@ -18,8 +18,9 @@
    - Перед первым вызовом LLM бэкенд на Rust компилирует единый системный контекст:
      ```text
      SystemMessage = Persona (.cvh/agents/<role>/persona.md) 
+                   + Контракт среды (.cvh/rules/runtime.md)
                    + Правила роли (.cvh/agents/<role>/rules/*.md)
-                   + Общие правила проекта (.cvh/rules/*.md) 
+                   + Каталог модульных правил (.cvh/rules/*.md — подгружаются по требованию через `load_rule("<topic>")`, без массовой инжекции в каждый ход)
                    + Инструкции инструментов (Tools)
                    + Контекст задачи (Task Prompt)
      ```

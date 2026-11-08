@@ -48,7 +48,7 @@ if not errorlevel 1 (
         git diff --name-only main HEAD 2>nul | findstr /b /i "src-tauri/ Cargo.toml Cargo.lock" >nul 2>&1
         if not errorlevel 1 set "HAS_BACKEND_CHANGES=1"
 
-        git diff --name-only main HEAD 2>nul | findstr /b /i "src/ index.html vite.config. tsconfig package.json" >nul 2>&1
+        git diff --name-only main HEAD 2>nul | findstr /b /i "src/ index.html vite.config. tsconfig package.json pnpm-lock.yaml" >nul 2>&1
         if not errorlevel 1 set "HAS_FRONTEND_CHANGES=1"
     )
 )

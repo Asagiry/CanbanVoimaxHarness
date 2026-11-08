@@ -3,12 +3,26 @@ description: Provider settings, tool policies and Cortex editors.
 ---
 # Settings and Cortex
 
-Cortex edits personas, rules and stage settings. Settings stores manage provider/model selection; tool policy UI reflects the backend effective policy. For persistence and model APIs, load `backend_config_map`.
+Cortex edits personas, rules and stage settings (also indexed in `frontend_cortex_map`). Settings stores manage provider/model selection; tool policy UI reflects the backend effective policy. For persistence and model APIs, load `backend_config_map`.
 
 | File | Responsibility |
 | --- | --- |
+| `src/components/settings/SettingsModal.tsx` | Notification settings + provider list/editor shell (LLM tab delegates to `providers/*`). |
+| `src/components/settings/providers/ProviderList.tsx` | Provider cards: name, status dot, «Пользовательский» badge, Edit/Delete, «+ Добавить поставщика». Selection syncs the active provider. ≤350 lines. |
+| `src/components/settings/providers/ProviderEditor.tsx` | Detail editor: API key, Advanced settings (display name, base URL, API protocol), model catalog, `fetchProviderModels`, reset defaults, Cancel/Apply validation. |
+| `src/components/settings/providers/ProviderModelRow.tsx` | Single catalog row: model id + displayName inputs, drag handle, delete. |
+| `src/components/settings/providers/ProviderModelPicker.tsx` | Fetch-models picker modal (search, select-all, «добавлена» badge, add-selected). |
+| `src/components/settings/providers/useProviderEditorState.ts` | Hook managing active `editingProvider` state for opening, creating custom, and closing provider editors. |
+| `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches, per-stage/per-agent overrides, and custom tool management. |
+| `src/components/settings/tool-policy/CustomToolForm.tsx` | `CustomToolRows` matrix rows and `CustomToolForm` for adding/deleting `.cvh/tools/*.json` custom tools. |
+| `src/components/settings/tool-policy/ToolParamsEditor.tsx` | `PolicyToggle` switch component and numeric parameter stepper rows (`TOOL_PARAM_DEFS`). |
+| `src/components/settings/tool-policy/ToolSchemaEditor.tsx` | Interactive JSON function schema override editor with format, save, and reset-to-default controls. |
+| `src/components/settings/tool-policy/toolPolicyConstants.ts` | `CustomTool` & `AgentMatrixItem` types, `CATEGORY_ORDER`, `buildAgentMatrix`, and `applyAgentToolToggle`. |
+| `src/stores/settings/providers.ts` | Provider types, `migrateFlatToProviders`, `catalogModelOptions`/`catalogModelLabel`, normalization and boundary validation. |
+| `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings; provider CRUD + `fetchProviderModels`; `availableModels` cache. |
+| `src/stores/toolPolicyStore.ts` | Frontend store and IPC sync for tool policy permissions, parameter limits, and custom schemas. |
 | `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
-| `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors. |
+| `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors, and unified provider catalog model selector. |
 | `src/components/cortex/AgentMindInspector.tsx` | Real-time agent state, current prompt and tools viewer. |
 | `src/components/cortex/ColumnStageCard.tsx` | Pipeline stage configuration card in Cortex view. |
 | `src/components/cortex/CreateAgentModal.tsx` | Modal dialog for creating new agent personas. |
@@ -17,19 +31,18 @@ Cortex edits personas, rules and stage settings. Settings stores manage provider
 | `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new rules or personas. |
 | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
 | `src/components/cortex/types.ts` | Cortex explorer interfaces, forms, and tree nodes. |
-| `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
-| `src/components/settings/SettingsModal.tsx` | Notification settings + provider list/editor shell (LLM tab delegates to `providers/*`). |
-| `src/components/settings/providers/ProviderList.tsx` | Provider cards: name, status dot, «Пользовательский» badge, Edit/Delete, «+ Добавить поставщика». Selection syncs the active provider. ≤350 lines. |
-| `src/components/settings/providers/ProviderEditor.tsx` | Detail editor: API key («Оставьте поле пустым…» placeholder — empty keeps the stored key), Advanced settings (display name, base URL, API protocol), model catalog, «Получить доступные модели» via `fetchProviderModels`, «Восстановить по умолчанию», Cancel/Apply with URL/protocol/model validation. |
-| `src/components/settings/providers/ProviderModelRow.tsx` | Single catalog row: model id + displayName inputs, drag handle, delete. |
-| `src/components/settings/providers/ProviderModelPicker.tsx` | Fetch-models picker modal (search, select-all, «добавлена» badge, add-selected). |
-| `src/stores/settings/providers.ts` | Provider types, `migrateFlatToProviders` (flat `LlmSettings` → single provider), `catalogModelOptions`/`catalogModelLabel` (label = `displayName ?? id`, value stays model id), normalization and boundary validation. |
-| `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings; provider CRUD + `fetchProviderModels`; `availableModels` retained only as derived localStorage cache. |
-| `src/components/cortex/AgentSettingVisualEditor.tsx` | Model selector unified on the provider catalog (displayName ?? id). |
+| `src/stores/cortexStore.ts` | Composed Zustand Cortex store (`useCortexStore`) and re-exports. |
+| `src/stores/cortex/cortexStoreSlice.ts` | File tree, personas CRUD, and rules state slice. |
+| `src/stores/cortex/cortexFileOps.ts` | Cortex file open/save, global rule deletion, and rule reordering actions. |
+| `src/stores/cortex/cortexTemplates.ts` | Persona/setting template actions and Cortex rule/hook/global rule creation actions. |
+| `src/stores/cortex/cortexSync.ts` | Stage-to-column synchronization and agent persona CRUD/icon/color IPC actions. |
+| `src/stores/cortex/cortexHelpers.ts` | Cortex path builders, rule/hook/setting templates, and command script path extractors. |
+| `src/stores/cortex/cortexConstants.ts` | Default Cortex stage tree and recognized script extensions. |
+| `src/stores/cortex/cortexListeners.ts` | Cortex event listener stub (delegated to `tauriEventGateway.ts`). |
+| `src/stores/cortex/types.ts` | Cortex store state, persona, rule, and file slice TypeScript interfaces. |
+| `src/stores/cortex/index.ts` | Barrel re-exports for `src/stores/cortex/*`. |
 | `src/components/drawer/AgentConsoleDrawer.tsx` | Chat model selector unified on the provider catalog. |
 | `src/components/board/modals/CreateTaskModal.tsx` | Model options from the provider catalog with displayName labels. |
-| `src/stores/toolPolicyStore.ts` | Frontend cache for tool policy permissions. |
-| `src/stores/cortex/cortexStoreSlice.ts` | File tree, personas CRUD, and rules state slice. |
 
 ## Related checks
 

@@ -41,12 +41,14 @@ else
     fi
 fi
 
-# Sync live .cvh/ from root (canonical source) into worktree mirror, minus secrets
-if [ -d ".cvh" ]; then
-    cp -a .cvh "$WT_DIR/.cvh"
-    rm -f "$WT_DIR/.cvh/llm.json" "$WT_DIR/.cvh"/*.secret "$WT_DIR/.cvh"/*.key 2>/dev/null || true
-    git -C "$WT_DIR" update-index --assume-unchanged -- .cvh >/dev/null 2>&1 || true
-fi
+# Sync live .cvh/ protected paths from root (canonical source) into worktree mirror
+mkdir -p "$WT_DIR/.cvh"
+if [ -d ".cvh/agents" ]; then cp -a ".cvh/agents" "$WT_DIR/.cvh/"; fi
+if [ -d ".cvh/rules" ]; then cp -a ".cvh/rules" "$WT_DIR/.cvh/"; fi
+if [ -d ".cvh/hooks" ]; then cp -a ".cvh/hooks" "$WT_DIR/.cvh/"; fi
+if [ -d ".cvh/settings" ]; then cp -a ".cvh/settings" "$WT_DIR/.cvh/"; fi
+if [ -f ".cvh/boards.json" ]; then cp -a ".cvh/boards.json" "$WT_DIR/.cvh/boards.json"; fi
+# .cvh is excluded via .gitignore and worktree runtime state isolation
 
 # Ensure dist directory exists for tauri generate_context!() proc macro
 mkdir -p "$WT_DIR/dist"

@@ -57,7 +57,7 @@ REM Sync live .cvh/ protected paths from root (canonical source) into worktree m
 if exist ".cvh\agents" (xcopy /E /I /Y ".cvh\agents" "%WT_DIR%\.cvh\agents" >nul)
 if exist ".cvh\rules" (xcopy /E /I /Y ".cvh\rules" "%WT_DIR%\.cvh\rules" >nul)
 if exist ".cvh\hooks" (xcopy /E /I /Y ".cvh\hooks" "%WT_DIR%\.cvh\hooks" >nul)
-if exist ".cvh\settings\tool-policy.json" (xcopy /Y ".cvh\settings\tool-policy.json" "%WT_DIR%\.cvh\settings\" >nul)
+if exist ".cvh\settings" (xcopy /E /I /Y ".cvh\settings" "%WT_DIR%\.cvh\settings" >nul)
 if exist ".cvh\boards.json" (xcopy /Y ".cvh\boards.json" "%WT_DIR%\.cvh\" >nul)
 REM .cvh is excluded via .gitignore and worktree runtime state isolation
 

@@ -33,6 +33,9 @@ if not errorlevel 1 (
 echo [CVH Ready Hook] Checking out main...
 REM Preserve live .cvh/ across checkout/pull/merge
 if exist ".cvh" (xcopy /E /I /Y ".cvh" "%TEMP%\cvh_backup_%CVH_TASK_ID%" >nul)
+REM Discard uncommitted .cvh/ residue so checkout/merge cannot abort on local changes
+git restore -- .cvh >nul 2>&1
+git clean -fd -- .cvh >nul 2>&1
 
 git checkout main
 if errorlevel 1 (

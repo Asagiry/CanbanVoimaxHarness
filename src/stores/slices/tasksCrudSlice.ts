@@ -323,6 +323,8 @@ export const createTasksCrudSlice: StateCreator<
         await invoke('update_task', {
           taskId,
           model: partial.model !== undefined ? partial.model : null,
+          providerId: partial.providerId !== undefined ? partial.providerId : null,
+          reasoningEffort: partial.reasoningEffort !== undefined ? partial.reasoningEffort : null,
           title: partial.title ?? null,
           description: partial.description ?? null,
           status: partial.status ?? null,

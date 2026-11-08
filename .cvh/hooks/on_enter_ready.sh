@@ -22,9 +22,13 @@ else
         git push origin main || true
     else
         echo "[CVH Ready Hook] Checking out main..."
+        # Preserve live .cvh/ (canonical source, uncommitted) across checkout/pull/merge
         BACKUP="$(mktemp -d 2>/dev/null || echo "/tmp/cvh_backup_$TASK_ID")"
         mkdir -p "$BACKUP"
         if [ -d ".cvh" ]; then cp -a .cvh "$BACKUP/" || true; fi
+        # Discard uncommitted .cvh/ residue so checkout/merge cannot abort on local changes
+        git restore -- .cvh >/dev/null 2>&1 || true
+        git clean -fd -- .cvh >/dev/null 2>&1 || true
 
         git checkout main || { echo "[CVH Ready Hook] ERROR: Failed to checkout main" >&2; exit 1; }
 
