@@ -12,7 +12,6 @@
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
 [![Zero-Amnesia Memory](https://img.shields.io/badge/Memory-Zero--Amnesia%20Relay-orange?style=flat-square)](#2-relay-handoff-memory-zero-amnesia-priming)
-[![OpenAI Codex for OSS](https://img.shields.io/badge/OpenAI%20Codex-OSS%20Showcase-purple?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
 
 ---
 
@@ -78,9 +77,9 @@ CanbanVoimaxHarness decouples desktop operating system primitives, high-throughp
         ▼                              ▼                  ▼                              ▼
 +-----------------------+   +----------------------+   +-------------------+   +--------------------+
 |  SQLITE WAL DATABASE  |   | ISOLATED WORKTREES   |   | COMPILER SENSORS  |   | LOCAL & CLOUD LLMS |
-|  * .cvh/harness.db    |   | * worktrees/<task>   |   | * cargo check     |   | * OpenAI Codex     |
-|  * ACID dialogue logs |   | * feat/<task> branch |   | * cargo clippy    |   | * Antigravity Proxy|
-|  * Sub-ms upserts     |   | * Auto merge & prune |   | * tsc --noEmit    |   | * Anthropic Claude |
+|  * .cvh/harness.db    |   | * worktrees/<task>   |   | * cargo check     |   | * Antigravity Proxy|
+|  * ACID dialogue logs |   | * feat/<task> branch |   | * cargo clippy    |   | * Anthropic        |
+|  * Sub-ms upserts     |   | * Auto merge & prune |   | * tsc --noEmit    |   | * DeepSeek / Ollama|
 +-----------------------+   +----------------------+   +-------------------+   +--------------------+
 ```
 
@@ -128,7 +127,7 @@ CVH delivers deep observability into agent execution velocity and token economic
 
 ### 6. 🏛️ Clean Architecture 9.7/10 & Type-Safe Domain Layer
 Engineered to strict Clean Architecture and Single-Responsibility principles (Uncle Bob `ub-mode`):
-- **NASA Test Shield: 533 PASS (100%)**: Comprehensive automated test shield consisting of 533 passing tests (Vitest unit tests across 49 suites and Rust core suites), guaranteeing zero regressions.
+- **NASA Test Shield: 574 PASS (100%)**: Comprehensive automated test shield consisting of 574 passing tests (297 Vitest unit tests across 24 suites + 277 Rust core tests), guaranteeing zero regressions.
 - **Type-Safe Nominal Branded Types**: `TaskId`, `StageId`, `BoardId`, and `TaskState` prevent primitive obsession across Rust core (`src-tauri/src/domain/`) and React frontend (`src/types/domain.ts`).
 - **R2D2 SQLite WAL Connection Pooling**: Multi-threaded connection pooling with WAL mode and specialized repository pattern (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`), eliminating database lock contention.
 - **Decoupled ReActEngine<Driver>**: Generic agent execution engine (`react_engine.rs`) parameterized by `AgentSessionDriver`, sharing SSE streaming and telemetry logic between root tasks and child subagents with zero duplication.
