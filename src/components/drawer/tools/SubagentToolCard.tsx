@@ -73,9 +73,10 @@ interface DiscoveredSubagent {
   status: string;
   durationMs?: number;
   isBg?: boolean;
+  prompt?: string;
 }
 
-function parseDiscoveredSubagents(
+export function parseDiscoveredSubagents(
   stdout: string | undefined | null,
   activeTaskId: string | null,
   storeSubagents: Record<string, SubagentInfo[]>,
@@ -108,6 +109,7 @@ function parseDiscoveredSubagents(
             status: (item.status || 'finished') as string,
             durationMs: typeof item.duration_ms === 'number' ? item.duration_ms : typeof item.durationMs === 'number' ? item.durationMs : undefined,
             isBg: Boolean(item.is_bg || item.isBg),
+            prompt: typeof item.prompt === 'string' ? item.prompt : undefined,
           });
         });
       }
@@ -126,6 +128,7 @@ function parseDiscoveredSubagents(
         status: sub.status,
         durationMs: sub.durationMs,
         isBg: sub.isBg,
+        prompt: sub.prompt || undefined,
       });
     });
   }
@@ -209,6 +212,7 @@ interface AwaitedSubagentItem {
   stepsCount: number;
   isBg: boolean;
   isBoardSubtask: boolean;
+  prompt: string;
 }
 
 function AwaitedSubagentRow({
@@ -386,6 +390,12 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
 
       const isBg = Boolean(storeSub?.isBg || (spawnTool && spawnTool.toolName === 'subagent_bg'));
       const isBoardSubtask = Boolean(boardSub);
+      const spawnPrompt = (spawnTool?.params as any)?.prompt;
+      const prompt =
+        storeSub?.prompt ||
+        (typeof spawnPrompt === 'string' ? spawnPrompt : '') ||
+        (boardSub as any)?.description ||
+        '';
 
       return {
         id: resolvedId,
@@ -399,6 +409,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
         stepsCount,
         isBg,
         isBoardSubtask,
+        prompt,
       };
     });
   }, [uniqueIds, activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, orderMap, language, tool.status, activityFeed]);
@@ -508,7 +519,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
                 sub={sub}
                 now={now}
                 language={language}
-                onOpen={() => openSubagent(sub.id, sub.title, sub.role, '')}
+                onOpen={() => openSubagent(sub.id, sub.title, sub.role, sub.prompt)}
               />
             ))
           ) : (
@@ -667,7 +678,7 @@ export function SubagentListExecutionCard({ tool }: { tool: ToolExecution }) {
               sub={sub}
               language={language}
               onOpen={() => {
-                if (sub.id) openSubagent(sub.id, sub.title, sub.role, '');
+                if (sub.id) openSubagent(sub.id, sub.title, sub.role, sub.prompt || '');
               }}
             />
           ))}
