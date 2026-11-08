@@ -38,7 +38,7 @@ Cortex edits personas, rules and stage settings (also indexed in `frontend_corte
 | `src/stores/cortex/cortexSync.ts` | Stage-to-column synchronization and agent persona CRUD/icon/color IPC actions. |
 | `src/stores/cortex/cortexHelpers.ts` | Cortex path builders, rule/hook/setting templates, and command script path extractors. |
 | `src/stores/cortex/cortexConstants.ts` | Default Cortex stage tree and recognized script extensions. |
-| `src/stores/cortex/cortexListeners.ts` | Cortex event listener stub (delegated to `tauriEventGateway.ts`). |
+| `src/stores/cortex/cortexListeners.ts` | DEPRECATED stub — see `frontend_cortex_map` for removal plan; do not add new imports. |
 | `src/stores/cortex/types.ts` | Cortex store state, persona, rule, and file slice TypeScript interfaces. |
 | `src/stores/cortex/index.ts` | Barrel re-exports for `src/stores/cortex/*`. |
 | `src/components/drawer/AgentConsoleDrawer.tsx` | Chat model selector unified on the provider catalog. |

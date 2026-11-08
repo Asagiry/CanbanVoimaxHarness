@@ -69,14 +69,15 @@ git add -A && git commit -m "feat(<task-id>): <summary>" && git merge-tree --wri
 ### 2.4 Non-Code / Prompt / Rule Modifications
 - If only documentation, rule markdown files, or configuration files were changed without code edits, no heavy compilation commands are required. Verify file formatting and valid syntax.
 
-### 2.5 Branch Integration & Zero-Regression Pre-Flight Sensor
+### 2.5 Branch Integration & Zero-Regression Pre-Flight Sensor (developer pre-flight)
+Developer-owned pre-flight procedure; the Reviewer only verifies its evidence (see `review-checklist.md` Gate 6).
 ```bash
 # 1. Commit all working tree changes to the branch first:
 git add -A && git commit -m "feat(<task-id>): <concise summary>"
 # 2. Verify clean mergeability against main:
 git merge-tree --write-tree main HEAD
 ```
-- **Acceptance Criteria**: Working tree is clean (`git status --porcelain` empty) and `git merge-tree` returns exit code `0` with zero merge conflicts.
+- **Acceptance Criteria**: Working tree is clean (`git status --porcelain` empty) and `git merge-tree` returns exit code `0` with zero merge conflicts. Record both outputs in the handover summary for reviewer verification.
 - **Concurrent Main Invariant (CLE)**:
   - **Cue**: When completing a task in an isolated worktree or touching shared components (`KanbanCard.tsx`, stores, migrations) while `main` advances with concurrent PRs.
   - **Lesson**: Always sync with `main` (`git merge origin/main`) and verify clean mergeability (`git merge-tree --write-tree main HEAD` exit 0) before handover; diff against `origin/main` to ensure concurrently merged features are never overwritten.

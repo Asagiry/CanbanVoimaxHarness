@@ -41,10 +41,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 ## 3. Six Mandatory Verification Gates
 
 ### Gate 1: Rule Hygiene, Anti-Changelog & Navigation Map Sync Gate
-- Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
-- Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
-- Update rules ONLY if universal system architecture or public contracts fundamentally changed.
-- If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
+- Rule hygiene (timeless contracts, never changelogs, when to update rules) is owned by `rules-sync.md` §1–2 — apply it here by reference, do not restate it. Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
 - **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, verify the relevant topic map in `.cvh/rules/` was updated. Update `backend_map.md` or `frontend_map.md` only when their topic routes change. Reject missing or incorrect file routes, not the absence of an unrelated router edit.
 
 ### Gate 2: Verification Evidence for the Changed Scope
@@ -52,7 +49,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Accept existing command logs and exit codes tied to the reviewed commit when relevant sources, dependencies, configuration, toolchain, and environment are unchanged. A bare claim that checks passed is not evidence.
 - Run only checks whose evidence is missing, failed, stale, or unverifiable, or whose scope does not cover a concrete risk found in the diff. State why each additional check is needed. Entering review alone does not invalidate successful verification.
 - For documentation and prompt-only changes, inspect the diff, references, and affected contracts; compiler/test runs are needed only if executable behavior or configuration is affected.
-- **Windows Command Hygiene**: When executing sensor checks via `execute_command`, strictly avoid Unix shell pipelines (`| wc -l`, `| grep`, `| head`, `| tail`) on Windows `cmd.exe`.
+- **Windows Command Hygiene**: Owned by `sensors.md` §1.4 (developer rule) — reviewer applies it by reference when running checks; do not restate the banned pipeline list here.
 
 ### Gate 3: Backend Architectural Invariants & Uncle Bob Clean Architecture
 - **Single Responsibility Principle (SRP)**: Code strictly partitioned into `db/` (repositories & pool), `config/` (I/O, models, scaffold, tool policy), `domain/` (Value Objects & state machines), and `agent/` (ReAct engine, compactor, tools).
@@ -67,26 +64,25 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Windows process spawns using safe path/arg quoting (`quote_windows_path()`, `quote_windows_arg()`).
 
 ### Gate 4: Frontend UI Invariants, Size & Testing Gates
-- **Strict Ban on Direct `listen<any>`**: Direct `listen(...)` or unvalidated `any` event listening is strictly banned. ALL Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`.
+- **Strict Ban on Direct `listen<any>`**: Direct `listen(...)` or unvalidated `any` event listening is strictly banned. ALL Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`. Sole exception: `src/components/layout/WindowControls.tsx:50` `win.onResized` (Tauri window API, not an event-gateway subscription).
 - **Component File Size Ceiling (<= 350 lines)**: React components must not exceed 350 lines. Reject monolithic views; mandate extraction into subcomponents or custom hooks.
 - **Vitest Unit Test Coverage**: Pure utilities in `src/lib/`, `src/types/`, and store slices in `src/stores/` must have matching Vitest unit tests in `__tests__/`.
 - Zustand store selections returning objects or arrays wrapped in `useShallow`.
 - Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
-- Light Paper (`#fafafa`) or Antigravity Stealth Dark (`#111114`, `#17171b`, `#232328`, `#212126`, `#2c2c33`, `#3a3a44`, `#f4f4f5`, `#a1a1aa`, `#71717a`, `#52525b`) design tokens; zero neon gradients and zero legacy dark tokens (`#161b22`, `#21262d`, `#30363d`, `#f0f6fc`, `#8b949e`).
+- Design tokens per `antislop.md` §1.1 (single owner of palette and legacy-token ban).
 - Overlays mounted outside `useUiZoom` canvas root.
 - Zero silent failures: reject empty `catch {}` blocks or dangerous fallbacks (`.catch(() => [])`, `.catch(() => null)`).
 - Redundant copy elimination (§ 2.39) and Tri-partite experience synergy (§ 2.40).
 
 ### Gate 5: Code Hygiene, Simplifier & Ponytail Minimalism
 - Zero dead code, zero unused imports, zero console.log spam.
-- Monospace `.tabular-nums` on all dynamic timers and token metrics.
+- Numeric formatting per `antislop.md` §1.4 (single owner of `tabular-nums`).
 - Surgical diffs adhering to Ponytail minimalism.
 - Code Simplifier: favor early returns over deep nested ladders; unwind single-use pass-through wrapper functions.
 
 ### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
 - **Branch Diff Inspection Mandate**: The Reviewer MUST inspect the branch diff using `git diff main...HEAD` (or `git log -p main..HEAD`). A bare `git diff` only inspects uncommitted working tree changes, which produces a deceptive empty diff when developer changes are committed.
-- **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist.
-- **Pre-Handover Clean Working Tree Check**: The feature branch MUST contain all task commits and the working tree must be completely clean (`git status --porcelain` is empty).
+- **Clean Mergeability Check (reviewer verify)**: Independently verify the developer's pre-flight evidence (`git merge-tree --write-tree main HEAD` exit 0, clean `git status --porcelain`) against the committed HEAD; reject with `CHANGES_REQUESTED` if conflicts exist or evidence is stale. Developer pre-flight procedure is owned by `sensors.md` §2.5 — this gate only verifies, it does not restate the procedure.
 - **Merge & Origin Integration**: The actual merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat`) upon advancing the task. The Reviewer executes stage routing via `advance_task(stage_id="ready" | "retro")` (see `verdict-routing.md`).
 
 ---

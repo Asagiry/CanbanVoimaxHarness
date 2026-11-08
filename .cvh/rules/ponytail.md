@@ -21,9 +21,9 @@ Ponytail engineering discipline for CanbanVoimaxHarness agents: achieving requir
 
 ## 2. Ban on Unwarranted Dependencies
 - Do not add external crates to `src-tauri/Cargo.toml` or npm packages to `package.json` without explicit approval.
-- Standard capabilities must rely on:
-  - Rust standard library, Tokio, Tauri API, rusqlite, serde.
-  - React 19, Zustand, Tailwind CSS v4, Lucide Icons.
+- Standard capabilities must rely on the approved dependency set in `src-tauri/Cargo.toml` / `package.json` (synced below; adding/removing a dependency requires updating this list in the same diff):
+  - Rust: std, Tokio, Tauri v2 (+ `tauri-plugin-dialog`, `tauri-plugin-notification`, `tauri-plugin-single-instance`), rusqlite, r2d2 + r2d2_sqlite, serde + serde_json, reqwest, regex, eventsource-stream, futures-util, anyhow, thiserror, chrono, uuid, base64.
+  - Frontend: React 19 (+ react-dom), Zustand, Tailwind CSS v4, Lucide Icons, `@hello-pangea/dnd`, `@tauri-apps/api` (+ `@tauri-apps/plugin-notification`).
 - If a utility can be implemented in 10–20 lines of clean code, do not install a third-party dependency for a single function call.
 
 ---
@@ -39,9 +39,9 @@ Ponytail engineering discipline for CanbanVoimaxHarness agents: achieving requir
 ---
 
 ## 4. Preservation of System Robustness
-Ponytail simplification governs solution structure, never compromising runtime reliability:
-- **Rust Backend**: Strongly typed error handling via `Result<T, AppError>`. Zero `.unwrap()` or `.expect()` in production paths. SQLite WAL transaction boundaries with atomic transactions.
-- **React Frontend**: Centralized `tauriEventGateway` for typed events. Domain Value Objects from `src/types/domain.ts`. Mandatory `useShallow` on Zustand store selectors returning arrays or objects. Clean timer and subscription teardowns in `useEffect`. Monospace `.tabular-nums` on dynamic telemetry and timers.
+Ponytail simplification governs solution structure, never compromising runtime reliability. Error-handling invariants (zero unwrap/expect, zero silent failures) are owned by `review-checklist.md` Gates 3–4; numeric formatting (`tabular-nums`) is owned by `antislop.md` §1.4; `useShallow` is owned by `review-checklist.md` Gate 4. This section does not restate them.
+- **Rust Backend**: Strongly typed error handling via `Result<T, AppError>`. SQLite WAL transaction boundaries with atomic transactions.
+- **React Frontend**: Centralized `tauriEventGateway` for typed events. Domain Value Objects from `src/types/domain.ts`. Clean timer and subscription teardowns in `useEffect`.
 
 ---
 
