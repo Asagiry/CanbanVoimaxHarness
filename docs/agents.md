@@ -40,7 +40,7 @@
 
 ---
 
-## 2. Персоны агентов (`.cvh/agents/<role>.md`)
+## 2. Персоны агентов (`.cvh/agents/<role>/persona.md`)
 
 Каждая активная колонка доски связывается с файлом персоны через свойство `persona: "<role>"` в конфигурации пайплайна или доски.
 
@@ -67,7 +67,7 @@
     └── rules/*.md
 ```
 
-### 2.2 Пример персоны: Разработчик (`developer.md`)
+### 2.2 Пример персоны: Разработчик (`.cvh/agents/developer/persona.md`)
 ```markdown
 # 💻 Persona: Lead Developer (agent-developer)
 
@@ -86,7 +86,7 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
 3. **Ponytail Minimalism**: Zero dead code, no placeholder functions.
 ```
 
-### 2.3 Пример персоны: Ревьюер (`reviewer.md`)
+### 2.3 Пример персоны: Ревьюер (`.cvh/agents/reviewer/persona.md`)
 Ревьюер работает в режиме «Красной команды» (Devil's Advocate):
 - **Zero Code Mutation Invariant**: Ревьюер не имеет инструментов модификации кода (`edit_file` и `write_file` отключены на уровне Tool Policy).
 - Обязан проверить изменения через сенсоры и вынести один из строгих вердиктов:
@@ -190,7 +190,7 @@ effective = stage_overrides[stage][tool] ?? global_enabled[tool] ?? true
 ### 3.3 Zero-Trust Schema Exclusion (Защита от галлюцинаций)
 Если инструмент отключен для текущей стадии задачи:
 - Его определение схемы JSON **полностью вырезается** из массива `tools` запроса к LLM.
-- Это экономит до 2,500 токенов на каждом запросе.
+- Это экономит до 2,400 токенов на каждом запросе.
 - Модель физически не знает о существовании запрещенного инструмента и не может галлюцинировать попыткой его вызвать.
 
 ---

@@ -29,7 +29,7 @@
 - `src-tauri/src/lib.rs` — полный список зарегистрированных Tauri-команд.
 - `src/stores/` (`boardStore.ts`, `drawerStore.ts`, `cortexStore.ts`, `settingsStore.ts`, `themeStore.ts`, `toolPolicyStore.ts`, `agentSessionStore.ts`, `slices/*`) —
   реактивные сторы, координация колонок, Single Authoritative Layer в матрице тулов.
-- Живой `.cvh/` этого репозитория (`pipeline.json`, `boards.json`, `config.json`, `harness.db`,
+- Живой `.cvh/` этого репозитория (`boards.json`, `config.json`, `harness.db`,
   `settings/tool-policy.json`, `agents/<role>/persona.md`, `rules/`, `spill/`, `worktrees/`)
   и `src/components/` (`board/`, `card/`, `drawer/`, `cortex/`, `settings/`, `layout/`).
 
@@ -48,8 +48,9 @@
 
 **Свежий старт (пустой проект):**
 
-1. Скаффолд создаёт ровно две колонки — `backlog` (без персоны, первая) и `ready` (терминальная, последняя).
-   Это `minimal_pipeline_config` — **работает** (тест `test_scaffold_minimal_backlog_ready_only`).
+1. Скаффолд создаёт ровно три колонки — `backlog` (без персоны, первая), `dev` (персона `cvh-dev`, средняя)
+   и `ready` (терминальная, последняя). Это `minimal_pipeline_config` (= `default_pipeline_config`) —
+   **работает** (тест `test_scaffold_minimal_backlog_ready_only`, `models.rs:769-773`).
 2. Папка `.cvh/agents/` — **намеренно пустая, ни одной персоны не сидируется**
    (тест `test_scaffold_cvh_project_pure_empty_structure`). **Первого агента создаёшь сам** —
    через ПКМ по заголовку колонки → смена персоны → «новый агент», либо командой `create_agent_persona`.
@@ -66,10 +67,9 @@
 
 ```text
 .cvh/
-├── harness.db             # высокопроизводительная SQLite база (WAL-режим): диалоги и стриминг
+├── harness.db             # SQLite SSOT (WAL-режим): задачи, диалоги и стриминг
 ├── config.json            # проект: имя, модель/endpoint по умолчанию, providers
-├── boards.json            # мульти-доски: { activeBoardId, boards[] } — единственный SSOT (pipeline.json deprecated) — см. §2.3
-├── tasks.json             # задачи: массив Task (CVH-001, CVH-002, …) — см. §2.4
+├── boards.json            # мульти-доски: { activeBoardId, boards[] } — единственный SSOT; pipeline.json deprecated, не создаётся — см. §2.3
 ├── agents/
 │   └── <role>/            # модульная папка роли (канонический путь):
 │       ├── persona.md    # системный промпт роли с YAML frontmatter (icon, description)
@@ -91,13 +91,13 @@
 > **Скрипты переходов**: общие хуки лежат в `.cvh/hooks/` (`gatekeeper_sensor.bat`, `on_review_finish.bat` и др.).
 > Если хук не настроен или файл отсутствует, бэкенд безопасно пропускает вызов (`if hook_path.exists()`).
 
-### 2.2 `pipeline.json` — колонки, hooks, autoRun/terminal — **работает**
+### 2.2 Колонки досок (`boards.json`, SSOT) — **работает**; `pipeline.json` deprecated, не создаётся
 
 Полная схема колонки (`PipelineColumn`, `config.rs`):
 
 | Поле | Тип | Назначение |
 |---|---|---|
-| `id` | string | уникальный id; `backlog` всегда первая, `ready` всегда последняя (см. нормализацию ниже) |
+| `id` | string | уникальный id; порядок сохраняется как задан (см. нормализацию ниже) |
 | `title` | string | заголовок колонки |
 | `color` / `icon` | string? | цвет, иконка Lucide |
 | `persona` | string? | роль агента; `null` = колонка-хранилище, агент не запускается |
@@ -112,27 +112,30 @@
 | `autoRun` | bool? | автозапуск агента при входе; default = `persona != null` |
 | `terminal` | bool? | терминальная колонка: задача переходит в `done` |
 
-Стабильная нормализация порядка (`normalize_pipeline_columns`, `src-tauri/src/config/models.rs`) — **работает**:
-`backlog` — всегда первая (если есть), `ready` — всегда последняя (если есть),
-остальные сохраняют относительный порядок; **дублирующийся `id` — ошибка** (переход/сохранение отклоняется).
+Стабильная нормализация порядка (`normalize_pipeline_stages` / `normalize_pipeline_columns`,
+`src-tauri/src/config/models.rs:590-615`) — **работает**: порядок стадий сохраняется как задан
+(без инъекции синтетических `backlog`/`ready`); первая стадия маркируется `is_intake = Some(true)`,
+последняя — `terminal = Some(true)`; **дублирующийся `id` — ошибка** (переход/сохранение отклоняется).
 
 Сколько «дефолтов» существует (все — **работает**, но это разные функции, не путайте):
 
-- `minimal_pipeline_config()` — скаффолд свежего проекта: только `backlog` + `ready`.
-- `default_pipeline_config()` — 5 стадий `backlog → dev → review → retro → ready`; используется как
-  fallback при битом/отсутствующем `pipeline.json` и как база `default_boards_config()`.
-- `get_canonical_board_columns()` — 3 колонки `backlog → dev → ready` (русские титулы, `ready.terminal=true`);
-  это то, что получает новая доска по умолчанию (`create_board` с `template: "canonical"`).
+- `default_pipeline_config()` — 3 стадии `backlog → dev → ready` (`models.rs:364-372`, через
+  `get_canonical_board_stages()`); используется как fallback при битом/отсутствующем `boards.json`
+  и как база `default_boards_config()`.
+- `minimal_pipeline_config()` — скаффолд свежего проекта: те же 3 стадии `backlog → dev → ready`
+  (`models.rs:769-773`, делегирует `default_pipeline_config()`).
+- `get_canonical_board_columns()` — алиас `get_canonical_board_stages()`: 3 колонки
+  `backlog → dev → ready` (`ready.terminal=true`); это то, что получает новая доска по умолчанию
+  (`create_board` с `template: "canonical"`).
 - `get_board_template_columns("modeler"|"3d"|"3d-modeler")` — 4 стадии
   `concept → modeling → texturing → ready`. Любой другой `template` → canonical.
-- Фронтенд-стор держит ещё два набора: `CANONICAL_BOARD_COLUMNS` (3 колонки с сенсорами/хуками)
-  и `INITIAL_COLUMNS` в `mockData.ts` (5 колонок с `wipLimit`) — это fallback для web-режима,
-  бэкенд их не читает.
+- Фронтенд-стор держит `CANONICAL_BOARD_COLUMNS` (3 колонки с сенсорами/хуками) — fallback для
+  web-режима, бэкенд его не читает.
 
 > Расхождение с `docs/board.md` (§3.2): дока обещает шаблоны `development` (5 стадий),
 > `kanban`/`simple` (`todo → in_progress → ready`) и `empty` (`backlog → ready`) —
 > **частично**: в коде таких веток `template` нет, всё не-`modeler` падает в canonical из 3 колонок.
-> `empty` фактически покрывается скаффолдом (минимальные 2 колонки), а не `create_board`.
+> `empty` фактически покрывается скаффолдом (минимальные 3 колонки), а не `create_board`.
 
 ### 2.3 `boards.json` — мульти-доски — **работает**
 
@@ -145,8 +148,8 @@
 - `create_board`: id — слагифицированное имя (`slugify_board_name`, с транслитерацией кириллицы,
   суффикс `-2`, `-3` при коллизии) — **работает**.
 - `delete_board`: единственную доску удалить нельзя; задачи удалённой доски переезжают на новую активную — **работает**.
-- Синхронизация двусторонняя (`save_boards_config` ↔ `save_pipeline_config`): активная доска
-  зеркалируется в `pipeline.json` (поля `boards`, `activeBoardId`, плюс `columns`/`title` = активная доска) — **работает**.
+- `save_pipeline_config` пишет только в `boards.json` (активная доска обновляется в SSOT);
+  `pipeline.json` не создаётся и не зеркалится (тест `config/tests.rs:264`) — **работает**.
 - Задачи привязаны к доске полем `board_id` (пустое нормализуется в `"development"`).
 
 ### 2.4 `config.json` — **работает**
@@ -156,9 +159,11 @@
 но в исполнении агента не участвует (см. §4, статус). Провайдеры (`antigravity`/`deepseek`/`anthropic`)
 в этом репозитории — декларативные; реальный вызов идёт на `baseUrl` из LLM-настроек (см. §5).
 
-### 2.5 `tasks.json` — **работает**
+### 2.5 Задачи в SQLite SSOT (`.cvh/harness.db`) — **работает**; `tasks.json` не пишется
 
-Массив `Task`: `id` (`CVH-003`, сабтаски `CVH-012.1`), `title`, `description`, `stageId`,
+Задачи хранятся в SQLite (таблица задач в `harness.db`); `save_tasks_to_disk` **не пишет**
+`.cvh/tasks.json` (тест `db/tests.rs:898-901`), легаси-`tasks.json` не воскрешает зомби-задачи.
+Модель `Task`: `id` (`CVH-003`, сабтаски `CVH-012.1`), `title`, `description`, `stageId`,
 `boardId`, `worktreePath?`, `branch?`, `verdict?`, `customFlow?`, `status?`, `model?`,
 `parentId?`, `subtaskIndex?`, `waitingForSubtaskId?`, `coverImage?`, `attachments?`,
 `todos?` (`[{id, content, status}]`), `createdAt`/`updatedAt` (ms).
@@ -213,7 +218,7 @@ ID монотонные `max+1`, **никогда не переиспользу�
 
 - Диалоги и активность задач — SQLite база данных `.cvh/harness.db` с WAL-журналированием (таблица `dialog_items` с композитным индексом по `task_id, created_at`).
   Операции `save_task_activity` / `load_task_activity` / `clear_task_activity` (с обратно совместимыми алиасами `save_task_dialog` / `load_task_dialog` / `clear_task_dialog`) выполняются атомарно в транзакциях (`src-tauri/src/db.rs`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
-- `spill/` — см. §5 (порог 100 строк / 8 КБ, `HEAD 20 + TAIL 20`) — **работает**.
+- `spill/` — см. §5 (порог 500 строк / 64 КБ; 2000 строк / 128 КБ для `read_file`; 5000 строк / 256 КБ для субагентов, `HEAD 20 + TAIL 20`) — **работает**.
 - `worktrees/` — git worktrees задач; в `.gitignore` (скаффолд дописывает `.cvh/llm.json`, `llm.json`, `.cvh/worktrees/`) — **работает**.
   Удаление — `cleanup_task_worktree` (worktree + ветка `feat/<slug>`, best-effort) — **работает**;
   из UI вызывается при удалении топ-уровневой задачи (сабтаски делят worktree родителя и его не чистят).
@@ -266,7 +271,7 @@ ID монотонные `max+1`, **никогда не переиспользу�
 - Модель: `task.model` → `llm_settings.model` → `agents/<role>/setting.model` → `col.modelOverride` →
   `project.defaultModel` → хардкод `gemini-3.8-flash-high`.
   Температура: `llm_settings` → `agent setting` → `column`. `baseUrl`: `llm_settings` → проект → `http://127.0.0.1:8045/v1`.
-- Статус `running` пишется в `tasks.json` + событие `agent:status`.
+- Статус `running` пишется в SQLite SSOT + событие `agent:status`.
 - Финиш: парсинг вердикта **по вхождению верхнего регистра** в финальном ответе:
   `CHANGES_REQUESTED` / `APPROVED_WITH_CAVEATS` / `APPROVED`. Дальше — иерархия сабтасок:
   родитель остаётся на месте (`waiting_subtask`), в следующей колонке создаётся `CVH-012.N`
@@ -327,7 +332,7 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 
 | Тул | Параметры | Описание и заметки кода |
 |---|---|---|
-| `read_file` | `file_path` (`path`), `offset` (def 1), `limit` (def 2000) | UTF-8, номера строк; вне worktree — отказ. Порог спиллинга: 2000 строк / 128 КБ. |
+| `read_file` | `file_path` (`path`), `offset` (def 1), `limit` (def 200, из `tool_policy.rs:25` / `file_ops.rs:262-268`) | UTF-8, номера строк; вне worktree — отказ. Порог спиллинга: 2000 строк / 128 КБ. |
 | `write_file` | `file_path` (`path`), `content` | Атомарная запись файла в изолированном worktree. |
 | `edit_file` (алиас `str_replace`) | `file_path` (`path`), `old_string` (`old_str`), `new_string` (`new_str`), `replace_all` (def false) | 5-уровневый fuzzy-матчинг с адаптацией CRLF/пробелов. |
 | `glob` | `pattern` (req), `path` (def `.`) | Поиск путей по шаблону; пропуск `.git`/`target`/`node_modules`. |
@@ -395,7 +400,8 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 - Испарение (`evaporate_tool_logs`): tool-ответы `> 500 chars` и **старше 2 ходов**
   (`current_turn - turn > 2`, в соответствии с `compactor.rs:1058`) заменяются плейсхолдером
   `[Output evaporated: N chars truncated. Exit code: C. Tool: T]`. Якоря Turn 0 (system + исходный user) неприкосновенны.
-- Авто: в `run_agent_loop` при `turn > 3 && estimate > 40_000` → событие `Compacted`.
+- Авто: `maybe_compact_messages` (`react_engine.rs:737-740`) при `estimate_tokens >= context_window`
+  (дефолт 128K при `context_window == 0`) → компакция до 75% окна (`target = window * 3 / 4`) + событие `Compacted`.
 - Ручное `compact_context(task_id)`: жмёт `agent_contexts[task_id]`… **частично**: `run_agent_loop`
   держит сообщения в локальном `Vec` и в `agent_contexts` их не кладёт, поэтому для живой сессии
   компактится синтетический 2-месседжный контекст с отчётом `CompactionReport`, а не реальная лента.
@@ -496,7 +502,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 }
 ```
 
-Агенты: `.cvh/agents/markup-dev.md` (верстает в worktree), `.cvh/agents/ux-reviewer.md`
+Агенты: `.cvh/agents/markup-dev/persona.md` (верстает в worktree), `.cvh/agents/ux-reviewer/persona.md`
 (вердикты `APPROVED`/`CHANGES_REQUESTED` — их парсит §3.3). В `tool-policy.json`:
 `stageOverrides."ux-review"`: `edit_file: false, write_file: false`
 (глобально выключать запись не надо — AND всё равно даст `false` только здесь).
@@ -545,14 +551,15 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 ### Шаг 0. Открой проект в CVH
 
 Открой корень репо → скаффолд (§1). Проверь: `.cvh/config.json` (имя/endpoint),
-`.cvh/pipeline.json` (2 колонки), `.cvh/tasks.json` (`[]`),
+`.cvh/boards.json` (3 колонки `backlog → dev → ready`; `pipeline.json` не создаётся),
+`.cvh/harness.db` (SQLite SSOT задач; `tasks.json` не пишется),
 `.cvh/settings/tool-policy.json`, `.gitignore` (есть `.cvh/worktrees/`).
 Если открываешь не git-репо — у `backlog` не будет builtin-хука: добавь позже вручную (§3.1).
 
-### Шаг 1. Доска(и): `boards.json` / `pipeline.json`
+### Шаг 1. Доска(и): `boards.json` (SSOT; `pipeline.json` deprecated)
 
 1. Создай доски под свои контуры (§7) — `create_board` или правкой JSON.
-2. Соблюди инвариант: `backlog` первая, `ready` последняя, id уникальны (иначе ошибка сохранения).
+2. Соблюди инвариант: порядок стадий сохраняется как задан, первая маркируется `is_intake`, последняя — `terminal`, id уникальны (иначе ошибка сохранения).
 3. Расставь `persona` только там, где реально нужен агент; `terminal: true` — только финалу.
 5. `gatekeeperSensor` — команда, честно проверяющая стадию в worktree (`cargo check`, `npm run build`,
    `terraform validate`); помни про таймаут 300с.
@@ -618,7 +625,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 | 4 | Надежда на `column.allowedTools` как enforcement | gate его не смотрит | права — в `tool-policy.json` + `setting` |
 | 5 | Имя тула `my-tool` / `MyTool` | `save_custom_tool` отклонит (только `a-z0-9_`) | переименуй |
 | 6 | `{args}` одинарные в `command` | подстановки нет (код ищет `{{args}}`) | двойные скобки |
-| 8 | Правка `pipeline.json` при активных досках | перезапишется зеркалом активной доски | правь `boards.json`/доску в UI |
+| 8 | Правка `pipeline.json` при активных досках | файл deprecated, бэкенд его не создаёт и не читает как SSOT | правь `boards.json`/доску в UI |
 | 9 | `wipLimit` как лимит | фронт-only поле, бэкенд не знает | контролируй руками |
 | 10 | Ожидание автозаписи `tasks-history.json`/knowledge-graph | код не пишет (задумано) | веди вручную/хуком |
 | 11 | Стадия без worktree у задачи | агент тихо работает в корне (WARN в лог) | проверяй worktree после создания |
@@ -627,7 +634,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 
 ## Приложение А. Статусная сводка проверки
 
-**Покрыто (работает)** — скаффолд (состав, минимальные 2 колонки, пустые `agents/`, git-условный builtin-хук,
+**Покрыто (работает)** — скаффолд (состав, минимальные 3 колонки `backlog → dev → ready`, пустые `agents/`, git-условный builtin-хук,
 `.gitignore`); все дефолты колонок (minimal/default/canonical/modeler); `ToolPolicyConfig` Single Authoritative Layer + алиасы;
 `create_task`, `update_task`, `delete_task` (все параметры, board-aware поиск колонки, shell→stdout→builtin цепочка, `skip_worktree`);
 `move_task_stage` (on_finish best-effort → sensor блокирующий → on_enter блокирующий → builtin → onEnterScript);
@@ -638,7 +645,7 @@ custom tools CRUD + исполнение `{{args}}`; `execute_hook` env/инте
 системник (персона + rules по алфавиту + runtime mandate, без внешних skills/монолитов — намеренно); полный стек инструментов
 с параметрами; `todo_write` (persist + событие); spill (>500 строк / >64KB; >2000 строк / >128KB для `read_file`);
 ACID-транзакции диалогов в SQLite WAL `harness.db`; `normalize_pipeline_columns`;
-boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` ↔ `pipeline.json` синк;
+boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT (`pipeline.json` deprecated, не создаётся);
 Cortex tree/read/save; Git Diff и Image Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
 `ContextGauge`+телеметрия; `localStorage`-бэкап задач и монотонные ID.
 
@@ -653,7 +660,7 @@ Cortex tree/read/save; Git Diff и Image Diff; drawer/телеметрия/steer
 (Все основные вехи дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и SQLite WAL леджера памяти переведены в статус «работает»).
 системник (персона + rules по алфавиту + mandate, без внешних skills/монолитов — намеренно); 10 стандартных тулов
 с параметрами; `todo_write` (persist + событие); spill; 3-tier диалогов; `normalize_pipeline_columns`;
-boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` ↔ `pipeline.json` синк;
+boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT (`pipeline.json` deprecated, не создаётся);
 Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
 `ContextGauge`+телеметрия; `localStorage`-бэкап задач и монотонные ID.
 
