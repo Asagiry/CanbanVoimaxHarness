@@ -239,27 +239,15 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
         );
     }
 
-    // 2. Snapshot to project backup in LocalAppData for disaster recovery
-    let serialized = serde_json::to_string_pretty(tasks)
-        .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
-
-    let backup_file = get_project_tasks_backup_file(&actual_root);
-    let backup_res = atomic_write_file(&backup_file, &serialized).await;
-
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
-    if db_res.is_err() && backup_res.is_err() {
-        let err_msg = "Failed to save tasks to both SQLite and backup".to_string();
-        crate::logger::cvh_log(Some(&actual_root), "ERROR", "SAVE_TASKS", &err_msg);
-        return Err(err_msg);
-    }
     crate::logger::cvh_log_with_details(
         Some(&actual_root),
         "INFO",
         "SAVE_TASKS",
-        &format!("save_tasks_to_disk: saved {} tasks (db_ok: {}, backup_ok: {})", tasks.len(), db_res.is_ok(), backup_res.is_ok()),
+        &format!("save_tasks_to_disk: saved {} tasks to SQLite", tasks.len()),
         Some(&format!("Saved IDs: [{}]", ids.join(", "))),
     );
-    Ok(())
+    db_res.map_err(|e| format!("save_tasks_to_disk: SQLite persistence error: {}", e))
 }
 
 pub async fn load_task_sequence(repo_root: &Path) -> u32 {

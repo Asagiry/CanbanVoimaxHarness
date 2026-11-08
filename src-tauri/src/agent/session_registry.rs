@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use crate::commands::state::{ActiveAgentHandle, AppState};
+use crate::commands::tasks::healing::task_id_matches;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -160,6 +162,309 @@ impl AgentSessionRegistry {
         let id_clean = session_id.trim();
         let map = self.sessions.read().unwrap_or_else(|p| p.into_inner());
         map.get(id_clean).map(|e| e.summary.clone())
+    }
+
+    /// Hierarchically aborts sessions for either a parent task or child subagent.
+    pub async fn abort_hierarchy(
+        &self,
+        target_id: &str,
+        state: &AppState,
+    ) -> Result<AbortSessionsOutcome, String> {
+        abort_hierarchical_sessions(target_id, state).await
+    }
+}
+
+/// Outcome of hierarchical session abortion.
+#[derive(Debug, Clone, Default)]
+pub struct AbortSessionsOutcome {
+    pub is_subagent: bool,
+    pub had_entry: bool,
+    pub aborted_session_ids: Vec<String>,
+}
+
+/// Suffix/prefix matching helper for subagent keys across registries and dialog identifiers.
+pub fn is_matching_subagent_key(key: &str, target_sub_id: &str) -> bool {
+    let k_stripped = key.split_once("::").map(|(_, tid)| tid).unwrap_or(key);
+    let k_clean = k_stripped.trim();
+    let t_clean = target_sub_id.trim();
+    if k_clean == t_clean {
+        return true;
+    }
+    let k_core = k_clean.rsplit(":sub:").next().unwrap_or(k_clean);
+    let t_core = t_clean.rsplit(":sub:").next().unwrap_or(t_clean);
+    if k_core == t_core {
+        return true;
+    }
+    // Suffix match with strict delimiter boundary
+    if k_core.contains(".sub-") {
+        let suffix = k_core.rsplit(".sub-").next().unwrap_or(k_core);
+        if suffix == t_core
+            || t_core.ends_with(&format!(".sub-{}", suffix))
+            || t_core.ends_with(&format!(":sub:{}", suffix))
+        {
+            return true;
+        }
+    }
+    if t_core.contains(".sub-") {
+        let suffix = t_core.rsplit(".sub-").next().unwrap_or(t_core);
+        if suffix == k_core
+            || k_core.ends_with(&format!(".sub-{}", suffix))
+            || k_core.ends_with(&format!(":sub:{}", suffix))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Determines if a task ID identifies a child subagent rather than a root parent task.
+pub async fn is_subagent_task_id(
+    task_id: &str,
+    active_agents: Option<&std::sync::Mutex<HashMap<String, ActiveAgentHandle>>>,
+) -> bool {
+    let p_trim = task_id.trim();
+    if p_trim.contains(".sub-") || p_trim.contains(":sub:") {
+        return true;
+    }
+
+    let in_sessions = {
+        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+        sessions.contains_key(p_trim) || sessions.values().any(|sess| {
+            if let Ok(info) = sess.retry_info.try_lock() {
+                info.subagent_id == p_trim
+            } else {
+                false
+            }
+        })
+    };
+    if in_sessions {
+        return true;
+    }
+
+    if let Some(active) = active_agents {
+        if let Ok(map) = active.lock() {
+            return map.keys().any(|k| k == p_trim && (k.contains(".sub-") || k.contains(":sub:")));
+        }
+    }
+
+    false
+}
+
+/// Hierarchical session abort:
+/// - If `target_id` is a child subagent: aborts ONLY that specific subagent session across
+///   `active_agents`, `session_registry`, `SUBAGENT_SESSIONS`, and `SUBAGENT_RECEIVERS`.
+/// - If `target_id` is a parent task: aborts parent task handle AND cascades abort to all child subagents.
+pub async fn abort_hierarchical_sessions(
+    target_id: &str,
+    state: &AppState,
+) -> Result<AbortSessionsOutcome, String> {
+    let p_trim = target_id.trim();
+    if p_trim.is_empty() {
+        return Ok(AbortSessionsOutcome::default());
+    }
+
+    let is_subagent = is_subagent_task_id(p_trim, Some(&state.active_agents)).await;
+
+    if is_subagent {
+        // =========================================================================
+        // 1. GRANULAR SUBAGENT ABORT:
+        //    Abort ONLY this specific subagent. DO NOT touch parent task or siblings!
+        // =========================================================================
+        let matching_handles: Vec<(String, ActiveAgentHandle)> = {
+            let mut map = state
+                .active_agents
+                .lock()
+                .map_err(|_| "Failed to lock active agents".to_string())?;
+
+            let mut matched = Vec::new();
+            let mut keys_to_remove = Vec::new();
+
+            for k in map.keys() {
+                if is_matching_subagent_key(k, p_trim) {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+
+            for k in keys_to_remove {
+                if let Some(entry) = map.remove(&k) {
+                    matched.push((k, entry));
+                }
+            }
+            matched
+        };
+
+        let aborted_sids = state.session_registry.abort_task(p_trim);
+        let had_entry = !matching_handles.is_empty() || !aborted_sids.is_empty();
+
+        for (_k, agent_entry) in matching_handles {
+            agent_entry.abort_flag.store(true, Ordering::SeqCst);
+            let maybe_handle = {
+                let mut guard = agent_entry.join_handle.lock().await;
+                guard.take()
+            };
+            if let Some(handle) = maybe_handle {
+                handle.abort();
+                let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
+            }
+        }
+
+        // Abort matching session in SUBAGENT_SESSIONS
+        let mut subagent_session_matched = false;
+        {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            for (sid, session) in sessions.iter() {
+                let is_this = {
+                    let mut info = session.retry_info.lock().await;
+                    if is_matching_subagent_key(sid, p_trim)
+                        || is_matching_subagent_key(&info.subagent_id, p_trim)
+                    {
+                        info.status = "aborted".to_string();
+                        info.last_error = Some("Прервано пользователем".to_string());
+                        info.ctx.abort_handle.store(true, Ordering::SeqCst);
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if is_this {
+                    subagent_session_matched = true;
+                    session.abort_handle.store(true, Ordering::SeqCst);
+                    let mut guard = session.join_handle.lock().await;
+                    if let Some(h) = guard.take() {
+                        h.abort();
+                    }
+                    if let Some(sender) = session.sender.lock().await.take() {
+                        let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+                    }
+                }
+            }
+        }
+
+        // Clean up matching receiver from SUBAGENT_RECEIVERS
+        {
+            let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
+            let mut keys_to_remove = Vec::new();
+            for k in receivers.keys() {
+                if is_matching_subagent_key(k, p_trim) {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+            for k in keys_to_remove {
+                receivers.remove(&k);
+            }
+        }
+
+        Ok(AbortSessionsOutcome {
+            is_subagent: true,
+            had_entry: had_entry || subagent_session_matched,
+            aborted_session_ids: aborted_sids,
+        })
+    } else {
+        // =========================================================================
+        // 2. PARENT TASK ABORT:
+        //    Abort parent task AND cascade abort to all its child subagents!
+        // =========================================================================
+        let matching_handles: Vec<(String, ActiveAgentHandle)> = {
+            let mut map = state
+                .active_agents
+                .lock()
+                .map_err(|_| "Failed to lock active agents".to_string())?;
+
+            let mut matched = Vec::new();
+            let mut keys_to_remove = Vec::new();
+
+            for k in map.keys() {
+                let k_stripped = k.split_once("::").map(|(_, tid)| tid).unwrap_or(k);
+                let k_trim = k_stripped.trim();
+                if task_id_matches(k_trim, p_trim)
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
+                {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+
+            for k in keys_to_remove {
+                if let Some(entry) = map.remove(&k) {
+                    matched.push((k, entry));
+                }
+            }
+            matched
+        };
+
+        let aborted_session_ids = state.session_registry.abort_task(p_trim);
+        let had_entry = !matching_handles.is_empty() || !aborted_session_ids.is_empty();
+
+        // Abort all active agent handles and wait with timeout
+        for (_k, agent_entry) in matching_handles {
+            agent_entry.abort_flag.store(true, Ordering::SeqCst);
+            let maybe_handle = {
+                let mut guard = agent_entry.join_handle.lock().await;
+                guard.take()
+            };
+            if let Some(handle) = maybe_handle {
+                handle.abort();
+                let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
+            }
+        }
+
+        // Abort all child subagents in SUBAGENT_SESSIONS
+        {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            for (sid, session) in sessions.iter() {
+                let matches_parent = {
+                    let mut info = session.retry_info.lock().await;
+                    if info.parent_task_id == p_trim
+                        || info.subagent_id.starts_with(&format!("{}.", p_trim))
+                        || info.subagent_id.starts_with(&format!("{}:sub:", p_trim))
+                        || sid.starts_with(&format!("{}.", p_trim))
+                        || sid.starts_with(&format!("{}:sub:", p_trim))
+                    {
+                        info.status = "aborted".to_string();
+                        info.last_error = Some("Прервано пользователем".to_string());
+                        info.ctx.abort_handle.store(true, Ordering::SeqCst);
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if matches_parent {
+                    session.abort_handle.store(true, Ordering::SeqCst);
+                    let mut guard = session.join_handle.lock().await;
+                    if let Some(h) = guard.take() {
+                        h.abort();
+                    }
+                    // Take sender so awaiting receiver gets Err immediately
+                    let _ = session.sender.lock().await.take();
+                }
+            }
+        }
+
+        // Clean up any awaiting receivers in SUBAGENT_RECEIVERS
+        {
+            let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
+            let mut keys_to_remove = Vec::new();
+            for k in receivers.keys() {
+                let k_trim = k.trim();
+                if task_id_matches(k_trim, p_trim)
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
+                    || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
+                {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+            for k in keys_to_remove {
+                receivers.remove(&k);
+            }
+        }
+
+        Ok(AbortSessionsOutcome {
+            is_subagent: false,
+            had_entry,
+            aborted_session_ids,
+        })
     }
 }
 

@@ -38,6 +38,7 @@ Thumbs.db
 .cvh/harness.db*
 .cvh/worktrees/
 .cvh/dialogs/
+.cvh/context/
 .cvh/spill/
 .cvh/logs/
 .cvh/tasks/

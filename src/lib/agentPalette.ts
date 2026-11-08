@@ -133,3 +133,38 @@ export function getRoleActiveCardStyle(role?: string | null, customColor?: strin
     boxShadow: `0 0 0 1px ${color}33`,
   };
 }
+
+export interface StageStyleTarget {
+  id?: string;
+  stageId?: string;
+  color?: string | null;
+  icon?: string | null;
+  persona?: string | null;
+  terminal?: boolean | null;
+  isIntake?: boolean | null;
+}
+
+export interface PersonaStyleTarget {
+  color?: string | null;
+  icon?: string | null;
+}
+
+export function resolveStageColor(stage?: StageStyleTarget | null, persona?: PersonaStyleTarget | null): string {
+  if (!stage) return BACKLOG_COLOR;
+  if (stage.isIntake || stage.id === 'backlog' || stage.stageId === 'backlog') return BACKLOG_COLOR;
+  if (stage.terminal || stage.id === 'ready' || stage.stageId === 'ready') return READY_COLOR;
+  if (persona?.color && isAllowedAgentColor(persona.color)) return persona.color;
+  if (stage.color && isAllowedAgentColor(stage.color)) return stage.color;
+  if (stage.persona) return getDeterministicAgentColor(stage.persona);
+  return getDeterministicAgentColor(stage.id || stage.stageId || 'general');
+}
+
+export function resolveStageIcon(stage?: StageStyleTarget | null, persona?: PersonaStyleTarget | null): string {
+  if (!stage) return 'Inbox';
+  if (stage.isIntake || stage.id === 'backlog' || stage.stageId === 'backlog') return 'Inbox';
+  if (stage.terminal || stage.id === 'ready' || stage.stageId === 'ready') return 'CheckCircle2';
+  if (persona?.icon) return persona.icon;
+  if (stage.icon) return stage.icon;
+  if (stage.persona) return getDeterministicAgentIcon(stage.persona);
+  return getDeterministicAgentIcon(stage.id || stage.stageId);
+}

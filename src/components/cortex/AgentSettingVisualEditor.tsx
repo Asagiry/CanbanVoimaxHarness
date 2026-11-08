@@ -247,7 +247,7 @@ export default function AgentSettingVisualEditor({
     return role ? getDeterministicAgentColor(role) : '#6366f1';
   };
 
-  const lastEmittedRef = useRef<string>(content);
+  const lastEmittedRef = useRef<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
   const [model, setModel] = useState<string>('inherit');
@@ -296,28 +296,6 @@ export default function AgentSettingVisualEditor({
     lastEmittedRef.current = content;
   }, [content, assignedPersona, role]);
 
-  // Первоначальный разбор при монтировании
-  useEffect(() => {
-    const { parsed, error } = parseSettingJson(content);
-    if (error) {
-      setParseError(error);
-      return;
-    }
-    setParseError(null);
-    setModel(parsed.model ?? 'inherit');
-    setReasoningEffort(parsed.reasoningEffort);
-    setContextWindow(parsed.contextWindow);
-    setMaxTokens(parsed.maxTokens);
-    setAllowedToolsData({
-      has: parsed.hasAllowedTools,
-      key: parsed.allowedToolsKey,
-      value: parsed.allowedTools,
-    });
-    setIcon(resolveFallbackIcon(parsed.icon));
-    setColor(resolveFallbackColor(parsed.color));
-    setRawExtra(parsed.rawExtra);
-    lastEmittedRef.current = content;
-  }, []);
 
   // Функция эмиссии изменений в родительский activeFile.content
   const emitChanges = (

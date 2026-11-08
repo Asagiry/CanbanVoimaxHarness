@@ -980,6 +980,61 @@ use std::path::PathBuf;
         assert_eq!(tasks[2].waiting_for_subtask_id, None, "Parent with completed child must have waiting_for_subtask_id cleared");
         assert_eq!(tasks[2].status.as_deref(), Some("idle"), "Status must revert from waiting_subtask to idle");
 
+        // 1b. Verify heal_tasks cleans up waiting_for_subtask_id when child is in error or idle
+        let mut test_tasks_err = vec![
+            Task {
+                id: "CVH-ERR-PARENT".to_string(),
+                title: "Parent with errored child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                status: Some("idle".to_string()),
+                waiting_for_subtask_id: Some("CVH-ERR-CHILD".to_string()),
+                ..tasks[0].clone()
+            },
+            Task {
+                id: "CVH-ERR-CHILD".to_string(),
+                title: "Errored child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                status: Some("error".to_string()),
+                parent_id: Some("CVH-ERR-PARENT".to_string()),
+                waiting_for_subtask_id: None,
+                ..tasks[0].clone()
+            },
+        ];
+        let healed_err = heal_tasks(&mut test_tasks_err, &bcfg);
+        assert!(healed_err, "heal_tasks must return true when cleaning up errored subtask wait");
+        assert_eq!(test_tasks_err[0].waiting_for_subtask_id, None, "Parent waiting on error subtask must be unblocked");
+
+        let mut test_tasks_idle = vec![
+            Task {
+                id: "CVH-IDLE-PARENT".to_string(),
+                title: "Parent with idle child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                status: Some("idle".to_string()),
+                waiting_for_subtask_id: Some("CVH-IDLE-CHILD".to_string()),
+                ..tasks[0].clone()
+            },
+            Task {
+                id: "CVH-IDLE-CHILD".to_string(),
+                title: "Idle child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                status: Some("idle".to_string()),
+                parent_id: Some("CVH-IDLE-PARENT".to_string()),
+                waiting_for_subtask_id: None,
+                ..tasks[0].clone()
+            },
+        ];
+        let healed_idle = heal_tasks(&mut test_tasks_idle, &bcfg);
+        assert!(healed_idle, "heal_tasks must return true when cleaning up idle subtask wait");
+        assert_eq!(test_tasks_idle[0].waiting_for_subtask_id, None, "Parent waiting on idle subtask must be unblocked");
+
         // 2. Verify subtask advance to terminal via internal_advance_task_to_stage clears parent waiting_for_subtask_id
         crate::config::save_boards_config(&tmp, &bcfg).await.expect("save boards");
         let parent_active = Task {

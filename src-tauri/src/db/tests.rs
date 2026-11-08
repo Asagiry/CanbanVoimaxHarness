@@ -923,3 +923,75 @@ async fn test_tasks_json_not_written_and_no_zombie_resurrection() {
 
     let _ = tokio::fs::remove_dir_all(&root).await;
 }
+
+#[tokio::test]
+async fn test_empty_todos_clears_old_todos_in_sqlite() {
+    let root = PathBuf::from("target").join(format!("cvh_ghost_todos_{}", uuid::Uuid::new_v4()));
+    let task_id = "GHOST-001";
+    let task = Task {
+        id: task_id.to_string(),
+        title: "Ghost Todos Task".to_string(),
+        description: "Testing ghost todos fix".to_string(),
+        stage_id: "backlog".to_string(),
+        board_id: None,
+        worktree_path: None,
+        branch: None,
+        verdict: None,
+        custom_flow: None,
+        status: Some("idle".to_string()),
+        model: None,
+        provider_id: None,
+        reasoning_effort: None,
+        parent_id: None,
+        subtask_index: None,
+        waiting_for_subtask_id: None,
+        handover_summary: None,
+        cover_image: None,
+        priority: None,
+        current_tokens: None,
+        skip_worktree: Some(true),
+        created_at: 100,
+        updated_at: 100,
+        stage_entered_at: None,
+        completed_at: None,
+        position: None,
+        hook_states: None,
+        stage_durations: None,
+        total_elapsed: None,
+        project_path: None,
+        attachments: None,
+        tags: None,
+        todos: Some(vec![
+            TodoItem { id: "td-1".into(), content: "item 1".into(), status: "todo".into() },
+            TodoItem { id: "td-2".into(), content: "item 2".into(), status: "completed".into() },
+        ]),
+    };
+
+    db_upsert_task(&root, &task).expect("initial upsert with todos");
+    let loaded = db_get_all_tasks(&root).expect("load tasks");
+    assert_eq!(loaded[0].todos.as_ref().unwrap().len(), 2);
+
+    // Now upsert with empty todos list (e.g. user removed all checklist items)
+    let mut updated_task = task.clone();
+    updated_task.todos = Some(vec![]);
+    db_upsert_task(&root, &updated_task).expect("upsert with empty todos");
+
+    let loaded_after = db_get_all_tasks(&root).expect("load tasks after clearing todos");
+    assert_eq!(loaded_after[0].todos.as_ref().unwrap().len(), 0, "Empty todos must not leave ghost todos in SQLite");
+
+    // Also test batch db_upsert_all_tasks
+    let mut batch_task = task.clone();
+    batch_task.id = "GHOST-BATCH".to_string();
+    batch_task.todos = Some(vec![
+        TodoItem { id: "td-b1".into(), content: "batch item".into(), status: "todo".into() },
+    ]);
+    db_upsert_all_tasks(&root, &[batch_task.clone()]).expect("batch upsert");
+    assert_eq!(db_get_all_tasks(&root).expect("load").iter().find(|t| t.id == "GHOST-BATCH").unwrap().todos.as_ref().unwrap().len(), 1);
+
+    batch_task.todos = Some(vec![]);
+    db_upsert_all_tasks(&root, &[batch_task]).expect("batch upsert empty");
+    assert_eq!(db_get_all_tasks(&root).expect("load").iter().find(|t| t.id == "GHOST-BATCH").unwrap().todos.as_ref().unwrap().len(), 0);
+
+    let _ = tokio::fs::remove_dir_all(&root).await;
+}
+

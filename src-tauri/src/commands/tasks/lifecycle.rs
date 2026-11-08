@@ -928,7 +928,7 @@ pub async fn internal_create_subtask_with_hook_states(
         waiting_for_subtask_id: None,
         handover_summary: handover_summary.map(|s| s.to_string()),
         cover_image: None,
-        attachments: tasks[parent_idx].attachments.clone(),
+        attachments: None,
         todos: None,
         priority: tasks[parent_idx].priority.clone(),
         tags: None,

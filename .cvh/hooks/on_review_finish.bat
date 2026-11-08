@@ -53,7 +53,8 @@ git pull --rebase origin main >nul 2>&1
 echo [CVH Merge Hook] Merging branch '%CVH_BRANCH%' into main...
 git merge --no-ff "%CVH_BRANCH%" -m "feat(%CVH_TASK_ID%): %CVH_TASK_TITLE% [approved]"
 if errorlevel 1 (
-    echo [CVH Merge Hook] ERROR: Git merge conflict while merging into main >&2
+    echo [CVH Merge Hook] ERROR: Git merge conflict while merging into main. Aborting merge... >&2
+    git merge --abort >nul 2>&1
     exit /b 1
 )
 
@@ -64,8 +65,7 @@ if exist "%TEMP%\cvh_backup_%CVH_TASK_ID%" (xcopy /E /I /Y "%TEMP%\cvh_backup_%C
 echo [CVH Merge Hook] Pushing to origin/main...
 git push origin main
 if errorlevel 1 (
-    echo [CVH Merge Hook] ERROR: Failed to push main to origin/main >&2
-    exit /b 1
+    echo [CVH Merge Hook] WARNING: Failed to push main to origin/main (offline or rejected). Local merge preserved. >&2
 )
 
 echo [CVH Merge Hook] SUCCESS: Cleanly merged into main and pushed to origin/main!

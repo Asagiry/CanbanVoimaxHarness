@@ -299,12 +299,16 @@ pub fn checkpoint_all_dbs(truncate: bool) {
 /// Seamless automatic data migration from legacy JSON files into SQLite tables.
 fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
     // 1. Tasks & Todos migration
+    let tasks_file = root.join(".cvh").join("tasks.json");
     let task_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))
         .unwrap_or(0);
 
+    if tasks_file.exists() && task_count > 0 {
+        let _ = std::fs::rename(&tasks_file, root.join(".cvh").join("tasks.json.migrated"));
+    }
+
     if task_count == 0 {
-        let tasks_file = root.join(".cvh").join("tasks.json");
         let mut loaded_tasks: Option<Vec<Task>> = None;
         if tasks_file.exists() {
             if let Ok(content) = std::fs::read_to_string(&tasks_file) {

@@ -42,7 +42,7 @@
           "persona": "planner",
           "wipLimit": null,
           "onEnterScript": null,
-          "modelOverride": "null",
+          "modelOverride": null,
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
@@ -72,7 +72,7 @@
           "persona": "developer",
           "wipLimit": null,
           "onEnterScript": null,
-          "modelOverride": "null",
+          "modelOverride": null,
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
@@ -109,7 +109,7 @@
           "persona": "reviewer",
           "wipLimit": null,
           "onEnterScript": null,
-          "modelOverride": "null",
+          "modelOverride": null,
           "reasoningEffort": null,
           "temperature": 0.1,
           "gatekeeperSensor": null,
@@ -132,10 +132,6 @@
             "on_enter": {
               "script": ".cvh/hooks/gatekeeper_sensor.bat",
               "description": "Запуск gatekeeper-сенсоров: проверка git mergeability, cargo check, Vitest, tsc и Oxlint"
-            },
-            "on_leave": {
-              "script": ".cvh/hooks/on_review_finish.bat",
-              "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
             }
           },
           "autoRun": true,
@@ -150,14 +146,12 @@
           "persona": "retro",
           "wipLimit": null,
           "onEnterScript": null,
-          "modelOverride": "null",
+          "modelOverride": null,
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
           "allowedTools": [
             "read_file",
-            "write_file",
-            "edit_file",
             "glob",
             "grep",
             "load_rule",
@@ -249,6 +243,9 @@
             "write_file",
             "glob",
             "grep",
+            "load_rule",
+            "todo_write",
+            "advance_task",
             "web_search"
           ],
           "hooks": {},

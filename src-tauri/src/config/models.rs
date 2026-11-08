@@ -1213,24 +1213,6 @@ Never rely solely on prompt instructions like *"please don't edit files"*.
 `cvh-dev` must configure `.cvh/settings/tool-policy.json` with strict Level B stage overrides:
 ```json
 {
-  "globalEnabled": {
-    "read_file": true,
-    "edit_file": true,
-    "write_file": true,
-    "glob": true,
-    "grep": true,
-    "execute_command": true,
-    "subagent": true,
-    "subagent_bg": true,
-    "collect_subagent": true,
-    "todo_write": true,
-    "advance_task": true,
-    "reject_task": true,
-    "question": true,
-    "list_tasks": true,
-    "get_task_history": true,
-    "load_rule": true
-  },
   "stageOverrides": {
     "plan": {
       "edit_file": false,

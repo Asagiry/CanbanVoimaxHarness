@@ -4,6 +4,7 @@ use eventsource_stream::{Eventsource, EventStreamError};
 use futures_util::StreamExt;
 use reqwest::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Debug, Clone)]
@@ -131,8 +132,13 @@ pub fn extract_openai_cache_creation(usage: &serde_json::Value) -> u64 {
 
 impl LlmClient {
     pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .tcp_keepalive(Duration::from_secs(30))
+            .build()
+            .unwrap_or_default();
         Self {
-            client: reqwest::Client::new(),
+            client,
             session: uuid::Uuid::new_v4().to_string(),
             prefix: std::sync::Arc::new(std::sync::Mutex::new(super::cache::PrefixTracker::default())),
         }
@@ -155,11 +161,8 @@ impl LlmClient {
             tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
         }
         let mut headers = super::cache::opencode_headers(base_url, &self.session);
-        let is_opencode = headers.contains_key("x-opencode-session");
-        if is_opencode {
-            for message in &mut request.messages {
-                message.cache_control = None;
-            }
+        for message in &mut request.messages {
+            message.cache_control = None;
         }
         self.prefix.lock().map_err(|_| anyhow::anyhow!("Prompt cache tracker lock poisoned"))?
             .observe(&request)?;
@@ -275,14 +278,21 @@ impl LlmClient {
         loop {
             let item = tokio::select! {
                 _ = tx.closed() => return Ok(None),
-                item = stream.next() => match item {
-                    Some(item) => item,
-                    None => break,
+                res = tokio::time::timeout(Duration::from_secs(60), stream.next()) => match res {
+                    Ok(Some(item)) => item,
+                    Ok(None) => break,
+                    Err(_) => {
+                        transport_error = Some("Stream timeout (no data for 60s)".to_string());
+                        break;
+                    }
                 },
             };
             match item {
                 Ok(event) => {
                     let data = event.data.trim();
+                    if data.is_empty() {
+                        continue;
+                    }
                     if data == "[DONE]" {
                         terminal_marker = true;
                         break;
@@ -884,7 +894,7 @@ mod tests {
         let mut expected = serde_json::to_value(&messages).unwrap();
         for message in expected.as_array_mut().unwrap() { message.as_object_mut().unwrap().remove("cache_control"); }
         assert_eq!(captured[0].1["messages"], expected);
-        assert_eq!(captured[2].1["messages"], serde_json::to_value(&messages).unwrap());
+        assert_eq!(captured[2].1["messages"], expected);
         assert!(messages.iter().all(|message| message.cache_control.is_some()));
     }
 

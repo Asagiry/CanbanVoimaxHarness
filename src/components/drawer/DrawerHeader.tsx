@@ -15,7 +15,39 @@ import {
   FolderGit2, GitBranch, Sun, Moon, Layers, Zap,
 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useTranslation } from '../../stores/languageStore';
+import { useTranslation, type TranslationKey } from '../../stores/languageStore';
+
+export function getStageButtonClass(
+  isCurrent: boolean,
+  isPassed: boolean,
+  targetTaskId: string | null
+): string {
+  if (isCurrent) {
+    return 'bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-2xs cursor-default';
+  }
+  if (targetTaskId && isPassed) {
+    return 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] cursor-pointer active:scale-95';
+  }
+  if (targetTaskId) {
+    return 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#a1a1aa] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] cursor-pointer active:scale-95';
+  }
+  return 'bg-[#fafafa] dark:bg-[#17171b] text-[#71717a] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] cursor-default select-none';
+}
+
+export function getStageAriaLabel(
+  isCurrent: boolean,
+  targetTaskId: string | null,
+  title: string,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  if (isCurrent) {
+    return t('drawer.stageCurrent', { title });
+  }
+  if (targetTaskId) {
+    return t('drawer.stageSwitch', { title });
+  }
+  return t('drawer.stageNotStarted');
+}
 
 export interface DrawerHeaderProps {
   task: KanbanTask;
@@ -245,22 +277,12 @@ export default function DrawerHeader({
                           onOpenDrawer(targetTaskId);
                         }
                       }}
-                      aria-label={
-                        isCurrent
-                          ? t('drawer.stageCurrent', { title: col.title })
-                          : targetTaskId
-                          ? t('drawer.stageSwitch', { title: col.title })
-                          : t('drawer.stageNotStarted')
-                      }
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
-                        isCurrent
-                          ? 'bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-2xs cursor-default'
-                          : targetTaskId && isPassed
-                          ? 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] cursor-pointer active:scale-95'
-                          : targetTaskId
-                          ? 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#a1a1aa] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] cursor-pointer active:scale-95'
-                          : 'bg-[#fafafa] dark:bg-[#17171b] text-[#71717a] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] cursor-default select-none'
-                      }`}
+                      aria-label={getStageAriaLabel(isCurrent, targetTaskId, col.title, t)}
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${getStageButtonClass(
+                        isCurrent,
+                        isPassed,
+                        targetTaskId
+                      )}`}
                     >
                       {isPassed && !isColRunning && (
                         <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] shrink-0" />

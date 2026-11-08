@@ -13,7 +13,7 @@ import { CardSubtaskBadge } from './CardSubtaskBadge';
 import { CardHookNode } from './CardHookNode';
 import { useCardHooks } from './useCardHooks';
 import { areCardPropsEqual, KanbanCardProps } from './cardComparators';
-import { getDeterministicAgentColor } from '../../lib/agentPalette';
+import { resolveStageColor } from '../../lib/agentPalette';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
 export type { KanbanCardProps };
@@ -39,15 +39,18 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const taskColumn = columns.find((c) => c.id === task.stageId);
-  const assignedPersonaColor = useCortexStore((s) =>
-    taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona)?.color : undefined
+  const assignedPersona = useCortexStore((s) =>
+    taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona) : undefined
   );
-  const assignedAgentColor = taskColumn?.persona
-    ? (assignedPersonaColor || getDeterministicAgentColor(taskColumn.persona))
-    : (taskColumn?.color || getDeterministicAgentColor(task.stageId));
+  const assignedAgentColor = resolveStageColor(taskColumn, assignedPersona);
   const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
     ? `${assignedAgentColor}50`
     : assignedAgentColor;
+  const cardBranch = useBoardStore((s) => {
+    if (task.branch) return task.branch;
+    if (!task.parentId) return undefined;
+    return s.tasks.find((t) => t.id === task.parentId)?.branch;
+  });
   const isTerminalColumn = Boolean(taskColumn?.terminal || task.stageId === 'ready' || task.stageId === 'done' || isDoneColumnDef(taskColumn));
   const isDone = Boolean(task.status === 'done' || isTerminalColumn);
 
@@ -180,17 +183,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     {task.model}
                   </div>
                 )}
-                {(() => {
-                  const cardBranch = task.branch || (task.parentId ? useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.branch : undefined);
-                  return cardBranch ? (
-                    <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                      <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#71717a] min-w-0">
-                        <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                        <span className="truncate">{cardBranch}</span>
-                      </span>
-                    </div>
-                  ) : null;
-                })()}
+                {cardBranch && (
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                    <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#71717a] min-w-0">
+                      <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{cardBranch}</span>
+                    </span>
+                  </div>
+                )}
                 <CardTimeFooter task={task} isDone={isTerminalColumn} />
               </div>
 

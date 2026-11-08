@@ -40,16 +40,17 @@ pub async fn execute_command(
         Some(repo_root),
     ).await?;
 
-    Ok(format!(
-        "[Exit Code: {}]
---- STDOUT ---
-{}
---- STDERR ---
-{}",
-        res.exit_code.unwrap_or(-1),
+    let output = format!(
+        "--- STDOUT ---\n{}\n--- STDERR ---\n{}",
         res.stdout,
         res.stderr
-    ))
+    );
+
+    if res.exit_code != Some(0) {
+        bail!("[Exit Code: {}]\n{}", res.exit_code.unwrap_or(-1), output);
+    }
+
+    Ok(format!("[Exit Code: 0]\n{}", output))
 }
 
 pub async fn execute_custom_tool(
@@ -72,9 +73,7 @@ pub async fn execute_custom_tool(
             Some(repo_root),
         ).await?;
         Ok(format!(
-            "[Custom Tool: {} Exit: {}]
-STDOUT: {}
-STDERR: {}",
+            "[Custom Tool: {} Exit: {}]\nSTDOUT: {}\nSTDERR: {}",
             custom_tool,
             res.exit_code.unwrap_or(-1),
             res.stdout.trim(),

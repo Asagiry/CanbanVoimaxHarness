@@ -4,7 +4,7 @@
 
 ## 0. Как сверялся гайд (что прочитано кодом, а не угадано)
 
-- `src-tauri/src/config/` (`models.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs`) —
+- `src-tauri/src/config/` (`models.rs`, `providers.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs`) —
   `scaffold_cvh_project`, `minimal_pipeline_config`, `default_pipeline_config`,
   `get_canonical_board_columns`, `get_board_template_columns`, `ToolPolicyConfig` (Single Authoritative Layer),
   `AgentSetting`, `agent_persona_path` / `agent_rules_dir` / `agent_hooks_dir` / `agent_setting_path`,
@@ -16,14 +16,14 @@
   `list_custom_tools_in` / `save_custom_tool_file` / `delete_custom_tool_file`,
   `get_tool_policies` / `save_tool_policies`, `compact_context`, `get_task_git_diff`, `get_task_image_diff`,
   `load_subagent_dialog`, `list_subagents`, `get_cortex_tree` / `read_cortex_file` / `save_cortex_file`.
-- `src-tauri/src/db/` (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`) —
+- `src-tauri/src/db/` (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `context_repo.rs`, `telemetry_repo.rs`) —
   R2D2 SQLite connection pool, WAL mode, ACID dialog item transactions, telemetry aggregation.
 - `src-tauri/src/agent/` (`react_engine.rs`, `session_registry.rs`, `compactor.rs`, `sanitizer.rs`, `telemetry.rs`, `text_match.rs`, `tool_schemas.rs`, `tools/*`) —
   `compile_primed_system_prompt_with_tools`, `get_standard_tools`, `ReActEngine<Driver>`,
   `session_registry` (child subagent sessions & Tokio completion channels),
   `maybe_spill_output` (500 строк / 64 КБ; 2000 строк / 128 КБ для `read_file`),
   `execute_tool` (Single Authoritative Layer gate, custom CLI tools).
-- `src-tauri/src/hooks.rs`, `git.rs`, `udf.rs`, `logger.rs`, `error.rs` —
+- `src-tauri/src/hooks.rs`, `git/mod.rs`, `udf.rs`, `logger.rs`, `error.rs` —
   `execute_hook` (env `CVH_*`, интерпретаторы, таймауты, process tree kill на Windows),
   `execute_sensor_command`, `HookContext`, git worktrees & diffs, SQLite UDFs.
 - `src-tauri/src/lib.rs` — полный список зарегистрированных Tauri-команд.

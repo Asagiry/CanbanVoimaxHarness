@@ -41,6 +41,21 @@ export function resolveStageTask(
   return null;
 }
 
+function getItemStageDuration(item: KanbanTask | null | undefined, colId: string, isDrawerRunning: boolean): number {
+  if (!item) return 0;
+  const isAtStage = item.stageId === colId;
+  if (isDrawerRunning && item.status === 'running' && isAtStage) {
+    const live = calculateStageDuration(item, true);
+    if (live > 0) return live;
+  }
+  const recorded = item.stageDurations?.[colId];
+  if (typeof recorded === 'number' && recorded > 0) return recorded;
+  if (isAtStage && item.activeStageDuration && item.activeStageDuration > 0) {
+    return item.activeStageDuration;
+  }
+  return 0;
+}
+
 export function resolveStageDuration(
   colId: string,
   task: KanbanTask,
@@ -49,48 +64,9 @@ export function resolveStageDuration(
   isDrawerRunning: boolean
 ): number {
   const matchingSubtask = [...subtasks].reverse().find((s) => s.stageId === colId);
-  if (matchingSubtask) {
-    const isSubtaskRunning = isDrawerRunning && matchingSubtask.status === 'running';
-    if (isSubtaskRunning) {
-      const live = calculateStageDuration(matchingSubtask, true);
-      if (live > 0) return live;
-    }
-    const recorded = matchingSubtask.stageDurations?.[colId];
-    if (typeof recorded === 'number' && recorded > 0) return recorded;
-    if (matchingSubtask.activeStageDuration && matchingSubtask.activeStageDuration > 0) {
-      return matchingSubtask.activeStageDuration;
-    }
-  }
-
-  if (rootTask) {
-    const isRootAtStage = rootTask.stageId === colId;
-    const isRootRunning = isDrawerRunning && rootTask.status === 'running' && isRootAtStage;
-    if (isRootRunning) {
-      const live = calculateStageDuration(rootTask, true);
-      if (live > 0) return live;
-    }
-    const recorded = rootTask.stageDurations?.[colId];
-    if (typeof recorded === 'number' && recorded > 0) return recorded;
-    if (isRootAtStage && rootTask.activeStageDuration && rootTask.activeStageDuration > 0) {
-      return rootTask.activeStageDuration;
-    }
-  }
-
-  if (task) {
-    const isTaskAtStage = task.stageId === colId;
-    const isTaskRunning = isDrawerRunning && task.status === 'running' && isTaskAtStage;
-    if (isTaskRunning) {
-      const live = calculateStageDuration(task, true);
-      if (live > 0) return live;
-    }
-    const recorded = task.stageDurations?.[colId];
-    if (typeof recorded === 'number' && recorded > 0) return recorded;
-    if (isTaskAtStage && task.activeStageDuration && task.activeStageDuration > 0) {
-      return task.activeStageDuration;
-    }
-  }
-
-  return 0;
+  return getItemStageDuration(matchingSubtask, colId, isDrawerRunning)
+    || getItemStageDuration(rootTask, colId, isDrawerRunning)
+    || getItemStageDuration(task, colId, isDrawerRunning);
 }
 
 export function resolveStageStatus(

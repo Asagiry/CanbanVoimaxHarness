@@ -863,6 +863,10 @@ async fn run_agent_inner(
                     serde_json::json!({ "taskId": tid, "status": "finished", "projectPath": &project_path_str }),
                 );
 
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    state_ref.remove_agent_context(&root_task, &tid);
+                }
+
                 let mut tasks = load_tasks_from_disk(&root_task).await;
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
                     let mut task_changed = false;
@@ -895,6 +899,11 @@ async fn run_agent_inner(
             Err(err) => {
                 let is_aborted = abort_flag_task.load(Ordering::SeqCst);
                 let err_str = err.to_string();
+
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    state_ref.remove_agent_context(&root_task, &tid);
+                }
+
                 if is_aborted {
                     crate::logger::cvh_log(
                         Some(&root_task),
@@ -913,17 +922,30 @@ async fn run_agent_inner(
                             tasks[task_idx].status = Some("idle".to_string());
                             tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                             let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
-                            let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                            if let Some(state_ref) = app.try_state::<AppState>() {
-                                if state_ref.get_root() == root_task {
-                                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                                        *guard = tasks.clone();
-                                    }
+                        }
+                        let parent_id = tasks[task_idx].parent_id.clone();
+                        if let Some(parent_idx) = tasks.iter().position(|t| {
+                            t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(&tid)).unwrap_or(false)
+                                || parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
+                        }) {
+                            tasks[parent_idx].waiting_for_subtask_id = None;
+                            if tasks[parent_idx].status.as_deref() == Some("waiting_subtask") {
+                                tasks[parent_idx].status = Some("idle".to_string());
+                            }
+                            tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+                            let _ = crate::db::db_upsert_task(&root_task, &tasks[parent_idx]);
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[parent_idx], "projectPath": &project_path_str }));
+                        }
+                        let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if state_ref.get_root() == root_task {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    *guard = tasks.clone();
                                 }
                             }
-                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
-                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                         }
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     }
                 } else {
                     eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
@@ -940,6 +962,20 @@ async fn run_agent_inner(
                     if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
                         tasks[task_idx].status = Some("error".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
+                        let parent_id = tasks[task_idx].parent_id.clone();
+                        if let Some(parent_idx) = tasks.iter().position(|t| {
+                            t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(&tid)).unwrap_or(false)
+                                || parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
+                        }) {
+                            tasks[parent_idx].waiting_for_subtask_id = None;
+                            if tasks[parent_idx].status.as_deref() == Some("waiting_subtask") {
+                                tasks[parent_idx].status = Some("idle".to_string());
+                            }
+                            tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+                            let _ = crate::db::db_upsert_task(&root_task, &tasks[parent_idx]);
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[parent_idx], "projectPath": &project_path_str }));
+                        }
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
                         if let Some(state_ref) = app.try_state::<AppState>() {
                             if state_ref.get_root() == root_task {
@@ -948,6 +984,7 @@ async fn run_agent_inner(
                                 }
                             }
                         }
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
                         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     }
                 }
@@ -964,11 +1001,12 @@ async fn run_agent_inner(
                 let _ = app.emit("agent:session_status", &summary);
             }
             state_ref.remove_active_agent_if_same(&root_task, &tid, &abort_flag_task);
+            state_ref.remove_agent_context(&root_task, &tid);
             crate::logger::cvh_log(
                 Some(&root_task),
                 "INFO",
                 "RUN_AGENT",
-                &format!("run_agent: active agent handle removed for task '{}'", tid),
+                &format!("run_agent: active agent handle and context removed for task '{}'", tid),
             );
         }
     });
@@ -981,44 +1019,17 @@ async fn run_agent_inner(
     Ok(format!("Agent launched for task {}", task_id))
 }
 
-/// Suffix/prefix matching helper for subagent keys across registries and dialog identifiers.
-pub fn is_matching_subagent_key(key: &str, target_sub_id: &str) -> bool {
-    let k_stripped = key.split_once("::").map(|(_, tid)| tid).unwrap_or(key);
-    let k_clean = k_stripped.trim();
-    let t_clean = target_sub_id.trim();
-    if k_clean == t_clean {
-        return true;
-    }
-    let k_core = k_clean.rsplit(":sub:").next().unwrap_or(k_clean);
-    let t_core = t_clean.rsplit(":sub:").next().unwrap_or(t_clean);
-    if k_core == t_core {
-        return true;
-    }
-    // Suffix match with strict delimiter boundary
-    if k_core.contains(".sub-") {
-        let suffix = k_core.rsplit(".sub-").next().unwrap_or(k_core);
-        if suffix == t_core || t_core.ends_with(&format!(".sub-{}", suffix)) || t_core.ends_with(&format!(":sub:{}", suffix)) {
-            return true;
-        }
-    }
-    if t_core.contains(".sub-") {
-        let suffix = t_core.rsplit(".sub-").next().unwrap_or(t_core);
-        if suffix == k_core || k_core.ends_with(&format!(".sub-{}", suffix)) || k_core.ends_with(&format!(":sub:{}", suffix)) {
-            return true;
-        }
-    }
-    false
-}
+pub use crate::agent::session_registry::is_matching_subagent_key;
 
 /// Agent & Child Subagent Abort:
 ///
 /// If task_id is a child subagent:
-///   1. Aborts ONLY this specific subagent (sets abort_flag, handle.abort(), status = "aborted").
+///   1. Aborts ONLY this specific subagent via `session_registry::abort_hierarchical_sessions`.
 ///   2. Marks mid-flight running tools for this subagent as failed in SQLite.
 ///   3. Leaves parent task and sibling subagents completely intact and running!
 ///
 /// If task_id is a parent task:
-///   1. Aborts parent task handle and cascaded child subagents.
+///   1. Aborts parent task handle and cascaded child subagents via `session_registry::abort_hierarchical_sessions`.
 ///   2. Marks mid-flight running tools for parent and subagents as failed.
 ///   3. Updates task status to 'idle' on disk and memory.
 pub async fn internal_abort_agent(
@@ -1032,283 +1043,22 @@ pub async fn internal_abort_agent(
         return Ok(false);
     }
 
-    // Determine if task_id identifies a child subagent
-    let is_subagent = if p_trim.contains(".sub-") || p_trim.contains(":sub:") {
-        true
-    } else {
-        let in_sessions = {
-            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
-            sessions.contains_key(p_trim) || sessions.values().any(|sess| {
-                if let Ok(info) = sess.retry_info.try_lock() {
-                    info.subagent_id == p_trim
-                } else {
-                    false
-                }
-            })
-        };
-        if in_sessions {
-            true
-        } else {
-            let in_active = {
-                if let Ok(map) = state.active_agents.lock() {
-                    map.keys().any(|k| k == p_trim && (k.contains(".sub-") || k.contains(":sub:")))
-                } else {
-                    false
-                }
-            };
-            in_active
-        }
-    };
+    state.remove_agent_context(root, p_trim);
 
-    if is_subagent {
-        // =========================================================================
-        // 1. GRANULAR SUBAGENT ABORT:
-        //    Abort ONLY this specific subagent. DO NOT touch parent task or siblings!
-        // =========================================================================
-        let matching_handles: Vec<(String, ActiveAgentHandle)> = {
-            let mut map = state
-                .active_agents
-                .lock()
-                .map_err(|_| "Failed to lock active agents".to_string())?;
+    // 1. Abort subagent and parent sessions hierarchically in session_registry
+    let outcome = crate::agent::session_registry::abort_hierarchical_sessions(p_trim, state).await?;
 
-            let mut matched = Vec::new();
-            let mut keys_to_remove = Vec::new();
-
-            for k in map.keys() {
-                if is_matching_subagent_key(k, p_trim) {
-                    keys_to_remove.push(k.clone());
-                }
-            }
-
-            for k in keys_to_remove {
-                if let Some(entry) = map.remove(&k) {
-                    matched.push((k, entry));
-                }
-            }
-            matched
-        };
-
-        let aborted_sids = state.session_registry.abort_task(p_trim);
-        if let Some(app) = app_handle {
-            for sid in &aborted_sids {
-                if let Some(summary) = state.session_registry.get_session(sid) {
-                    let _ = app.emit("agent:session_status", &summary);
-                }
-            }
-        }
-
-        let had_entry = !matching_handles.is_empty() || !aborted_sids.is_empty();
-
-        for (_k, agent_entry) in matching_handles {
-            agent_entry.abort_flag.store(true, Ordering::SeqCst);
-            let maybe_handle = {
-                let mut guard = agent_entry.join_handle.lock().await;
-                guard.take()
-            };
-            if let Some(handle) = maybe_handle {
-                handle.abort();
-                let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
-            }
-        }
-
-        // Abort matching session in SUBAGENT_SESSIONS
-        let mut subagent_session_matched = false;
-        {
-            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
-            for (sid, session) in sessions.iter() {
-                let is_this = {
-                    let mut info = session.retry_info.lock().await;
-                    if is_matching_subagent_key(sid, p_trim)
-                        || is_matching_subagent_key(&info.subagent_id, p_trim)
-                    {
-                        info.status = "aborted".to_string();
-                        info.last_error = Some("Прервано пользователем".to_string());
-                        info.ctx.abort_handle.store(true, Ordering::SeqCst);
-                        true
-                    } else {
-                        false
-                    }
-                };
-                if is_this {
-                    subagent_session_matched = true;
-                    session.abort_handle.store(true, Ordering::SeqCst);
-                    let mut guard = session.join_handle.lock().await;
-                    if let Some(h) = guard.take() {
-                        h.abort();
-                    }
-                    if let Some(sender) = session.sender.lock().await.take() {
-                        let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
-                    }
-                }
-            }
-        }
-
-        // Clean up matching receiver from SUBAGENT_RECEIVERS
-        {
-            let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
-            let mut keys_to_remove = Vec::new();
-            for k in receivers.keys() {
-                if is_matching_subagent_key(k, p_trim) {
-                    keys_to_remove.push(k.clone());
-                }
-            }
-            for k in keys_to_remove {
-                receivers.remove(&k);
-            }
-        }
-
-        // Mark mid-flight running tools for this subagent as failed in SQLite
-        if let Ok(aborted_tools) = crate::db::mark_running_tools_as_aborted(root, p_trim, true) {
-            if let Some(app) = app_handle {
-                for (_item_id, item_task_id, tool_id, tool_name) in aborted_tools {
-                    let _ = app.emit(
-                        "agent:tool_result",
-                        serde_json::json!({
-                            "taskId": item_task_id,
-                            "id": tool_id,
-                            "name": tool_name,
-                            "result": "Прервано пользователем",
-                            "success": false,
-                        }),
-                    );
-                }
-            }
-        }
-
-        for sid in &aborted_sids {
-            state.session_registry.update_status(sid, crate::agent::session_registry::SessionStatus::Finished);
-            if let Some(app) = app_handle {
-                if let Some(summary) = state.session_registry.get_session(sid) {
-                    let _ = app.emit("agent:session_status", &summary);
-                }
-            }
-        }
-
-        if let Some(app) = app_handle {
-            let _ = app.emit(
-                "subagent:status",
-                serde_json::json!({ "subagentId": p_trim, "status": "aborted" }),
-            );
-            let _ = app.emit(
-                "subagent:aborted",
-                serde_json::json!({ "subagentId": p_trim }),
-            );
-        }
-
-        return Ok(had_entry || subagent_session_matched);
-    }
-
-    // =========================================================================
-    // 2. PARENT TASK ABORT:
-    //    Abort parent task AND cascade abort to all its child subagents!
-    // =========================================================================
-    // 1. Collect all matching handles from state.active_agents (parent + any subagents)
-    let matching_handles: Vec<(String, ActiveAgentHandle)> = {
-        let mut map = state
-            .active_agents
-            .lock()
-            .map_err(|_| "Failed to lock active agents".to_string())?;
-
-        let mut matched = Vec::new();
-        let mut keys_to_remove = Vec::new();
-
-        for k in map.keys() {
-            let k_stripped = k.split_once("::").map(|(_, tid)| tid).unwrap_or(k);
-            let k_trim = k_stripped.trim();
-            if task_id_matches(k_trim, p_trim)
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
-            {
-                keys_to_remove.push(k.clone());
-            }
-        }
-
-        for k in keys_to_remove {
-            if let Some(entry) = map.remove(&k) {
-                matched.push((k, entry));
-            }
-        }
-        matched
-    };
-
-    let aborted_session_ids = state.session_registry.abort_task(p_trim);
+    // 2. Emit session status updates for any aborted sessions
     if let Some(app) = app_handle {
-        for sid in &aborted_session_ids {
+        for sid in &outcome.aborted_session_ids {
             if let Some(summary) = state.session_registry.get_session(sid) {
                 let _ = app.emit("agent:session_status", &summary);
             }
         }
     }
 
-    let had_entry = !matching_handles.is_empty() || !aborted_session_ids.is_empty();
-
-    // 2. Abort all active agent handles and wait with timeout
-    for (_k, agent_entry) in matching_handles {
-        agent_entry.abort_flag.store(true, Ordering::SeqCst);
-        let maybe_handle = {
-            let mut guard = agent_entry.join_handle.lock().await;
-            guard.take()
-        };
-        if let Some(handle) = maybe_handle {
-            handle.abort();
-            let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
-        }
-    }
-
-    // 3. Abort all child subagents in SUBAGENT_SESSIONS
-    {
-        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
-        for (sid, session) in sessions.iter() {
-            let matches_parent = {
-                let mut info = session.retry_info.lock().await;
-                if info.parent_task_id == p_trim
-                    || info.subagent_id.starts_with(&format!("{}.", p_trim))
-                    || info.subagent_id.starts_with(&format!("{}:sub:", p_trim))
-                    || sid.starts_with(&format!("{}.", p_trim))
-                    || sid.starts_with(&format!("{}:sub:", p_trim))
-                {
-                    info.status = "aborted".to_string();
-                    info.last_error = Some("Прервано пользователем".to_string());
-                    info.ctx.abort_handle.store(true, Ordering::SeqCst);
-                    true
-                } else {
-                    false
-                }
-            };
-            if matches_parent {
-                session.abort_handle.store(true, Ordering::SeqCst);
-                let mut guard = session.join_handle.lock().await;
-                if let Some(h) = guard.take() {
-                    h.abort();
-                }
-                // Take sender so awaiting receiver gets Err immediately
-                let _ = session.sender.lock().await.take();
-            }
-        }
-    }
-
-    // 4. Clean up any awaiting receivers in SUBAGENT_RECEIVERS
-    {
-        let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
-        let mut keys_to_remove = Vec::new();
-        for k in receivers.keys() {
-            let k_trim = k.trim();
-            if task_id_matches(k_trim, p_trim)
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
-                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
-            {
-                keys_to_remove.push(k.clone());
-            }
-        }
-        for k in keys_to_remove {
-            receivers.remove(&k);
-        }
-    }
-
-    // 5. Mark all running mid-flight tools in SQLite for parent and subagents as failed
-    if let Ok(aborted_tools) = crate::db::mark_running_tools_as_aborted(root, p_trim, false) {
+    // 3. Mark mid-flight running tools as failed in SQLite & emit tool_result
+    if let Ok(aborted_tools) = crate::db::mark_running_tools_as_aborted(root, p_trim, outcome.is_subagent) {
         if let Some(app) = app_handle {
             for (_item_id, item_task_id, tool_id, tool_name) in aborted_tools {
                 let _ = app.emit(
@@ -1325,7 +1075,32 @@ pub async fn internal_abort_agent(
         }
     }
 
-    // 6. Update task status on disk & memory to "idle"
+    // 4. Update session statuses to Finished in session_registry
+    for sid in &outcome.aborted_session_ids {
+        state.session_registry.update_status(sid, crate::agent::session_registry::SessionStatus::Finished);
+        if let Some(app) = app_handle {
+            if let Some(summary) = state.session_registry.get_session(sid) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
+        }
+    }
+
+    // 5. Handle UI and task lifecycle: subagent vs parent task
+    if outcome.is_subagent {
+        if let Some(app) = app_handle {
+            let _ = app.emit(
+                "subagent:status",
+                serde_json::json!({ "subagentId": p_trim, "status": "aborted" }),
+            );
+            let _ = app.emit(
+                "subagent:aborted",
+                serde_json::json!({ "subagentId": p_trim }),
+            );
+        }
+        return Ok(outcome.had_entry);
+    }
+
+    // Parent task: update task status on disk & memory to "idle"
     let mut tasks = load_tasks_from_disk(root).await;
     // MERGE IN-MEMORY TASKS:
     // Merge in-memory tasks from state.tasks before updating status to avoid wiping unsaved disk tasks (§ 2.22)
@@ -1341,10 +1116,24 @@ pub async fn internal_abort_agent(
         }
     }
     let mut task_updated = false;
+    let subtask_parent_id = tasks.iter().find(|t| task_id_matches(&t.id, p_trim)).and_then(|t| t.parent_id.clone());
+    if let Some(parent) = tasks.iter_mut().find(|t| {
+        t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(p_trim)).unwrap_or(false)
+            || subtask_parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
+    }) {
+        parent.waiting_for_subtask_id = None;
+        if parent.status.as_deref() == Some("waiting_subtask") {
+            parent.status = Some("idle".to_string());
+        }
+        parent.updated_at = Utc::now().timestamp_millis();
+        let _ = crate::db::db_upsert_task(root, parent);
+        task_updated = true;
+    }
     if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, p_trim)) {
         if t.status.as_deref() != Some("idle") {
             t.status = Some("idle".to_string());
             t.updated_at = Utc::now().timestamp_millis();
+            let _ = crate::db::db_upsert_task(root, t);
             task_updated = true;
         }
     }
@@ -1359,15 +1148,6 @@ pub async fn internal_abort_agent(
         }
     }
 
-    for sid in &aborted_session_ids {
-        state.session_registry.update_status(sid, crate::agent::session_registry::SessionStatus::Finished);
-        if let Some(app) = app_handle {
-            if let Some(summary) = state.session_registry.get_session(sid) {
-                let _ = app.emit("agent:session_status", &summary);
-            }
-        }
-    }
-
     if let Some(app) = app_handle {
         let _ = app.emit(
             "agent:status",
@@ -1379,7 +1159,7 @@ pub async fn internal_abort_agent(
         );
     }
 
-    Ok(had_entry || task_updated)
+    Ok(outcome.had_entry || task_updated)
 }
 
 pub async fn abort_agent(
@@ -1389,18 +1169,8 @@ pub async fn abort_agent(
 ) -> Result<(), String> {
     let root = state.get_root();
     let p_trim = task_id.trim();
-    let is_sub = p_trim.contains(".sub-")
-        || p_trim.contains(":sub:")
-        || {
-            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
-            sessions.contains_key(p_trim) || sessions.values().any(|sess| {
-                if let Ok(info) = sess.retry_info.try_lock() {
-                    info.subagent_id == p_trim
-                } else {
-                    false
-                }
-            })
-        };
+    state.remove_agent_context(&root, p_trim);
+    let is_sub = crate::agent::session_registry::is_subagent_task_id(p_trim, Some(&state.active_agents)).await;
     let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await?;
     if !is_sub {
         let _ = app_handle.emit(
@@ -1423,327 +1193,7 @@ pub async fn compact_context(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<crate::agent::compactor::CompactionReport, String> {
-    let root = state.get_root();
-
-    let tool_item_id = tool_id.unwrap_or_else(|| {
-        format!(
-            "compact_context-{}-{}",
-            task_id,
-            chrono::Utc::now().timestamp_millis()
-        )
-    });
-
-    // 0. Emit agent:tool_call immediately so chat feed displays running compact_context card
-    let _ = app_handle.emit(
-        "agent:tool_call",
-        serde_json::json!({
-            "taskId": &task_id,
-            "id": &tool_item_id,
-            "name": "compact_context",
-            "arguments": serde_json::json!({
-                "taskId": &task_id,
-                "title": "Сжатие контекста...",
-            }).to_string(),
-        }),
-    );
-
-    // 1. Load LLM configuration and resolve active agent model
-    let llm_settings = crate::config::load_llm_settings(&root).await.unwrap_or_default();
-    let tasks = load_tasks_from_disk(&root).await;
-    let task = tasks.iter().find(|t| t.id == task_id).cloned();
-
-    let active_agent_model = resolve_task_active_agent_model(&root, task.as_ref(), &llm_settings).await;
-
-    // 2. Resolve compactor model (inheritance support)
-    let compactor_model = crate::agent::compactor::resolve_compactor_model(
-        &llm_settings.compactor_model,
-        &active_agent_model,
-    );
-
-    // Same explicit-provider rule for the compactor dispatch.
-    let (provider_base_url, api_key) = llm_settings.endpoint_for_pair(
-        task.as_ref().and_then(|t| t.provider_id.as_deref()),
-        &compactor_model,
-    );
-    let base_url = if !provider_base_url.trim().is_empty() {
-        provider_base_url
-    } else {
-        "http://127.0.0.1:8045/v1".to_string()
-    };
-
-    // 3. Load dialogue items from SQLite
-    let dialog_items = crate::db::load_dialog_items(&root, &task_id).unwrap_or_default();
-
-    // 4. Determine items to condense before the last 4 active messages (2 full recent turns)
-    let mut ids_to_archive: Vec<String> = Vec::new();
-    let mut messages_to_condense: Vec<crate::llm::ChatMessage> = Vec::new();
-
-    if dialog_items.len() > 4 {
-        let split_idx = dialog_items.len().saturating_sub(4);
-        let items_slice = &dialog_items[..split_idx];
-
-        for it in items_slice {
-            ids_to_archive.push(it.id.clone());
-            if it.is_runtime_error() || it.item_type == "system" { continue; }
-            match it.item_type.as_str() {
-                "user" | "steer" => {
-                    messages_to_condense.push(crate::llm::ChatMessage::user(
-                        it.content.clone().unwrap_or_default(),
-                    ));
-                }
-                "thought" => {
-                    let mut msg = crate::llm::ChatMessage::assistant(
-                        it.content.clone(),
-                        None,
-                    );
-                    msg.name = Some("thought".to_string());
-                    messages_to_condense.push(msg);
-                }
-                "tool" => {
-                    if let Some(ref t) = it.tool {
-                        let tool_id = t.get("id").and_then(|v| v.as_str()).unwrap_or("tool_call");
-                        let stdout = t.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
-                        let tool_name = t.get("toolName").and_then(|v| v.as_str()).unwrap_or("tool");
-                        let params = t.get("params").cloned().unwrap_or(serde_json::Value::Null);
-
-                        // Reconstruct Assistant ToolCall message so compactor extracts tool name and parameters
-                        messages_to_condense.push(crate::llm::ChatMessage::assistant(
-                            None,
-                            Some(vec![crate::llm::ToolCall {
-                                id: tool_id.to_string(),
-                                call_type: "function".to_string(),
-                                function: crate::llm::FunctionCall {
-                                    name: tool_name.to_string(),
-                                    arguments: params.to_string(),
-                                },
-                            }]),
-                        ));
-                        messages_to_condense.push(crate::llm::ChatMessage::tool_response(
-                            tool_id,
-                            stdout.to_string(),
-                        ));
-                    }
-                }
-                _ => {
-                    if let Some(ref c) = it.content {
-                        messages_to_condense.push(crate::llm::ChatMessage::assistant(
-                            Some(c.clone()),
-                            None,
-                        ));
-                    }
-                }
-            }
-        }
-    } else {
-        // Fallback to in-memory active agent context if available, or task description
-        let mem_msgs = {
-            if let Ok(map) = state.agent_contexts.lock() {
-                map.get(&task_id).and_then(|cs| cs.lock().ok().map(|g| g.messages.clone()))
-            } else {
-                None
-            }
-        };
-
-        if let Some(msgs) = mem_msgs {
-            if msgs.len() > 4 {
-                let split_idx = msgs.len().saturating_sub(4);
-                messages_to_condense.extend(msgs[..split_idx].iter().cloned());
-            }
-        }
-
-        if messages_to_condense.is_empty() {
-            if let Some(ref t) = task {
-                messages_to_condense.push(crate::llm::ChatMessage::user(format!(
-                    "Task {}: {}\n{}",
-                    t.id, t.title, t.description
-                )));
-            } else {
-                messages_to_condense.push(crate::llm::ChatMessage::user(format!(
-                    "Task {}",
-                    task_id
-                )));
-            }
-        }
-    }
-
-    let tokens_before = crate::agent::compactor::estimate_tokens(&messages_to_condense);
-
-    let (task_title, task_desc) = {
-        if let Ok(guard) = state.tasks.lock() {
-            guard.iter().find(|t| t.id == task_id)
-                .map(|t| (t.title.clone(), t.description.clone()))
-                .unwrap_or_default()
-        } else {
-            (String::new(), String::new())
-        }
-    };
-
-    // 5. Run LLM condensation with the 7-section structured prompt
-    let compacted_markdown = crate::agent::compactor::condense_context_with_llm(
-        &task_id,
-        &messages_to_condense,
-        &compactor_model,
-        &base_url,
-        api_key.as_deref(),
-        Some(&task_title),
-        Some(&task_desc),
-    )
-    .await;
-
-    let tokens_after = crate::agent::compactor::estimate_text_tokens(&compacted_markdown);
-    let saved_tokens = tokens_before.saturating_sub(tokens_after);
-    let compacted_count = if !ids_to_archive.is_empty() {
-        ids_to_archive.len()
-    } else {
-        messages_to_condense.len().max(1)
-    };
-
-    // 6. Build tool execution item and compacted summary item for SQLite and in-chat display
-    let stdout_msg = format!(
-        "Контекст успешно сжат. Сохранено {} токенов. Контекст сокращен с {} до {} токенов.",
-        saved_tokens, tokens_before, tokens_after
-    );
-    let tool_act_item = crate::db::ActivityItem {
-        id: tool_item_id.clone(),
-        item_type: "tool".to_string(),
-        timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
-        content: None,
-        tool: Some(serde_json::json!({
-            "id": &tool_item_id,
-            "toolName": "compact_context",
-            "timestamp": chrono::Local::now().format("%H:%M:%S").to_string(),
-            "durationMs": 0,
-            "status": "success",
-            "params": {
-                "taskId": &task_id,
-                "title": format!("Сжато (-{} токенов)", saved_tokens),
-                "savedTokens": saved_tokens,
-            },
-            "stdout": &stdout_msg,
-        })),
-        duration_ms: Some(0.0),
-        images: None,
-    };
-
-    let compacted_item = crate::db::ActivityItem {
-        id: format!("compacted-{}-{}", task_id, chrono::Utc::now().timestamp_millis()),
-        item_type: "compacted".to_string(),
-        timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
-        content: Some(compacted_markdown.clone()),
-        tool: Some(serde_json::json!({
-            "compactedCount": compacted_count,
-            "savedTokens": saved_tokens,
-            "tokensBefore": tokens_before,
-            "tokensAfter": tokens_after,
-            "compactorModel": compactor_model,
-        })),
-        duration_ms: None,
-        images: None,
-    };
-
-    crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive)
-        .map_err(|e| format!("Failed to persist compacted dialog: {}", e))?;
-
-    // 7. Store task.current_tokens in memory and persist to disk (Fixes 100% gauge on re-entering drawer)
-    {
-        let mut disk_tasks = load_tasks_from_disk(&root).await;
-        if let Some(t) = disk_tasks.iter_mut().find(|t| t.id == task_id) {
-            t.current_tokens = Some(tokens_after);
-        }
-        let _ = save_tasks_to_disk(&root, &disk_tasks).await;
-
-        if let Ok(mut guard) = state.tasks.lock() {
-            if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
-                t.current_tokens = Some(tokens_after);
-            }
-        }
-    }
-
-    // 8. Update in-memory active agent context if present (preserving Turn 0 anchors and last 4 messages)
-    let context_state_opt = {
-        if let Ok(map) = state.agent_contexts.lock() {
-            map.get(&task_id).cloned()
-        } else {
-            None
-        }
-    };
-
-    let (sys_tokens, tool_tokens, total_tokens_after) = if let Some(cs) = context_state_opt {
-        if let Ok(mut guard) = cs.lock() {
-            let mut new_messages = Vec::new();
-            if !guard.messages.is_empty() {
-                new_messages.push(guard.messages[0].clone()); // System prompt
-            }
-            if guard.messages.len() > 1 && guard.messages[1].role == crate::llm::Role::User {
-                new_messages.push(guard.messages[1].clone()); // Initial user spec
-            }
-            new_messages.push(crate::llm::ChatMessage::system(format!(
-                "# Compacted Context Summary\n\n{}",
-                compacted_markdown
-            )));
-            if guard.messages.len() > 4 {
-                let tail_start = guard.messages.len().saturating_sub(4);
-                let actual_tail = tail_start.max(2);
-                for msg in &guard.messages[actual_tail..] {
-                    new_messages.push(msg.clone());
-                }
-            }
-            // Enforce safe ceiling guarantee on in-memory context as well
-            let _ = crate::agent::compactor::compact_conversation_to_target(&mut new_messages, 96_000, None);
-            guard.messages = new_messages;
-            guard.compaction_revision += 1;
-
-            let sys = guard.messages.first()
-                .and_then(|m| m.content.as_deref())
-                .map(crate::agent::compactor::estimate_text_tokens)
-                .unwrap_or(0);
-            let tool = crate::agent::compactor::estimate_tools_tokens(&None);
-            let tot = crate::agent::compactor::estimate_tokens(&guard.messages) + tool;
-            (sys, tool, tot)
-        } else {
-            (0, 0, tokens_after)
-        }
-    } else {
-        (0, 0, tokens_after)
-    };
-
-    let report = crate::agent::compactor::CompactionReport {
-        tokens_before,
-        tokens_after: total_tokens_after,
-        evaporated_count: compacted_count,
-        saved_tokens,
-        compacted_messages_count: compacted_count,
-        summary: Some(compacted_markdown),
-    };
-
-    // 9. Emit Tauri events for compact_context tool execution card, compaction report, and telemetry
-    let _ = app_handle.emit(
-        "agent:tool_result",
-        serde_json::json!({
-            "taskId": &task_id,
-            "id": &tool_item_id,
-            "name": "compact_context",
-            "result": &stdout_msg,
-            "success": true,
-        }),
-    );
-    let _ = app_handle.emit("agent:compacted", &report);
-    let _ = app_handle.emit(
-        "agent:telemetry",
-        serde_json::json!({
-            "taskId": task_id,
-            "inputTokens": total_tokens_after,
-            "outputTokens": 0,
-            "cacheReadTokens": 0,
-            "cacheCreationTokens": 0,
-            "cacheHitRate": 0.0,
-            "systemTokens": sys_tokens,
-            "toolTokens": tool_tokens,
-        }),
-    );
-    let _ = app_handle.emit("dialog:updated", serde_json::json!({ "taskId": task_id }));
-
-    Ok(report)
+    crate::agent::compactor::compact_context_for_task(task_id, tool_id, app_handle, state).await
 }
 
 pub fn persist_or_queue_steer(

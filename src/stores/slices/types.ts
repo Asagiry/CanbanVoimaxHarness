@@ -52,17 +52,14 @@ export interface TaskTimersSlice {
   resetTaskTimer: (taskId: string) => void;
 }
 
-export interface TasksCrudSlice {
-  tasks: KanbanTask[];
-  selectedTaskId: string | null;
-  hoveredTaskId: string | null;
-  searchQuery: string;
-  isLoadingTasks: boolean;
-  hookStates: Record<string, TaskHookStates>;
+export interface TaskQuestionsSlice {
   activeQuestions: Record<string, ActiveQuestionInfo>;
-
   setActiveQuestion: (payload: ActiveQuestionInfo) => void;
   clearActiveQuestion: (taskId: string) => void;
+}
+
+export interface TaskHooksSlice {
+  hookStates: Record<string, TaskHookStates>;
   setHookStart: (payload: {
     taskId: string;
     stageId: string;
@@ -82,6 +79,14 @@ export interface TasksCrudSlice {
     hookName?: string;
   }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
+}
+
+export interface TasksCrudCoreSlice {
+  tasks: KanbanTask[];
+  selectedTaskId: string | null;
+  hoveredTaskId: string | null;
+  searchQuery: string;
+  isLoadingTasks: boolean;
   setTasks: (tasks: KanbanTask[]) => void;
   setSelectedTaskId: (id: string | null) => void;
   setHoveredTaskId: (id: string | null) => void;
@@ -106,4 +111,6 @@ export interface TasksCrudSlice {
   runTaskAgent: (taskId: string, prompt?: string, options?: { skipSync?: boolean; projectPath?: string }) => Promise<void>;
 }
 
-export type BoardState = BoardMetaSlice & TaskTimersSlice & TasksCrudSlice;
+export type TasksCrudSlice = TasksCrudCoreSlice & TaskHooksSlice & TaskQuestionsSlice;
+
+export type BoardState = BoardMetaSlice & TaskTimersSlice & TasksCrudCoreSlice & TaskHooksSlice & TaskQuestionsSlice;

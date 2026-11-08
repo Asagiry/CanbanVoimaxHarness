@@ -1,9 +1,6 @@
 
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
 
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub const PROTECTED_CVH_PATHS: &[&str] = &[
     ".cvh/agents/",
@@ -239,11 +236,7 @@ pub async fn sync_cvh_to_all_worktrees(repo_root: &Path) {
     }
 }
 
-pub async fn mark_worktree_cvh_untracked(worktree: &Path) {
-    let mut cmd = Command::new("git");
-    cmd.current_dir(worktree)
-        .args(["update-index", "--assume-unchanged", "--", ".cvh"]);
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    let _ = cmd.output().await;
+pub async fn mark_worktree_cvh_untracked(_worktree: &Path) {
+    // .cvh runtime directories and SQLite DBs are excluded via root .gitignore.
+    // Git does not support --assume-unchanged on directories.
 }

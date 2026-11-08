@@ -306,7 +306,6 @@ use std::sync::Arc;
         // 3. When policy disables a tool, cvh-dev is denied by the Tool Policy Matrix
         let mut restricted_policy = ToolPolicyConfig::default();
         restricted_policy.stage_overrides.entry("dev".to_string()).or_default().insert("web_search".to_string(), false);
-        restricted_policy.global_enabled.insert("web_search".to_string(), false);
         let restricted_ctx = ToolContext {
             tool_policy: &restricted_policy,
             ..cvh_dev_ctx.clone()

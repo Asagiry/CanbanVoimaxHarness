@@ -1,3 +1,4 @@
+import { saveCachedHookStates } from '../board/hookStorage';
 import { StateCreator } from 'zustand';
 import {
   KanbanTask,
@@ -7,10 +8,9 @@ import {
   isBackendTaskDTO,
   getHookScript,
 } from '../../types';
-import { BoardState, TasksCrudSlice } from './types';
+import { BoardState, TasksCrudCoreSlice } from './types';
 import { sortTasksByPosition, isDoneColumnDef } from '../board/boardHelpers';
 import { CANONICAL_BOARD_COLUMNS } from '../board/boardConstants';
-import { loadCachedHookStates, saveCachedHookStates } from '../board/hookStorage';
 import { mapBackendTaskToKanban, isTaskForeign } from '../board/taskNormalizer';
 import { syncTasksBackend, triggerRunAgent } from '../board/taskSync';
 import { useDrawerStore } from '../drawerStore';
@@ -21,159 +21,13 @@ export const createTasksCrudSlice: StateCreator<
   BoardState,
   [],
   [],
-  TasksCrudSlice
+  TasksCrudCoreSlice
 > = (set, get) => ({
   tasks: [],
   selectedTaskId: null,
   hoveredTaskId: null,
   searchQuery: '',
   isLoadingTasks: false,
-  hookStates: loadCachedHookStates(),
-  activeQuestions: {},
-
-  setActiveQuestion: (payload) => {
-    set((state) => {
-      // Dedupe to single active per root family (CVH-076.* / CVH-076)
-      const root = payload.taskId.split('.')[0];
-      const next: Record<string, typeof payload> = {};
-      for (const [k, v] of Object.entries(state.activeQuestions)) {
-        if (k.split('.')[0] !== root) next[k] = v;
-      }
-      next[payload.taskId] = payload;
-      return { activeQuestions: next };
-    });
-  },
-
-  clearActiveQuestion: (taskId) => {
-    set((state) => {
-      const prefix = `${taskId}.`;
-      const keysToDelete = Object.keys(state.activeQuestions).filter(
-        (k) => k === taskId || k.startsWith(prefix)
-      );
-      // Also purge ancestors' keys when clearing a descendant (recordQuestionAnswer path)
-      const root = taskId.split('.')[0];
-      if (root !== taskId) keysToDelete.push(root, ...Object.keys(state.activeQuestions).filter((k) => k.startsWith(`${root}.`)));
-      if (keysToDelete.length === 0) return state;
-      const next = { ...state.activeQuestions };
-      for (const k of keysToDelete) delete next[k];
-      return { activeQuestions: next };
-    });
-  },
-
-  setHookStart: ({ taskId, stageId, hookType, hookName, description }) => {
-    set((state) => {
-      const normalizedHookType = (hookType as string) === 'on_finish' || (hookType as string) === 'on_exit' ? 'on_leave' : hookType;
-      const prev = state.hookStates[taskId] || {};
-      const nextTaskHookState: TaskHookStates = {
-        ...prev,
-        [normalizedHookType]: {
-          hookName: hookName || (normalizedHookType as string),
-          stageId,
-          hookType: normalizedHookType,
-          status: 'running',
-          startedAt: Date.now(),
-          stdout: '',
-          stderr: '',
-          description,
-        },
-      };
-      const nextHookStates = {
-        ...state.hookStates,
-        [taskId]: nextTaskHookState,
-      };
-      saveCachedHookStates(nextHookStates);
-      const nextTasks = state.tasks.map((t) => {
-        if (t.id === taskId) {
-          return { ...t, hookStates: nextTaskHookState };
-        }
-        return t;
-      });
-      return {
-        hookStates: nextHookStates,
-        tasks: nextTasks,
-      };
-    });
-  },
-
-  setHookFinish: ({ taskId, stageId, hookType, success, exitCode, stdout, stderr, error, hookName }) => {
-    set((state) => {
-      const normalizedHookType = (hookType as string) === 'on_finish' || (hookType as string) === 'on_exit' ? 'on_leave' : hookType;
-      const prev = state.hookStates[taskId] || {};
-      const existing = prev[normalizedHookType];
-      const startedAt = existing?.startedAt ?? Date.now();
-      const durationMs = Date.now() - startedAt;
-      const nextTaskHookState: TaskHookStates = {
-        ...prev,
-        [normalizedHookType]: {
-          hookName: hookName || existing?.hookName || (normalizedHookType as string),
-          stageId,
-          hookType: normalizedHookType,
-          status: success ? 'success' : 'failed',
-          startedAt,
-          durationMs,
-          exitCode: exitCode ?? null,
-          stdout: stdout || '',
-          stderr: stderr || '',
-          error,
-          description: existing?.description,
-        },
-      };
-      const nextHookStates = {
-        ...state.hookStates,
-        [taskId]: nextTaskHookState,
-      };
-      saveCachedHookStates(nextHookStates);
-      const nextTasks = state.tasks.map((t) => {
-        if (t.id === taskId) {
-          return { ...t, hookStates: nextTaskHookState };
-        }
-        return t;
-      });
-      return {
-        hookStates: nextHookStates,
-        tasks: nextTasks,
-      };
-    });
-  },
-
-  clearHookState: (taskId, hookType) => {
-    set((state) => {
-      if (!state.hookStates[taskId]) return state;
-      if (!hookType) {
-        const next = { ...state.hookStates };
-        delete next[taskId];
-        saveCachedHookStates(next);
-        const nextTasks = state.tasks.map((t) => {
-          if (t.id === taskId) {
-            const copy = { ...t };
-            delete copy.hookStates;
-            return copy;
-          }
-          return t;
-        });
-        return { hookStates: next, tasks: nextTasks };
-      }
-      const prev = state.hookStates[taskId];
-      const nextTaskHooks = { ...prev };
-      delete nextTaskHooks[hookType];
-      const nextHookStates = {
-        ...state.hookStates,
-        [taskId]: nextTaskHooks,
-      };
-      saveCachedHookStates(nextHookStates);
-      const nextTasks = state.tasks.map((t) => {
-        if (t.id === taskId) {
-          return { ...t, hookStates: nextTaskHooks };
-        }
-        return t;
-      });
-      return {
-        hookStates: nextHookStates,
-        tasks: nextTasks,
-      };
-    });
-  },
-
   setTasks: (tasks) => {
     set({ tasks });
   },

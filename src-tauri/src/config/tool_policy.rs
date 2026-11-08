@@ -10,8 +10,6 @@ use crate::config::models::normalize_tool_name;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolPolicyConfig {
-    #[serde(default = "default_global_tools", rename = "globalEnabled")]
-    pub global_enabled: HashMap<String, bool>,
     #[serde(default, rename = "stageOverrides")]
     pub stage_overrides: HashMap<String, HashMap<String, bool>>,
     #[serde(default = "default_tool_settings", rename = "toolSettings")]
@@ -29,32 +27,6 @@ pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
     map.insert("subagent_bg".to_string(), serde_json::json!({ "max_concurrent": 3 }));
     map.insert("todo_write".to_string(), serde_json::json!({ "min_items": 3, "max_items": 20 }));
     map.insert("execute_command".to_string(), serde_json::json!({ "timeout_sec": 180 }));
-    map
-}
-
-pub fn default_global_tools() -> HashMap<String, bool> {
-    let mut map = HashMap::new();
-    map.insert("execute_command".to_string(), true);
-    map.insert("read_file".to_string(), true);
-    map.insert("edit_file".to_string(), true);
-    map.insert("write_file".to_string(), true);
-    map.insert("glob".to_string(), true);
-    map.insert("grep".to_string(), true);
-    map.insert("web_search".to_string(), true);
-    map.insert("web_fetch".to_string(), true);
-    map.insert("subagent".to_string(), true);
-    map.insert("subagent_bg".to_string(), true);
-    map.insert("collect_subagent".to_string(), true);
-    map.insert("subagent_list".to_string(), true);
-    map.insert("todo_write".to_string(), true);
-    map.insert("advance_task".to_string(), true);
-    map.insert("reject_task".to_string(), true);
-    map.insert("question".to_string(), true);
-    map.insert("create_task".to_string(), true);
-    map.insert("complete_task".to_string(), true);
-    map.insert("list_tasks".to_string(), true);
-    map.insert("get_task_history".to_string(), true);
-    map.insert("load_rule".to_string(), true);
     map
 }
 
@@ -149,7 +121,6 @@ impl Default for ToolPolicyConfig {
         stage_overrides.insert("orchestrator".to_string(), orch_map);
 
         Self {
-            global_enabled: default_global_tools(),
             stage_overrides,
             tool_settings: default_tool_settings(),
             tool_descriptions: HashMap::new(),
@@ -219,14 +190,12 @@ pub fn is_tool_allowed(
     match stage_id {
         Some(stage) => {
             if let Some(stage_map) = policy.stage_overrides.get(stage) {
-                policy_lookup(stage_map, canonical)
-                    .or_else(|| policy_lookup(&policy.global_enabled, canonical))
-                    .unwrap_or(true)
+                policy_lookup(stage_map, canonical).unwrap_or(true)
             } else {
-                policy_lookup(&policy.global_enabled, canonical).unwrap_or(true)
+                true
             }
         }
-        None => policy_lookup(&policy.global_enabled, canonical).unwrap_or(true),
+        None => true,
     }
 }
 

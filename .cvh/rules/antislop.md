@@ -14,7 +14,7 @@ AI slop in user interfaces is strictly eradicated:
 
 1. **No Gratuitous Gradients**:
    - Strictly prohibit indigo→violet, purple→pink, or rainbow gradients.
-   - Use flat, solid color tokens from the obsidian dark palette (`#07090e`, `#0d1117`, `#161b22`, `#30363d`).
+   - Use flat, solid color tokens from the Antigravity stealth dark palette (`#111114`, `#17171b`, `#232328`, `#212126`, `#2c2c33`, `#3a3a44`, `#f4f4f5`, `#a1a1aa`, `#71717a`, `#52525b`).
    - Prohibit gradient-clip text headers (`bg-clip-text text-transparent bg-gradient-to-r`).
 2. **No Neon Glows & Over-Decoration**:
    - No pulsating neon glow borders (`shadow-[0_0_20px_...]`).

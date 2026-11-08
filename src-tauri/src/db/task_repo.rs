@@ -352,16 +352,14 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
 
     if let Some(ref todos) = task.todos {
-        if !todos.is_empty() {
-            let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
-            for (idx, td) in todos.iter().enumerate() {
-                tx.execute(
-                    "INSERT INTO task_todos (id, task_id, content, status, order_idx)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![td.id, task.id, td.content, td.status, idx as i64],
-                )
-                .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
-            }
+        let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
+        for (idx, td) in todos.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO task_todos (id, task_id, content, status, order_idx)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![td.id, task.id, td.content, td.status, idx as i64],
+            )
+            .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
         }
     }
 
@@ -466,16 +464,14 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
 
         if let Some(ref todos) = task.todos {
-            if !todos.is_empty() {
-                let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
-                for (idx, td) in todos.iter().enumerate() {
-                    tx.execute(
-                        "INSERT INTO task_todos (id, task_id, content, status, order_idx)
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
-                        params![td.id, task.id, td.content, td.status, idx as i64],
-                    )
-                    .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
-                }
+            let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1", params![task.id]);
+            for (idx, td) in todos.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO task_todos (id, task_id, content, status, order_idx)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![td.id, task.id, td.content, td.status, idx as i64],
+                )
+                .map_err(|e| format!("Failed to insert todo {}: {}", td.id, e))?;
             }
         }
     }

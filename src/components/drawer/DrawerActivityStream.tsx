@@ -6,6 +6,7 @@ import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import ImageLightboxModal from './ImageLightboxModal';
 import ActivityItemActions from './stream/ActivityItemActions';
+import { useShallow } from 'zustand/react/shallow';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -56,7 +57,14 @@ export default function DrawerActivityStream({
     activeSubagentTitle,
     activeSubagentRole,
     activeSubagentPrompt,
-  } = useDrawerStore();
+  } = useDrawerStore(
+    useShallow((s) => ({
+      activeSubagentId: s.activeSubagentId,
+      activeSubagentTitle: s.activeSubagentTitle,
+      activeSubagentRole: s.activeSubagentRole,
+      activeSubagentPrompt: s.activeSubagentPrompt,
+    }))
+  );
   const { t } = useTranslation();
   const connectionWait = useDrawerStore((state) => {
     const taskId = activeSubagentId || task.id;

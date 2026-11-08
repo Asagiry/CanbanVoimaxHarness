@@ -1,3 +1,4 @@
+import { isIntakeStage, isTerminalStage } from '../../types/domain';
 import {
   BackendTaskDTO,
   isBackendTaskDTO,
@@ -109,32 +110,32 @@ export function normalizeKanbanTask(
     }
   }
 
-  // Alias matching fallback (dev <-> development, backlog <-> waiting, ready <-> done)
+  // Alias matching fallback (dev <-> development, backlog <-> intake, ready <-> terminal)
   const matchedCol = knownCol ?? effectiveColumns.find((c) => {
     if (!rawId) return false;
     const cid = c.id.toLowerCase();
     const rid = rawId.toLowerCase();
     if ((rid === 'dev' || rid === 'development') && (cid === 'dev' || cid === 'development')) return true;
-    if ((rid === 'backlog' || rid === 'waiting' || rid === 'ожидание') && (cid === 'backlog' || cid === 'waiting' || cid === 'ожидание')) return true;
-    if ((rid === 'ready' || rid === 'done' || rid === 'готово') && (cid === 'ready' || cid === 'done' || cid === 'готово')) return true;
+    if (isIntakeStage(rid) && isIntakeStage(cid)) return true;
+    if (isTerminalStage(rid) && isTerminalStage(cid)) return true;
     return false;
   });
 
   const stageId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
   const col = effectiveColumns.find((c) => c.id === stageId);
-  const isTerminalTask = Boolean(col?.terminal || stageId === 'ready' || stageId === 'done');
+  const isTerminalTask = isTerminalStage(col || stageId);
   const effectiveWaitingForSubtaskId = isTerminalTask
     ? undefined
     : (raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined);
 
   const rawStatus = (raw.status as TaskStatus) || undefined;
-  let status: TaskStatus = rawStatus ?? (col?.terminal
+  let status: TaskStatus = rawStatus ?? (isTerminalTask
     ? 'done'
     : col?.persona
     ? 'running'
     : 'idle');
-  if (status === 'waiting_subtask') {
-    status = isTerminalTask ? 'done' : 'idle';
+  if (status === 'waiting_subtask' && isTerminalTask) {
+    status = 'done';
   }
   if (effectiveWaitingForSubtaskId && status === 'idle') {
     status = 'done';

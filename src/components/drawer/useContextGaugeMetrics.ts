@@ -198,8 +198,8 @@ export function useContextGaugeMetrics({
       : undefined;
 
     const isExploratorySubagent = taskId.includes('.sub-') || taskId.includes(':sub:');
-    const baseSystem = telemetrySys ?? (isExploratorySubagent ? 800 : 0);
-    const baseTool = telemetryTool ?? (isExploratorySubagent ? 1000 : 0);
+    const baseSystem = telemetrySys ?? (isExploratorySubagent ? 800 : (persona ? 1800 : 1200));
+    const baseTool = telemetryTool ?? (isExploratorySubagent ? 1000 : 2200);
 
     let messageChars = textChars;
     for (const t of toolsArr) {

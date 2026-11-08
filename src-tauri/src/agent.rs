@@ -819,12 +819,15 @@ pub async fn maybe_spill_output(
     output: String,
 ) -> Result<String> {
     let canonical = canonical_tool_name(tool_name);
-    let is_exempt = canonical == "subagent"
-        || canonical == "subagent_bg"
-        || canonical == "collect_subagent"
-        || canonical == "subagent_list"
-        || canonical == "load_rule"
-        || canonical == "get_task_history";
+    let is_exempt = matches!(
+        canonical,
+        "subagent"
+            | "subagent_bg"
+            | "collect_subagent"
+            | "subagent_list"
+            | "load_rule"
+            | "get_task_history"
+    );
 
     let lines_count = output.lines().count();
     let bytes_len = output.len();
@@ -1234,10 +1237,8 @@ pub fn should_abort_tool_batch(tool_name: &str, success: bool, result_output: &s
         "edit_file"
             | "write_file"
             | "create_task"
-            | "create_tasks"
             | "complete_task"
             | "advance_task"
-            | "move_task"
             | "reject_task"
     );
     let is_failing_cmd = norm == "execute_command"
@@ -1282,7 +1283,7 @@ pub fn resolve_task_role(stage_id: &str, personas: &HashMap<String, String>) -> 
         match stage_id {
             "dev" => "developer".to_string(),
             "review" => "reviewer".to_string(),
-            "retro" => "retro-verifier".to_string(),
+            "retro" => "retro".to_string(),
             other => other.to_string(),
         }
     })
@@ -1400,8 +1401,11 @@ pub async fn execute_tool(
         }
         "reject_task" => execute_reject_task(ctx, args).await?,
         "question" => execute_question(ctx, args).await?,
-        "create_task" => execute_create_task(ctx, args, false).await?,
-        "create_tasks" => execute_create_task(ctx, args, true).await?,
+        "create_task" | "create_tasks" => {
+            let is_batch = tool_name == "create_tasks"
+                || args.get("tasks").and_then(|v| v.as_array()).is_some();
+            execute_create_task(ctx, args, is_batch).await?
+        }
         "complete_task" => execute_complete_task(ctx, args).await?,
         "list_tasks" => execute_list_tasks(ctx, args).await?,
         "get_task_history" => execute_get_task_history(ctx, args).await?,
@@ -1463,20 +1467,17 @@ pub fn run_inprocess_subagent(
     let mut effective_sub_tools: Vec<String> = base_tools
         .into_iter()
         .filter(|t| {
-            t != "subagent"
-                && t != "subagent_bg"
-                && t != "collect_subagent"
-                && t != "subagent_list"
-                && t != "advance_task"
-                && t != "move_task"
-                && t != "move_task_stage"
-                && t != "advance_stage"
-                && t != "next_stage"
-                && t != "reject_task"
-                && t != "create_task"
-                && t != "create_tasks"
-                && t != "complete_task"
-                && is_tool_active_for_agent(
+            !matches!(
+                canonical_tool_name(t),
+                "subagent"
+                    | "subagent_bg"
+                    | "collect_subagent"
+                    | "subagent_list"
+                    | "advance_task"
+                    | "reject_task"
+                    | "create_task"
+                    | "complete_task"
+            ) && is_tool_active_for_agent(
                     t,
                     &ctx.tool_policy,
                     &role,
@@ -3231,7 +3232,7 @@ impl ThinkingStreamParser {
                 // If not found, check if end of buffer could be a partial closing tag
                 let mut partial_len = 0;
                 for tag in &["</thinking>", "</think>", "</thought>", "</reasoning>"] {
-                    for len in 1..tag.len() {
+                    for len in 2..tag.len() {
                         if self.buffer.ends_with(&tag[..len]) && len > partial_len {
                             let pos = self.buffer.len() - len;
                             if is_valid_partial_closing_tag(&self.buffer, pos) {

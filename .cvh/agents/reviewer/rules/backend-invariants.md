@@ -70,7 +70,7 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
 ---
 
 ## 8. Safe Windows Quoting for Process Spawning
-- **Rule**: All child process spawns in `hooks.rs` or `git.rs` must use `quote_windows_path()` and `quote_windows_arg()`.
+- **Rule**: All child process spawns in `hooks.rs` or `git/mod.rs` must use `quote_windows_path()` and `quote_windows_arg()`.
 - **Audit**: Check command line construction. Naked string interpolation like `format!("cmd /c {}", path)` is forbidden due to path spaces and special characters (`()`, `&`).
 
 ---

@@ -516,7 +516,6 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
 
 export interface ToolPolicyState {
   isModalOpen: boolean;
-  globalEnabled: Record<string, boolean>;
   stageOverrides: Record<string, Record<string, boolean>>;
   toolSettings: ToolSettings;
   toolDescriptions: Record<string, string>;
@@ -525,7 +524,6 @@ export interface ToolPolicyState {
   // Actions
   openModal: () => void;
   closeModal: () => void;
-  toggleGlobalTool: (toolId: string) => void;
   setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;
   setToolSetting: (toolId: string, key: string, value: number) => void;
   getToolSetting: (toolId: string, key: string, defaultValue: number) => number;
@@ -539,31 +537,6 @@ export interface ToolPolicyState {
   loadFromTauri: () => Promise<void>;
   saveToTauri: () => Promise<void>;
 }
-
-const DEFAULT_GLOBAL: Record<string, boolean> = {
-  advance_task: true,
-  reject_task: true,
-  execute_command: true,
-  read_file: true,
-  edit_file: true,
-  write_file: true,
-  glob: true,
-  grep: true,
-  web_search: true,
-  web_fetch: true,
-  subagent: true,
-  subagent_sync: true,
-  subagent_bg: true,
-  collect_subagent: true,
-  subagent_list: true,
-  todo_write: true,
-  question: true,
-  create_task: true,
-  complete_task: true,
-  load_rule: true,
-  list_tasks: true,
-  get_task_history: true,
-};
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
   backlog: {
@@ -650,7 +623,6 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
 
 export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   isModalOpen: false,
-  globalEnabled: DEFAULT_GLOBAL,
   stageOverrides: DEFAULT_OVERRIDES,
   toolSettings: DEFAULT_TOOL_SETTINGS,
   toolDescriptions: {},
@@ -658,14 +630,6 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
-
-  toggleGlobalTool: (toolId) => {
-    set((state) => {
-      const next = { ...state.globalEnabled, [toolId]: !state.globalEnabled[toolId] };
-      return { globalEnabled: next };
-    });
-    get().saveToTauri();
-  },
 
   setStageTool: (stageId, toolId, enabled) => {
     set((state) => {
@@ -793,7 +757,6 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
 
   resetDefaults: () => {
     set({
-      globalEnabled: { ...DEFAULT_GLOBAL },
       stageOverrides: { ...DEFAULT_OVERRIDES },
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
       toolDescriptions: {},
@@ -806,7 +769,6 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const policies = await invoke<{
-        globalEnabled?: Record<string, boolean>;
         stageOverrides?: Record<string, Record<string, boolean>>;
         toolSettings?: ToolSettings;
         toolDescriptions?: Record<string, string>;
@@ -824,7 +786,6 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           }
         }
         set({
-          globalEnabled: policies.globalEnabled || DEFAULT_GLOBAL,
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
           toolSettings: mergedSettings,
           toolDescriptions: policies.toolDescriptions || {},
@@ -839,10 +800,9 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   saveToTauri: async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const { globalEnabled, stageOverrides, toolSettings, toolDescriptions, toolCustomSchemas } = get();
+      const { stageOverrides, toolSettings, toolDescriptions, toolCustomSchemas } = get();
       await invoke('save_tool_policies', {
         policies: {
-          globalEnabled,
           stageOverrides,
           toolSettings,
           toolDescriptions,

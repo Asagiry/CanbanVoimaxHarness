@@ -90,7 +90,7 @@ Implements DDD principles and Uncle Bob's Clean Architecture:
 - **Orphaned Column Healing**: If `task.stage_id` does not exist on the target board, it dynamically heals to the board's first column (`backlog`).
 - **Boundary Columns Protection**: `backlog` is normalized to index 0; `ready` (`terminal: true`) is normalized to the final index (`normalize_pipeline_columns`).
 
-### 3.5 Safe Windows Quoting & Worktree Execution (`src-tauri/src/hooks.rs`, `git.rs`)
+### 3.5 Safe Windows Quoting & Worktree Execution (`src-tauri/src/hooks.rs`, `src-tauri/src/git/mod.rs`)
 - Tasks operate inside isolated git worktrees at `worktrees/<task-slug>` on branch `feat/<task-slug>`.
 - **Safe Command Formatting**: Windows shell commands MUST use `quote_windows_path()` and `quote_windows_arg()` to prevent shell syntax breakage from spaces, parentheses `()`, and ampersands `&`.
 - Windows commands executed via `cmd.exe` use `/D /S /C "chcp 65001 >nul && <command>"` for consistent UTF-8 encoding.

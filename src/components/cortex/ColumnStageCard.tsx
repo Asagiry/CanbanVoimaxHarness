@@ -16,10 +16,10 @@ import { useCortexStore } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import {
-  BACKLOG_COLOR,
-  READY_COLOR,
   isAllowedAgentColor,
   getDeterministicAgentColor,
+  resolveStageColor,
+  resolveStageIcon,
 } from '../../lib/agentPalette';
 import { hookMomentOf, savePipelineConfig } from './types';
 import NewCortexFileForm from './NewCortexFileForm';
@@ -67,28 +67,13 @@ export function ColumnStageCard({
   const settingsFile = stage.files.find((f) => f.type === 'settings');
   const settingsIsMissing = settingsFile ? Boolean(fileMissing[settingsFile.id]) : false;
 
-  const isBacklog = Boolean(column?.isIntake || stage.stageId === 'backlog');
   const isReady = Boolean(column?.terminal || stage.stageId === 'ready');
   const assignedPersona = column?.persona
     ? agentPersonas.find((p) => p.role === column.persona)
     : undefined;
 
-  const effectiveIcon = isBacklog
-    ? column?.icon || stage.icon || getDefaultColumnIcon('backlog')
-    : isReady
-    ? column?.icon || stage.icon || getDefaultColumnIcon('ready')
-    : assignedPersona?.icon || column?.icon || stage.icon || getDefaultColumnIcon(stage.stageId);
-
-  const effectiveColor = isBacklog
-    ? BACKLOG_COLOR
-    : isReady
-    ? READY_COLOR
-    : assignedPersona?.color ||
-      (column?.color && isAllowedAgentColor(column.color)
-        ? column.color
-        : column?.persona
-        ? getDeterministicAgentColor(column.persona)
-        : stage.color);
+  const effectiveIcon = resolveStageIcon(stage, assignedPersona);
+  const effectiveColor = resolveStageColor(stage, assignedPersona);
 
   const handleAgentChange = async (newPersonaRaw: string) => {
     if (!column) return;

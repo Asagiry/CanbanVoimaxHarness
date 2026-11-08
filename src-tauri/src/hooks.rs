@@ -139,14 +139,19 @@ pub fn kill_process_tree_sync(pid: u32) {
         let pid_str = pid.to_string();
         cmd.args(["/F", "/T", "/PID", &pid_str]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let _ = cmd.spawn();
+        if let Ok(mut child) = cmd.spawn() {
+            let _ = child.wait();
+        }
     }
     #[cfg(not(target_os = "windows"))]
     {
         let pid_str = pid.to_string();
-        let _ = std::process::Command::new("kill")
+        if let Ok(mut child) = std::process::Command::new("kill")
             .args(["-9", &pid_str])
-            .spawn();
+            .spawn()
+        {
+            let _ = child.wait();
+        }
     }
 }
 

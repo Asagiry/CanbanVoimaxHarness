@@ -410,7 +410,7 @@ pub fn propagate_parent_subtask_advance(
                 waiting_for_subtask_id: None,
                 handover_summary: None,
                 cover_image: None,
-                attachments: tasks[parent_idx].attachments.clone(),
+                attachments: None,
                 todos: None,
                 priority: parent_priority,
                 tags: None,

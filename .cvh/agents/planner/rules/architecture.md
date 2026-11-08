@@ -44,7 +44,7 @@ When planning technical solutions, identify affected subsystems and map them str
 | **Domain Layer (Rust)** | `src-tauri/src/domain/ids.rs`, `state.rs` | Nominal Value Objects (`TaskId`, `StageId`, `BoardId`) and `TaskState` ADT state machine. |
 | **Agent Engine** | `src-tauri/src/agent/react_engine.rs`, `compactor.rs`, `tool_schemas.rs`, `tools/*` | `ReActEngine<Driver>`, unified SSE streaming, telemetry (TTFT, TPS, Cache Hit Rate), context compactor, modular tool execution. |
 | **Task Commands** | `src-tauri/src/commands/tasks/healing.rs`, `lifecycle.rs`, `runner.rs`, `storage.rs`, `transitions.rs` | Self-healing boards, task lifecycle, agent runner dispatch, stage transitions. |
-| **Worktree & Git** | `src-tauri/src/git.rs`, `commands/git.rs` | Native worktree creation, diff generation, branch merging to `main`, two-step worktree pruning. |
+| **Worktree & Git** | `src-tauri/src/git/mod.rs`, `commands/git.rs` | Native worktree creation, diff generation, branch merging to `main`, two-step worktree pruning. |
 | **Hooks Engine** | `src-tauri/src/hooks.rs` | Transition scripts runner, Windows argument escaping, timeout enforcement, gatekeeper sensor checks. |
 | **Frontend Event Gateway** | `src/services/tauriEventGateway.ts` | Centralized typed event listeners (`AgentEventMap`), 150ms streaming micro-batching. (Strict ban on `listen<any>`). |
 | **Frontend Domain Layer** | `src/types/domain.ts` | Value Objects (`TaskId`, `StageId`, `BoardId`), factories (`toTaskId`), state machine (`TaskState`, `TaskStates`). |

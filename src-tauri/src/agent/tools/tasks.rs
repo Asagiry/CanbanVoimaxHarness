@@ -7,6 +7,79 @@ use tauri::{Emitter, Manager};
 
 use crate::agent::{get_stage_personas, resolve_task_role, Task, ToolContext};
 
+const STAGE_KEYS: &[&str] = &["stage_id", "stageId", "column_id", "columnId"];
+const TASK_ID_KEYS: &[&str] = &["task_id", "taskId"];
+const BOARD_KEYS: &[&str] = &["board_id", "boardId"];
+const PARENT_ID_KEYS: &[&str] = &["parent_id", "parentId"];
+const SUBTASK_KEYS: &[&str] = &["is_subtask", "isSubtask"];
+
+fn get_str_param<'a>(val: &'a serde_json::Value, keys: &[&str]) -> Option<&'a str> {
+    keys.iter().find_map(|&k| {
+        val.get(k)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    })
+}
+
+fn get_bool_param(val: &serde_json::Value, keys: &[&str]) -> Option<bool> {
+    keys.iter().find_map(|&k| val.get(k).and_then(|v| v.as_bool()))
+}
+
+struct TaskInput {
+    title: String,
+    description: String,
+    column_id: Option<String>,
+    board_id: Option<String>,
+    tags: Option<Vec<String>>,
+    priority: Option<String>,
+    model: Option<String>,
+    is_subtask: Option<bool>,
+    parent_id: Option<String>,
+}
+
+fn parse_task_input(item: &serde_json::Value, idx_hint: Option<usize>) -> Result<TaskInput> {
+    let title_raw = item.get("title").and_then(|v| v.as_str()).ok_or_else(|| {
+        match idx_hint {
+            Some(idx) => anyhow::anyhow!("Missing 'title' in tasks[{}]", idx),
+            None => anyhow::anyhow!("Missing required parameter 'title'"),
+        }
+    })?;
+    let title = title_raw.trim().to_string();
+    if title.is_empty() {
+        match idx_hint {
+            Some(idx) => bail!("'title' in tasks[{}] cannot be empty", idx),
+            None => bail!("Parameter 'title' cannot be empty"),
+        }
+    }
+    let description = item
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let column_id = get_str_param(item, STAGE_KEYS).map(str::to_string);
+    let board_id = get_str_param(item, BOARD_KEYS).map(str::to_string);
+    let tags = item.get("tags").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter().filter_map(|t| t.as_str().map(str::to_string)).collect::<Vec<_>>()
+    });
+    let priority = get_str_param(item, &["priority"]).map(str::to_string);
+    let model = get_str_param(item, &["model"]).map(str::to_string);
+    let is_subtask = get_bool_param(item, SUBTASK_KEYS);
+    let parent_id = get_str_param(item, PARENT_ID_KEYS).map(str::to_string);
+
+    Ok(TaskInput {
+        title,
+        description,
+        column_id,
+        board_id,
+        tags,
+        priority,
+        model,
+        is_subtask,
+        parent_id,
+    })
+}
+
 pub async fn execute_create_task(
     ctx: &ToolContext<'_>,
     args: &serde_json::Value,
@@ -18,18 +91,6 @@ pub async fn execute_create_task(
     // Check if batch call (via create_tasks alias or tasks array in arguments)
     let is_batch = is_batch_call || args.get("tasks").and_then(|v| v.as_array()).is_some();
 
-    struct TaskInput {
-        title: String,
-        description: String,
-        column_id: Option<String>,
-        board_id: Option<String>,
-        tags: Option<Vec<String>>,
-        priority: Option<String>,
-        model: Option<String>,
-        is_subtask: Option<bool>,
-        parent_id: Option<String>,
-    }
-
     let mut inputs = Vec::new();
 
     if let Some(tasks_arr) = args.get("tasks").and_then(|v| v.as_array()) {
@@ -37,144 +98,10 @@ pub async fn execute_create_task(
             bail!("'tasks' array must not be empty");
         }
         for (idx, item) in tasks_arr.iter().enumerate() {
-            let title = item
-                .get("title")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("Missing 'title' in tasks[{}]", idx))?
-                .trim()
-                .to_string();
-            if title.is_empty() {
-                bail!("'title' in tasks[{}] cannot be empty", idx);
-            }
-            let description = item
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            let column_id = item
-                .get("stage_id")
-                .or_else(|| item.get("stageId"))
-                .or_else(|| item.get("column_id"))
-                .or_else(|| item.get("columnId"))
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            let board_id = item
-                .get("board_id")
-                .or_else(|| item.get("boardId"))
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            let tags = item.get("tags").and_then(|v| v.as_array()).map(|arr| {
-                arr.iter().filter_map(|t| t.as_str().map(str::to_string)).collect::<Vec<_>>()
-            });
-            let priority = item
-                .get("priority")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            let model = item
-                .get("model")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            let is_subtask = item
-                .get("is_subtask")
-                .or_else(|| item.get("isSubtask"))
-                .and_then(|v| v.as_bool());
-            let parent_id = item
-                .get("parent_id")
-                .or_else(|| item.get("parentId"))
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-
-            inputs.push(TaskInput {
-                title,
-                description,
-                column_id,
-                board_id,
-                tags,
-                priority,
-                model,
-                is_subtask,
-                parent_id,
-            });
+            inputs.push(parse_task_input(item, Some(idx))?);
         }
     } else {
-        let title = args
-            .get("title")
-            .and_then(|v| v.as_str())
-            .context("Missing required parameter 'title'")?
-            .trim()
-            .to_string();
-        if title.is_empty() {
-            bail!("Parameter 'title' cannot be empty");
-        }
-        let description = args
-            .get("description")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string();
-        let column_id = args
-            .get("stage_id")
-            .or_else(|| args.get("stageId"))
-            .or_else(|| args.get("column_id"))
-            .or_else(|| args.get("columnId"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-        let board_id = args
-            .get("board_id")
-            .or_else(|| args.get("boardId"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-        let tags = args.get("tags").and_then(|v| v.as_array()).map(|arr| {
-            arr.iter().filter_map(|t| t.as_str().map(str::to_string)).collect::<Vec<_>>()
-        });
-        let priority = args
-            .get("priority")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-        let model = args
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-        let is_subtask = args
-            .get("is_subtask")
-            .or_else(|| args.get("isSubtask"))
-            .and_then(|v| v.as_bool());
-        let parent_id = args
-            .get("parent_id")
-            .or_else(|| args.get("parentId"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-
-        inputs.push(TaskInput {
-            title,
-            description,
-            column_id,
-            board_id,
-            tags,
-            priority,
-            model,
-            is_subtask,
-            parent_id,
-        });
+        inputs.push(parse_task_input(args, None)?);
     }
 
     let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
@@ -371,10 +298,7 @@ pub async fn execute_complete_task(
         .and_then(|v| v.as_str())
         .context("Missing required parameter 'summary'")?;
 
-    let current_task_id = args
-        .get("task_id")
-        .or_else(|| args.get("taskId"))
-        .and_then(|v| v.as_str())
+    let current_task_id = get_str_param(args, TASK_ID_KEYS)
         .or(task_id)
         .context("No active task ID for complete_task")?;
 
@@ -483,9 +407,8 @@ pub async fn execute_list_tasks(
     let mut tasks = crate::db::db_get_all_tasks(repo_root)
         .map_err(|e| anyhow::anyhow!("Failed to read tasks from database: {}", e))?;
 
-    if let Some(target_stage) = args.get("stage_id").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
-        let target = target_stage.trim();
-        tasks.retain(|t| t.stage_id.eq_ignore_ascii_case(target));
+    if let Some(target_stage) = get_str_param(args, STAGE_KEYS) {
+        tasks.retain(|t| t.stage_id.eq_ignore_ascii_case(target_stage));
     }
 
     if let Some(q) = args.get("query").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()) {
@@ -554,10 +477,7 @@ pub async fn execute_get_task_history(
 ) -> Result<String> {
     let repo_root = ctx.repo_root;
 
-    let target_task_id = args
-        .get("task_id")
-        .or_else(|| args.get("taskId"))
-        .and_then(|v| v.as_str())
+    let target_task_id = get_str_param(args, TASK_ID_KEYS)
         .context("Missing required parameter 'task_id'")?;
     let include_tool_outputs = args
         .get("include_tool_outputs")
@@ -617,15 +537,15 @@ pub async fn execute_get_task_history(
             }
             "tool" => {
                 let (tool_name, params_str, status_str, duration, error_snippet, output_snippet) = if let Some(ref t) = it.tool {
-                    let name = t.get("toolName").or_else(|| t.get("name")).and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let name = get_str_param(t, &["toolName", "name"]).unwrap_or("unknown");
                     let params = t.get("params").or_else(|| t.get("arguments")).cloned().unwrap_or_else(|| serde_json::json!({}));
                     let params_str = serde_json::to_string(&params).unwrap_or_else(|_| "{}".to_string());
-                    let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("success");
+                    let status = get_str_param(t, &["status"]).unwrap_or("success");
                     let duration = t.get("durationMs").and_then(|v| v.as_f64()).or(it.duration_ms).unwrap_or(0.0);
-                    let err = t.get("stderr").or_else(|| t.get("error")).and_then(|v| v.as_str())
+                    let err = get_str_param(t, &["stderr", "error"])
                         .or_else(|| if status == "failed" { it.content.as_deref() } else { None })
                         .unwrap_or("none");
-                    let out = t.get("stdout").or_else(|| t.get("result")).and_then(|v| v.as_str())
+                    let out = get_str_param(t, &["stdout", "result"])
                         .or(it.content.as_deref());
                     (name, params_str, status, duration, err, out)
                 } else {

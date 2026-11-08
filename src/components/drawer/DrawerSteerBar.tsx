@@ -10,7 +10,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import AgentIcon from '../common/AgentIcon';
-import { getSubagentOrderMap, formatSubagentRoleDisplay } from './SubagentsSidebar';
+import { getSubagentOrderMap, formatSubagentRoleDisplay } from './subagentHelpers';
 import { compressImageFile } from '../../lib/imageCompression';
 import {
   ArrowUp,
@@ -101,8 +101,8 @@ export default function DrawerSteerBar({
   const parentMatchedPersona = agentPersonas.find(
     (p) => p.role.toLowerCase() === taskPersona.toLowerCase()
   );
-  const parentLimit = parentMatchedPersona?.contextWindow || (taskPersona.toLowerCase() === 'cvh-dev' ? 200000 : 128000);
-  const effectiveLimit = matchedPersona?.contextWindow || parentLimit;
+
+  const effectiveLimit = matchedPersona?.contextWindow || parentMatchedPersona?.contextWindow || 128000;
 
   // --- Provider / Model label (screenshot format: "OpenCode Go / Crouton Alpha Free Max") ---
   // Honest display = what the backend will actually dispatch:
@@ -113,7 +113,8 @@ export default function DrawerSteerBar({
   // backend resolver uses (pair > agent setting > col > project > crouton).
   const providers = useSettingsStore((s) => s.providers) ?? [];
   const pairModel = task.providerId ? task.model : null;
-  const modelId = pairModel || matchedPersona?.model || 'crouton-alpha-free';
+  const defaultModel = useSettingsStore.getState().settings?.model || (useSettingsStore.getState() as any).model || 'default';
+  const modelId = pairModel || matchedPersona?.model || defaultModel;
   const pairProvider =
     (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
     (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||

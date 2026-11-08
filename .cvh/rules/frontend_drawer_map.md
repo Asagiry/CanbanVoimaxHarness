@@ -13,6 +13,7 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
+| `src/components/drawer/EffortSelector.tsx` | Reasoning effort selector (off/low/medium/high/max) for tasks and personas. |
 | `src/components/drawer/GitDiffSidebar.tsx` | Resizable git diff panel with live change updates. |
 | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
 | `src/components/drawer/TaskTodoWidget.tsx` | Drawer-hoisted checklist progress bar and task item list. |

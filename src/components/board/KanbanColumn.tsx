@@ -8,7 +8,7 @@ import StageHookBadge from './StageHookBadge';
 import { useCortexStore } from '../../stores/cortexStore';
 import { isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import AgentIcon from '../common/AgentIcon';
-import { getDeterministicAgentColor } from '../../lib/agentPalette';
+import { resolveStageColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
@@ -98,9 +98,7 @@ function KanbanColumn({
     )
   );
 
-  const assignedAgentColor = column.persona
-    ? (assignedPersona?.color || getDeterministicAgentColor(column.persona))
-    : (column.color || getDeterministicAgentColor(column.id));
+  const assignedAgentColor = resolveStageColor(column, assignedPersona);
 
   const enterHookDef =
     column.hooks?.['on_enter'] ?? (column.onEnterScript ? { script: column.onEnterScript } : undefined);

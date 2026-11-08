@@ -88,9 +88,9 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
     }
 
     // Relational subtask and terminal status self-healing (§ 2.2, § 2.7 & § 3):
-    let active_task_ids: HashSet<String> = tasks
+    let running_subtask_ids: HashSet<String> = tasks
         .iter()
-        .filter(|t| t.status.as_deref() != Some("done"))
+        .filter(|t| t.status.as_deref() == Some("running"))
         .map(|t| t.id.clone())
         .collect();
 
@@ -111,6 +111,12 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
                 any_modified = true;
             }
         } else {
+            if let Some(ref sub_id) = t.waiting_for_subtask_id {
+                if !running_subtask_ids.contains(sub_id) {
+                    t.waiting_for_subtask_id = None;
+                    any_modified = true;
+                }
+            }
             if t.waiting_for_subtask_id.is_some() && t.status.as_deref() == Some("idle") {
                 t.status = Some("done".to_string());
                 if t.completed_at.is_none() {
@@ -121,12 +127,6 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
             if t.status.as_deref() == Some("waiting_subtask") {
                 t.status = Some("idle".to_string());
                 any_modified = true;
-            }
-            if let Some(ref sub_id) = t.waiting_for_subtask_id {
-                if !active_task_ids.contains(sub_id) {
-                    t.waiting_for_subtask_id = None;
-                    any_modified = true;
-                }
             }
         }
     }

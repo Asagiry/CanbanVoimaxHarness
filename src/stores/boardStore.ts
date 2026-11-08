@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { createBoardMetaSlice } from './slices/boardMetaSlice';
 import { createTaskTimersSlice } from './slices/taskTimersSlice';
+import { createTaskHooksSlice } from './slices/taskHooksSlice';
+import { createTaskQuestionsSlice } from './slices/taskQuestionsSlice';
 import { createTasksCrudSlice } from './slices/tasksCrudSlice';
 import { BoardState } from './slices/types';
 
@@ -48,5 +50,7 @@ export type {
 export const useBoardStore = create<BoardState>()((...a) => ({
   ...createBoardMetaSlice(...a),
   ...createTaskTimersSlice(...a),
+  ...createTaskHooksSlice(...a),
+  ...createTaskQuestionsSlice(...a),
   ...createTasksCrudSlice(...a),
 }));

@@ -480,10 +480,9 @@ use std::path::{Path, PathBuf};
             .insert("read_file".to_string(), false);
         assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
 
-        // Fallback for stages with no record: falls back to global_enabled
-        policy.global_enabled.insert("glob".to_string(), false);
-        assert!(!is_tool_allowed(&policy, Some("no-such-stage"), "glob"));
-        assert!(!is_tool_allowed(&policy, None, "glob"));
+        // Fallback for stages with no record: falls back to fail-open default (true)
+        assert!(is_tool_allowed(&policy, Some("no-such-stage"), "glob"));
+        assert!(is_tool_allowed(&policy, None, "glob"));
     }
 
     #[test]
