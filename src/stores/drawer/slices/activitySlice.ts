@@ -270,10 +270,21 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
             ) {
               const dedupedItems = deduplicateLoadedActivityItems(items);
               const { feed, tools, thoughts, outputs } = hydrateLoadedActivityState(dedupedItems, get().registerSubagentMapping);
+              const loadedIds = new Set(feed.map((it) => it.id));
+              const liveOnly = currentFeed.filter((it) => !loadedIds.has(it.id));
+              const mergedFeed = liveOnly.length > 0 ? [...feed, ...liveOnly] : feed;
+              const mergedThoughts = [...thoughts];
+              const mergedOutputs = [...outputs];
+              for (const it of liveOnly) {
+                if (it.type === 'thought') mergedThoughts.push(it as never);
+                else if (it.type === 'output') mergedOutputs.push(it as never);
+              }
+              const liveToolIds = new Set(tools.map((t) => t.id));
+              const liveTools = (state.toolExecutions[taskId] || []).filter((t) => !liveToolIds.has(t.id));
               return {
-                activityFeed: { ...state.activityFeed, [taskId]: feed },
-                toolExecutions: { ...state.toolExecutions, [taskId]: tools },
-                streamEntries: { ...state.streamEntries, [taskId]: { thoughts, outputs } },
+                activityFeed: { ...state.activityFeed, [taskId]: mergedFeed },
+                toolExecutions: { ...state.toolExecutions, [taskId]: [...tools, ...liveTools] },
+                streamEntries: { ...state.streamEntries, [taskId]: { thoughts: mergedThoughts, outputs: mergedOutputs } },
                 tokenOverrides: newOverrides,
               };
             }
@@ -281,14 +292,21 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
           });
           return;
         }
-        set((state) => ({
-          activityFeed: { ...state.activityFeed, [taskId]: [] },
-          streamEntries: { ...state.streamEntries, [taskId]: { thoughts: [], outputs: [] } },
-          toolExecutions: { ...state.toolExecutions, [taskId]: [] },
-          tokenOverrides: { ...state.tokenOverrides, [taskId]: undefined },
-          cumulativeOutputTokens: { ...state.cumulativeOutputTokens, [taskId]: 0 },
-          cumulativeGenerationSec: { ...state.cumulativeGenerationSec, [taskId]: 0 },
-        }));
+        set((state) => {
+          const currentFeed = state.activityFeed[taskId] || [];
+          const currentTools = state.toolExecutions[taskId] || [];
+          const currentEntries = state.streamEntries[taskId];
+          const hasLive = currentFeed.length > 0 || currentTools.length > 0 || (currentEntries && (currentEntries.thoughts.length > 0 || currentEntries.outputs.length > 0));
+          if (hasLive) return {};
+          return {
+            activityFeed: { ...state.activityFeed, [taskId]: [] },
+            streamEntries: { ...state.streamEntries, [taskId]: { thoughts: [], outputs: [] } },
+            toolExecutions: { ...state.toolExecutions, [taskId]: [] },
+            tokenOverrides: { ...state.tokenOverrides, [taskId]: undefined },
+            cumulativeOutputTokens: { ...state.cumulativeOutputTokens, [taskId]: 0 },
+            cumulativeGenerationSec: { ...state.cumulativeGenerationSec, [taskId]: 0 },
+          };
+        });
       }
     } catch (e) {
       console.info('load_task_activity invoke error or web mode:', e);
@@ -332,7 +350,10 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
     if (!taskId || !item) return;
     set((state) => {
       const streamed = item.id.match(/^(.+):(thought|output)$/);
-      if (streamed && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamed[1]) return state;
+      if (streamed && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamed[1]) {
+        console.warn('[appendActivityItem] dropping item streamId mismatch', { taskId, itemId: item.id, activeStreamId: state.activeStreamIds[taskId] });
+        return state;
+      }
       return {
         activityFeed: {
           ...state.activityFeed,

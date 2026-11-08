@@ -15,6 +15,7 @@ import { mapBackendTaskToKanban, isTaskForeign } from '../board/taskNormalizer';
 import { syncTasksBackend, triggerRunAgent } from '../board/taskSync';
 import { useDrawerStore } from '../drawerStore';
 import { useProjectStore } from '../projectStore';
+import { useAgentSessionStore } from '../agentSessionStore';
 import { logEvent } from '../../lib/logger';
 
 export const createTasksCrudSlice: StateCreator<
@@ -425,7 +426,8 @@ export const createTasksCrudSlice: StateCreator<
               const preservedStageDurations = mapped.stageDurations && Object.keys(mapped.stageDurations).length > 0
                 ? mapped.stageDurations
                 : t.stageDurations;
-              const preservedStatus = (t.status === 'running' && mapped.status === 'idle') ? 'running' : mapped.status;
+              const sessionRunning = (() => { try { return useAgentSessionStore.getState().isSessionRunning(mapped.id); } catch { return false; } })();
+              const preservedStatus = ((t.status === 'running' && mapped.status === 'idle') || (sessionRunning && mapped.status === 'idle')) ? 'running' : mapped.status;
               return {
                 ...t,
                 ...mapped,
@@ -501,7 +503,8 @@ export const createTasksCrudSlice: StateCreator<
         if (prev?.todos && (task.todos === undefined || task.todos.length === 0)) {
           task.todos = prev.todos;
         }
-        if (prev?.status === 'running' && task.status === 'idle') {
+        const sessionRunning = (() => { try { return useAgentSessionStore.getState().isSessionRunning(task.id); } catch { return false; } })();
+        if ((prev?.status === 'running' || sessionRunning) && task.status === 'idle') {
           task.status = 'running';
           task.isTimerRunning = true;
         }

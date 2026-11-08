@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { CardTimerBadge, CardTimeFooter, calculateTotalElapsed } from '../CardTimerBadge';
 import { KanbanTask } from '../../../types';
+import { useAgentSessionStore } from '../../../stores/agentSessionStore';
 
 const createSampleTask = (overrides?: Partial<KanbanTask>): KanbanTask => ({
   id: 'CVH-001',
@@ -89,11 +90,20 @@ describe('CardTimerBadge component rendering', () => {
   });
 
   it('renders neutral Idle badge when task is idle without waiting subtask', () => {
+    useAgentSessionStore.getState().reset();
     const task = createSampleTask({ status: 'idle' });
     const html = renderToString(<CardTimerBadge task={task} isDone={false} />);
 
     expect(html).toContain('Idle');
     expect(html).toContain('text-[#666666]');
+  });
+
+  it('renders In Progress when status idle but session running', () => {
+    useAgentSessionStore.getState().handleSessionStatus({ sessionId: 's1', taskId: 'CVH-001', status: 'running', startedAt: Date.now() });
+    const task = createSampleTask({ status: 'idle', stageEnteredAt: Date.now() - 65_000 });
+    const html = renderToString(<CardTimerBadge task={task} isDone={false} />);
+    expect(html).toContain('In Progress');
+    useAgentSessionStore.getState().reset();
   });
 });
 

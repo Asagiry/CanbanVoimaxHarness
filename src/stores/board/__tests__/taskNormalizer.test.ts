@@ -283,7 +283,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
     expect(task?.persona).toBe('cvh-dev');
   });
 
-  it('normalizes task with waitingForSubtaskId and status idle to done while preserving subtask reference', () => {
+  it('preserves idle status with waitingForSubtaskId (no false done for parent with subagent)', () => {
     const rawDto: BackendTaskDTO = {
       id: 'CVH-031',
       title: 'Planning Task',
@@ -300,7 +300,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
     });
 
     expect(task).not.toBeNull();
-    expect(task?.status).toBe('done');
+    expect(task?.status).toBe('idle');
     expect(task?.waitingForSubtaskId).toBe('CVH-031.1');
   });
 
