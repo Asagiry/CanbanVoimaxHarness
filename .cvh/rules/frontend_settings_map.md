@@ -21,26 +21,7 @@ Cortex edits personas, rules and stage settings (also indexed in `frontend_corte
 | `src/stores/settings/providers.ts` | Provider types, `migrateFlatToProviders`, `catalogModelOptions`/`catalogModelLabel`, normalization and boundary validation. |
 | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings; provider CRUD + `fetchProviderModels`; `availableModels` cache. |
 | `src/stores/toolPolicyStore.ts` | Frontend store and IPC sync for tool policy permissions, parameter limits, and custom schemas. |
-| `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
-| `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors, and unified provider catalog model selector. |
-| `src/components/cortex/AgentMindInspector.tsx` | Real-time agent state, current prompt and tools viewer. |
-| `src/components/cortex/ColumnStageCard.tsx` | Pipeline stage configuration card in Cortex view. |
-| `src/components/cortex/CreateAgentModal.tsx` | Modal dialog for creating new agent personas. |
-| `src/components/cortex/EditAgentPersonaModal.tsx` | Modal dialog for updating agent persona metadata. |
-| `src/components/cortex/GlobalRulesSection.tsx` | Global rules list, editor triggers, and toggle controls. |
-| `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new rules or personas. |
-| `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
-| `src/components/cortex/types.ts` | Cortex explorer interfaces, forms, and tree nodes. |
-| `src/stores/cortexStore.ts` | Composed Zustand Cortex store (`useCortexStore`) and re-exports. |
-| `src/stores/cortex/cortexStoreSlice.ts` | File tree, personas CRUD, and rules state slice. |
-| `src/stores/cortex/cortexFileOps.ts` | Cortex file open/save, global rule deletion, and rule reordering actions. |
-| `src/stores/cortex/cortexTemplates.ts` | Persona/setting template actions and Cortex rule/hook/global rule creation actions. |
-| `src/stores/cortex/cortexSync.ts` | Stage-to-column synchronization and agent persona CRUD/icon/color IPC actions. |
-| `src/stores/cortex/cortexHelpers.ts` | Cortex path builders, rule/hook/setting templates, and command script path extractors. |
-| `src/stores/cortex/cortexConstants.ts` | Default Cortex stage tree and recognized script extensions. |
-| `src/stores/cortex/cortexListeners.ts` | DEPRECATED stub — see `frontend_cortex_map` for removal plan; do not add new imports. |
-| `src/stores/cortex/types.ts` | Cortex store state, persona, rule, and file slice TypeScript interfaces. |
-| `src/stores/cortex/index.ts` | Barrel re-exports for `src/stores/cortex/*`. |
+Cortex components and stores (`src/components/cortex/*`, `src/stores/cortexStore.ts`, `src/stores/cortex/*`) are indexed solely in `frontend_cortex_map` — do not duplicate them here.
 | `src/components/drawer/AgentConsoleDrawer.tsx` | Chat model selector unified on the provider catalog. |
 | `src/components/board/modals/CreateTaskModal.tsx` | Model options from the provider catalog with displayName labels. |
 
