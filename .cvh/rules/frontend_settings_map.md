@@ -48,7 +48,6 @@ Cortex edits personas, rules and stage settings (also indexed in `frontend_corte
 
 Choose checks for the changed behavior; use the active role's `sensors` rule for execution policy.
 
-- `src/components/cortex/__tests__/cortexAntigravityDark.test.ts` — Cortex and shared-component theme regression checks.
 - `src/stores/__tests__/settingsCache.test.ts` — Provider presets, explicit model selection, and total-input cache ratios.
 - `src/stores/__tests__/providers.test.ts` — Provider migration, normalization, validation, upsert/delete fallback.
 - `src/components/settings/providers/__tests__/ProviderList.test.ts` — Provider card rendering helpers.

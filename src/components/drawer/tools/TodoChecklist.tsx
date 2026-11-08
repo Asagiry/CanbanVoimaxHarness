@@ -63,7 +63,7 @@ export const TodoChecklist: React.FC<TodoChecklistProps> = ({
                   ? 'bg-amber-500/[0.08] dark:bg-amber-500/[0.12] border border-amber-500/20'
                   : isDone
                   ? 'bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]'
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-900/40'
+                  : 'hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23]'
               }`}
             >
               <span
@@ -75,16 +75,16 @@ export const TodoChecklist: React.FC<TodoChecklistProps> = ({
                 ) : isWorking ? (
                   <Loader2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 animate-spin" />
                 ) : (
-                  <Circle className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                  <Circle className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a]" />
                 )}
               </span>
               <span
                 className={`font-mono text-xs leading-relaxed select-text min-w-0 break-words ${
                   isDone
-                    ? 'line-through text-slate-400 dark:text-slate-500'
+                    ? 'line-through text-[#8f8f8f] dark:text-[#71717a]'
                     : isWorking
                     ? 'text-amber-900 dark:text-amber-200 font-medium'
-                    : 'text-slate-700 dark:text-slate-300'
+                    : 'text-[#171717] dark:text-[#d4d4d8]'
                 }`}
               >
                 {todo.content}

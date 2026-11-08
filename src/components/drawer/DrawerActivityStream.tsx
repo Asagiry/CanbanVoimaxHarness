@@ -123,7 +123,7 @@ export default function DrawerActivityStream({
     <LightboxContext.Provider value={handleOpenLightbox}>
       <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#0b0b0e] overflow-hidden transition-colors">
         {connectionWait && (
-          <div role="status" className="flex items-center gap-2 px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+          <div role="status" className="flex items-center gap-2 px-4 py-2 text-xs text-[#8f8f8f] dark:text-[#71717a]">
             <WifiOff size={14} aria-hidden="true" className="shrink-0" />
             <span>{t('drawer.waitingForConnection')}</span>
           </div>

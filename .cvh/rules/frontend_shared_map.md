@@ -44,6 +44,5 @@ Typed Tauri events enter through `tauriEventGateway.ts`, which batches frequent 
 
 Choose checks for the changed behavior; use the active role's `sensors` rule for execution policy.
 
-- `src/components/layout/__tests__/numberAlignment.test.tsx` — Vitest suite for project, board, and subagent counter baseline alignment.
 - `src/hooks/__tests__/useUiZoom.test.ts` — Vitest suite for UI zoom scaling, modal overlays, and wheel listeners.
 - `src/components/common/__tests__/HookIcon.test.tsx` — Vitest suite for hook moment resolution and visual icon rendering.

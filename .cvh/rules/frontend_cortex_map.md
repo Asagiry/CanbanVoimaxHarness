@@ -32,6 +32,5 @@ Cortex inspects and edits agent personas (`.cvh/agents/<role>/persona.md`), role
 
 Choose checks for the changed behavior; use the active role's `sensors` rule for execution policy.
 
-- `src/components/cortex/__tests__/cortexAntigravityDark.test.ts` — Cortex and shared-component theme regression checks.
 - `src/components/cortex/__tests__/AgentSettingReasoning.test.ts` — Reasoning effort and agent setting editor checks.
 - `src/stores/__tests__/cortexStore.test.ts` — Cortex file tree, hook resolution, and persona synchronization tests.
