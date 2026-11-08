@@ -7,7 +7,7 @@
 [![Rust 2021](https://img.shields.io/badge/Rust-2021%20Edition-black?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-533%20PASS%20(100%25)-success?style=flat-square)](#-key-architectural-highlights)
+[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-574%20PASS%20(100%25)-success?style=flat-square)](#-key-architectural-highlights)
 [![Clean Architecture](https://img.shields.io/badge/Clean%20Architecture-9.7%2F10-blueviolet?style=flat-square)](#6-clean-architecture-9710--type-safe-domain-layer)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
@@ -255,6 +255,28 @@ Build optimized production desktop binaries and installer packages with a single
 - **Windows (PowerShell)**: `.\build-release.ps1`
 - **Linux / macOS**: `./build-release.sh`
 Automatically runs dependency installation, frontend production build, and native Tauri desktop compilation in release profile.
+
+### Verification Commands (Ground Truth Sensors)
+```bash
+pnpm test                          # Vitest suite (297 tests / 24 suites)
+pnpm lint                          # oxlint --deny-warnings
+pnpm exec tsc --noEmit             # TypeScript strict check
+cargo test                         # Rust core tests (277 tests)
+cargo clippy                       # Rust lints (-D warnings in CI)
+```
+
+### LLM Defaults
+- **Provider**: Antigravity Proxy (`http://127.0.0.1:8045/v1`)
+- **Model**: `gemini-3.8-flash-high`
+- **Compactor model**: `inherit` (follows the active model)
+- Supported providers: Antigravity Proxy, Anthropic, DeepSeek, Ollama (see `src-tauri/src/config/providers.rs`)
+
+### Version & Stack
+- **Version**: `0.1.0` (`package.json`, `src-tauri/Cargo.toml`)
+- **Frontend**: React 19, zustand `^5`, `@hello-pangea/dnd` `^18`, lucide-react, tailwindcss `^4`, vite `^6`, typescript `^5.7`
+- **Backend**: Rust 2021, Tauri v2, tokio (full), reqwest `0.12`, rusqlite `0.32` (bundled), r2d2
+
+> Roadmap and future architectural ideas: see [IDEAS.md](IDEAS.md).
 ---
 
 ## 🏛️ Project Directory Structure (9.7/10 Clean Code Modular Architecture)
@@ -262,23 +284,42 @@ Automatically runs dependency installation, frontend production build, and nativ
 ```text
 CanbanVoimaxHarness/
 ├── README.md                  # Showcase Presentation & Architecture Guide
+├── IDEAS.md                   # Roadmap & future architectural ideas
+├── HANDOFF.md                 # Handover & architectural backlog
 ├── package.json               # Frontend dependencies (React 19, Tailwind v4, Vite, Zustand)
 ├── pnpm-lock.yaml             # Deterministic pnpm dependency lockfile
+├── pnpm-workspace.yaml        # pnpm workspace configuration
 ├── vite.config.ts             # Vite bundling configuration
+├── vitest.config.ts           # Vitest test configuration
 ├── tsconfig.json              # TypeScript strict configuration
+├── index.html                 # Vite HTML entrypoint
+├── .oxlintrc.json             # Oxlint configuration
+├── build-release.bat          # 1-click Windows release build (CMD)
+├── build-release.ps1          # 1-click Windows release build (PowerShell)
+├── build-release.sh           # 1-click Linux/macOS release build
+├── scripts/
+│   └── setup-mbx.ps1          # mbx compiler-cache setup (Windows)
+├── .github/
+│   └── workflows/             # CI & release workflows (ci.yml, release.yml)
+├── public/
+│   └── favicon.svg            # App favicon
 │
 ├── .cvh/                      # Project Harness Control Plane Configuration
-│   ├── harness.db             # High-performance SQLite database (R2D2 WAL mode)
+│   ├── harness.db             # Runtime artifact: SQLite DB (R2D2 WAL mode; gitignored)
 │   ├── boards.json            # Multi-board definitions & active board (single SSOT; pipeline.json deprecated)
+│   ├── config.json            # Harness configuration
 │   ├── rules/                 # Global architectural rules & navigation maps
 │   ├── agents/                # Modular persona definitions (<role>/persona.md, setting, rules/)
-│   ├── settings/              # Tool Policy Matrix (tool-policy.json) & sequence allocators
+│   ├── settings/              # Tool Policy Matrix (tool-policy.json), llm.json, sequence.json
 │   ├── hooks/                 # Transition scripts (.bat, .sh)
-│   └── spill/                 # Spilled tool output logs (>500 lines / >64KB)
+│   ├── spill/                 # Runtime artifact: spilled tool output logs (>500 lines / >64KB; gitignored)
+│   └── tools/                 # Runtime artifact: custom CLI tool descriptors (gitignored if present)
 │
 ├── .agents/                   # Agent Skills Catalog & Task History
 │   ├── skills/                # Modular skills catalog
 │   ├── tasks-history.json     # Machine-readable task ledger
+│   ├── task-history/          # Per-task history records
+│   ├── HARNESS2_DEEP_DIVE.md  # Harness deep-dive notes
 │   └── knowledge-graph.json   # Architectural MCP knowledge graph
 │
 ├── docs/                      # Authoritative Technical Manuals
@@ -286,10 +327,20 @@ CanbanVoimaxHarness/
 │   ├── agents.md              # ReAct loop, Personas, and Zero-Turn Priming
 │   ├── board.md               # Board Control Plane, Invariants & Multi-Boards
 │   ├── hooks.md               # Stage transition lifecycle scripts & hooks
+│   ├── tools.md               # Tools catalog & policy matrix
+│   ├── OPTIMAL_PIPELINE_BEHAVIORAL_PATTERNS.md # Behavioral patterns reference
+│   ├── StyleReference/        # UI style references
+│   ├── archive/               # Archived documents
 │   └── references/            # Architectural References & Blueprints
 │       └── ecc-patterns.md    # Everything-Claw-Code Patterns & Progressive Disclosure
 │
 ├── src-tauri/                 # Rust Desktop Core (Tauri v2 Clean Modular Architecture)
+│   ├── build.rs               # Tauri build script
+│   ├── deny.toml              # cargo-deny configuration
+│   ├── nsis-hooks.nsh         # NSIS installer hooks (Windows)
+│   ├── capabilities/          # Tauri capabilities (default.json)
+│   ├── icons/                 # App icons (png, ico, icns)
+│   ├── tests/                 # Rust integration tests (if present)
 │   ├── src/
 │   │   ├── main.rs            # Desktop entrypoint & crash handler
 │   │   ├── lib.rs             # Tauri plugin & IPC handler registration
@@ -325,6 +376,7 @@ CanbanVoimaxHarness/
 │   │   │   ├── tool_schemas.rs  # LLM tool definitions & JSON schemas
 │   │   │   └── tools/           # Modular tool execution implementations
 │   │   ├── commands/          # Tauri IPC Command Handlers
+│   │   │   ├── mod.rs         # IPC command module router
 │   │   │   ├── state.rs       # Central application state container (AppState)
 │   │   │   ├── tasks.rs       # Task command routing
 │   │   │   ├── tasks/         # Modular task pipelines (transitions, lifecycle, runner, storage, healing)
@@ -343,27 +395,31 @@ CanbanVoimaxHarness/
 └── src/                       # React 19 Tactical Frontend (Modular Architecture)
     ├── components/
     │   ├── board/             # Kanban board, BoardTabsHeader & column interactions
+    │   │   └── modals/        # CreateColumnModal, CreateTaskModal, ImageLightboxModal
     │   ├── card/              # Modular KanbanCard (~256 lines), badges & comparators
-    │   ├── drawer/            # AgentConsoleDrawer, diff/ (ImageDiffViewer), stream/
+    │   ├── drawer/            # AgentConsoleDrawer
+    │   │   ├── tools/         # Tool execution cards (Command, FileOps, Search, Web, Todo, Subagent)
+    │   │   ├── stream/        # Stream cards (Thought, Steer, SubagentActivity, Markdown)
+    │   │   └── diff/          # Diff viewer (ImageDiffViewer, DiffFileList)
     │   ├── cortex/            # Cortex Explorer, Persona & Rule visual editors
     │   ├── layout/            # Topbar navigation & WindowControls
     │   ├── common/            # AgentIcon, Logo, PersonaSelect, RuntimeRuleIcon
     │   ├── splash/            # SplashScreen bootstrap loader
     │   └── settings/          # Pipeline, tool policy & LLM config modals
-    ├── hooks/                 # UI hooks (useUiZoom)
+    ├── hooks/                 # UI hooks (useUiZoom, useContextMenuPosition)
     ├── stores/                # Zustand reactive stores (boardStore, drawerStore, cortexStore, settingsStore, toolPolicyStore, slices/)
     │   ├── board/             # Board store slices, normalizers & helpers
     │   ├── drawer/            # Drawer store slices (stream, activity, subagents)
-    │   └── cortex/            # Cortex store slices (cortexStoreSlice, helpers, listeners)
+    │   ├── cortex/            # Cortex store slices (cortexStoreSlice, helpers, listeners)
+    │   └── slices/            # Shared store slices (tasksCrud, taskTimers, taskHooks, taskQuestions)
     ├── services/              # Pure decoupled services
     │   ├── tauriEventGateway.ts # Strongly typed IPC event gateway (zero listen<any>)
-    │   └── notificationService.ts # Desktop notifications dispatcher
+    │   ├── notificationService.ts # Desktop notifications dispatcher
+    │   └── notificationFormatter.ts # Notification message formatting
     ├── types/
-    │   └── domain.ts          # Nominal branded types (TaskId, StageId, BoardId)
-    ├── lib/
-    │   └── markdown/          # Extracted markdown AST parser & token helpers
-    ├── i18n/                  # Modular localization (ru.ts, en.ts, types.ts)
-    └── App.tsx                # Root layout, drag-and-drop context & overlays
+    │   ├── domain.ts          # Nominal branded types (TaskId, StageId, BoardId)
+    │   └── index.ts           # Type barrel exports
+    ├── lib/                   # Shared utilities (agentPalette, columnIcons, imageCompression, logger, slug)
     │   └── markdown/          # Extracted markdown AST parser & token helpers
     ├── i18n/                  # Modular localization (ru.ts, en.ts, types.ts)
     └── App.tsx                # Root layout, drag-and-drop context & overlays

@@ -60,11 +60,8 @@ mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 - `mbx check`, `mbx test`, and `mbx clippy` use `.toolchain/mbx-cache` and `.mbx.toml`.
 
 ### 2.3 Full-Stack Turbo Sensors (<10s)
-When both frontend and backend are touched, or for full-stack pre-handover validation:
-```bash
-git add -A && git commit -m "feat(<task-id>): <summary>" && git merge-tree --write-tree main HEAD && pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml
-```
-- **Acceptance Criteria**: All sensors exit `0` sequentially with zero merge conflicts.
+When both frontend and backend are touched, run the union of §2.1 and §2.2 sensors (frontend: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`; backend: `mbx check`, `mbx clippy -- -D warnings`, plus `mbx test` for domain/db refactors). Commit and mergeability are covered separately by §2.5 — do not bundle them into the sensor command.
+- **Acceptance Criteria**: All sensors exit `0` sequentially.
 
 ### 2.4 Non-Code / Prompt / Rule Modifications
 - If only documentation, rule markdown files, or configuration files were changed without code edits, no heavy compilation commands are required. Verify file formatting and valid syntax.

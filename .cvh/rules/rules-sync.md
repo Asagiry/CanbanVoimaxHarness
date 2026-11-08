@@ -32,3 +32,7 @@ Do **NOT** update rules for:
 - Never append PR summaries or task-specific change histories to `.cvh/agents/*/rules/*.md`.
 - Keep rules concise, prescriptive, and timeless.
 - Code describes itself through strict types and comprehensive tests, not transient prose in rule files.
+
+## 4. Boundary with Retro Rule Evolution
+- `retro/rules/rule-evolution.md` is the sole exception to the ban above: it may record task IDs, commit hashes, and rejection quotes **only** as `Evidence` lines inside CLE entries (Cue — Lesson — Evidence, max 3–4 lines per entry), and only when the lesson is a durable, timeless invariant.
+- This exception does not authorize appending task histories, PR summaries, or bug diaries to any other rule file, nor to `rule-evolution.md` outside CLE format. If an entry cannot be phrased as a timeless invariant with a concrete trigger, it does not belong in a rule file at all.

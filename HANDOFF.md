@@ -77,7 +77,7 @@
   - Исправлены права инструментов в `tool-policy.json` (`retro.edit_file = true`, отключены subagents для `review`/`reviewer`) и `pipeline.json` (`execute_command` для retro, тулы для `nastroyka.dev`).
   - Синхронизированы вызовы `load_rule` в `persona.md` (`planner`, `developer`, `retro`, `reviewer`).
   - Очищена документация: удалены мусорные директории `docs/ecc/` и `docs/skills/`, удален дублирующий `docs/IDEAS.md`, идеи объединены в корневой `IDEAS.md`, перемещен `GOAL-CLEAN-CODE-REFACTORING.md` в `docs/archive/`.
-  - Удалены мертвые хуки `on_enter_ready.bat/.sh`, в `gatekeeper_sensor.bat` добавлена проверка Vitest и Oxlint.
+  - Хуки `on_enter_ready.bat/.sh` сохранены (файлы существуют в `.cvh/hooks/`), в `gatekeeper_sensor.bat` добавлена проверка Vitest и Oxlint.
   - Актуализирован `README.md`: бейджи NASA Test Shield (574 теста), single authoritative layer, каталог инструментов, порог спиллинга субагентов 5000 строк / 256 КБ, раздел сборки релиза в 1 клик.
 - **CVH-041**: Устранение дублирования конфигурации досок, единый SSOT в `.cvh/boards.json`, авто-миграции.
 - **CVH-042**: Исправление порядка миграций SQLite, атомарное выделение монотонных номеров задач с учетом веток git.

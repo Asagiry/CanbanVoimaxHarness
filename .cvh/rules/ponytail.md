@@ -13,8 +13,8 @@ Ponytail engineering discipline for CanbanVoimaxHarness agents: achieving requir
 - **Modularity is NOT Over-Engineering**:
   - Ponytail minimalism does **NOT** mean stuffing 500 lines into `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, or monolithic `db/mod.rs` / `config/mod.rs`.
   - Creating a focused new file is mandatory when logic crosses a Single Responsibility Principle (SRP) boundary or exceeds size ceilings:
-    - **Backend Module Ceiling**: Maximum **350–500 lines** per Rust module (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`).
-    - **Frontend Component Ceiling**: Maximum **250–350 lines** per React component (`src/components/card/`, `drawer/stream/`, `stores/*/slices/`).
+    - **Backend Module Ceiling (target for new/modified files)**: **≤500 lines** per Rust module (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`). Pre-existing legacy files exceeding this (e.g. `agent.rs`, `agent/compactor.rs`, `tasks/transitions.rs`) are grandfathered under `review-checklist.md` §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
+    - **Frontend Component Ceiling (target for new/modified files)**: **≤350 lines** per React component (`src/components/card/`, `drawer/stream/`, `stores/*/slices/`). Pre-existing legacy files exceeding this (e.g. `src/services/tauriEventGateway.ts`) are grandfathered under the same immunity.
   - Modular decomposition into dedicated widgets (e.g. `CardTimerBadge.tsx`, `CardHookNode.tsx`, `domain::ids`) prevents unmaintainable monolithic drift while keeping individual files minimal and surgical.
 
 ---
@@ -52,7 +52,7 @@ Language models suffer from pathological over-defensiveness: stuffing defensive 
    - For boundary or concurrency issues that are mathematically or structurally improbable, explain the likelihood and only add checks after explicit user confirmation.
    - Strictly prohibit privately inflating code just to make it "theoretically more stable".
 2. **Law 2: Single Validation at Boundary (Entry-Point Guard)**:
-   - External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary** using domain factories (`toTaskId`, `toStageId`, `toTaskState`).
+   - External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary** using the domain factories of the respective stack: frontend `toTaskId` / `toStageId` / `toBoardId` / `toTaskState` from `src/types/domain.ts`; backend `TaskId::parse`/`TaskId::new`, `StageId::parse`/`StageId::new`, `BoardId::parse`/`BoardId::new` from `src-tauri/src/domain/ids.rs` (and `domain::state::TaskState` for lifecycle state).
    - Internally, rely 100% on the strict type system (TypeScript / Rust). Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
 3. **Law 3: Reject Premature Abstraction**:
    - For logic used only in a single location, inline it directly by the call site.

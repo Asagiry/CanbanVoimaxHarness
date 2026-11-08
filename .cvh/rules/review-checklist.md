@@ -52,8 +52,8 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - **Windows Command Hygiene**: Owned by `sensors.md` §1.4 (developer rule) — reviewer applies it by reference when running checks; do not restate the banned pipeline list here.
 
 ### Gate 3: Backend Architectural Invariants & Uncle Bob Clean Architecture
-- **Single Responsibility Principle (SRP)**: Code strictly partitioned into `db/` (repositories & pool), `config/` (I/O, models, scaffold, tool policy), `domain/` (Value Objects & state machines), and `agent/` (ReAct engine, compactor, tools).
-- **Backend File Size Ceiling (<= 500 lines)**: New backend files or modified modules must not exceed 500 lines. Monolithic modules must be decomposed into submodules.
+- **Single Responsibility Principle (SRP)**: Code strictly partitioned into `db/` (repositories & pool), `config/` (I/O, models, scaffold, tool policy), `domain/` (Value Objects & state machines), and `agent/` (ReAct engine, compactor, tools). The remaining top-level modules are first-class partitions, not exceptions: `commands/` (Tauri IPC handlers), `git/` (git operations), `llm/` (provider client/cache/models), plus root modules `hooks.rs`, `udf.rs`, `logger.rs`, `error.rs`, `lib.rs`, `main.rs`.
+- **Backend File Size Ceiling (<= 500 lines, target for new/modified files)**: New backend files or modified modules must not exceed 500 lines. Monolithic modules must be decomposed into submodules. Pre-existing legacy files exceeding this (e.g. `agent.rs`, `agent/compactor.rs`, `tasks/transitions.rs`) are grandfathered under §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
 - **Elimination of Primitive Obsession**: Mandatory use of Domain Value Objects (`domain::ids::TaskId`, `StageId`, `BoardId`) instead of naked strings.
 - **Make Illegal States Unrepresentable**: Mandatory use of Algebraic Data Types (`domain::state::TaskState`) for lifecycle tracking. No conflicting booleans.
 - Single-Instance plugin ordering first in `src-tauri/src/lib.rs`.
@@ -65,14 +65,14 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ### Gate 4: Frontend UI Invariants, Size & Testing Gates
 - **Strict Ban on Direct `listen<any>`**: Direct `listen(...)` or unvalidated `any` event listening is strictly banned. ALL Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`. Sole exception: `src/components/layout/WindowControls.tsx:50` `win.onResized` (Tauri window API, not an event-gateway subscription).
-- **Component File Size Ceiling (<= 350 lines)**: React components must not exceed 350 lines. Reject monolithic views; mandate extraction into subcomponents or custom hooks.
+- **Component File Size Ceiling (<= 350 lines, target for new/modified files)**: React components must not exceed 350 lines. Reject monolithic views; mandate extraction into subcomponents or custom hooks. Pre-existing legacy files exceeding this (e.g. `src/services/tauriEventGateway.ts`) are grandfathered under §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
 - **Vitest Unit Test Coverage**: Pure utilities in `src/lib/`, `src/types/`, and store slices in `src/stores/` must have matching Vitest unit tests in `__tests__/`.
 - Zustand store selections returning objects or arrays wrapped in `useShallow`.
 - Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
 - Design tokens per `antislop.md` §1.1 (single owner of palette and legacy-token ban).
 - Overlays mounted outside `useUiZoom` canvas root.
 - Zero silent failures: reject empty `catch {}` blocks or dangerous fallbacks (`.catch(() => [])`, `.catch(() => null)`).
-- Redundant copy elimination (§ 2.39) and Tri-partite experience synergy (§ 2.40).
+- Redundant copy elimination and Tri-partite experience synergy (see `frontend-invariants.md` §9–§10).
 
 ### Gate 5: Code Hygiene, Simplifier & Ponytail Minimalism
 - Zero dead code, zero unused imports, zero console.log spam.
