@@ -9,13 +9,13 @@ Tool policy is enforced in three layers (all alias-aware via `normalize_tool_nam
 | --- | --- |
 | `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `providers`, `tool_policy`, `discovery`, `scaffold`, `io`). |
 | `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules; `LlmSettings` carries `providers` (`#[serde(default)]`, `ensure_providers()` on load/save); `ToolPermissions::is_tool_allowed` (AND `global && stage`) and `agent_allows_tool` (agent allowlist intersection). |
-| `src-tauri/src/config/providers.rs` | LLM provider catalog: `Provider` (`id`, `name`, `is_custom`, `api_key`, `base_url`, `protocol: ProviderProtocol`, `models: Vec<ProviderModel{id, display_name?}>`); `Provider::validate()` boundary guard; `normalize_providers` dedups providers/models; `legacy_provider` migrates flat `LlmSettings` into a single provider. ≤500 lines, zero production unwrap. |
+| `src-tauri/src/config/providers.rs` | LLM provider catalog under `config/` (not `llm/`): `Provider` (`id`, `name`, `is_custom`, `api_key`, `base_url`, `protocol: ProviderProtocol`, `models: Vec<ProviderModel{id, display_name?}>`); `Provider::validate()` boundary guard; `normalize_providers` dedups providers/models; `legacy_provider` migrates flat `LlmSettings` into a single provider. ≤500 lines, zero production unwrap. |
 | `src-tauri/src/config/tool_policy.rs` | `ToolPolicyConfig` (`stage_overrides`, `tool_settings`, `tool_descriptions`, `tool_custom_schemas` — no `global_enabled`) and free `is_tool_allowed(policy, stage_id, tool)`: stage override lookup, default `true`; subagent master-switch hierarchy. |
 | `src-tauri/src/config/discovery.rs` | Multi-tier root discovery, `%LOCALAPPDATA%`. |
 | `src-tauri/src/config/scaffold.rs` | Automatic scaffold, auto-gitignore policies. |
 | `src-tauri/src/config/io.rs` | `atomic_write_file`, JSON load/save. |
 | `src-tauri/src/commands/cortex.rs` | Persona/rules file operations, YAML frontmatter. |
-| `src-tauri/src/commands/llm.rs` | Provider settings, model catalogs and connection checks; provider CRUD (`list_providers`, `upsert_provider_command`, `delete_provider`) persisted via `config/io.rs` (`atomic_write_file`); `fetch_available_models` signature unchanged. |
+| `src-tauri/src/commands/llm.rs` | Provider settings, model catalogs and connection checks; provider CRUD (`list_providers`, `upsert_provider_command`, `delete_provider`) persisted via `save_llm_settings_to_disk`; `fetch_available_models` signature unchanged. |
 | `src-tauri/src/commands/tools.rs` | Tool policy inspection, stage overrides & matrix updates. |
 | `src-tauri/src/llm/mod.rs` | LLM client and models module re-exports. |
 | `src-tauri/src/llm/client.rs` | Provider requests, streaming parsers and normalized usage. |

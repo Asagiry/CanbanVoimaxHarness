@@ -7,6 +7,8 @@ Typed Tauri events enter through `tauriEventGateway.ts`, which batches frequent 
 
 | File | Responsibility |
 | --- | --- |
+| `src/main.tsx` | React entrypoint mounting the application. |
+| `src/index.css` | Global styles and Tailwind entry. |
 | `src/App.tsx` | Application composition, providers, bootstrap and overlays. |
 | `src/components/splash/SplashScreen.tsx` | Boot screen displayed while backend state synchronizes. |
 | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
@@ -38,7 +40,9 @@ Typed Tauri events enter through `tauriEventGateway.ts`, which batches frequent 
 | `src/lib/markdown/parseMarkdownTokens.ts` | AST token parser for codeblocks, tables, inline styling. |
 | `src/lib/markdown/types.ts` | AST interfaces for markdown tokens. |
 | `src/lib/markdown/index.ts` | Re-exports for markdown parser. |
-| `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `TaskState`. |
+| `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `ProviderId`, `TaskState`, `StageLike`, `CANONICAL_TERMINAL_STAGES`, `CANONICAL_INTAKE_STAGES`, `isTerminalStage`, `isIntakeStage`. |
+| `src/types/index.ts` | Main types barrel (re-exports `domain.ts`); `ReasoningEffort` (`off`/`low`/`medium`/`high`), `REASONING_EFFORTS`, `normalizeReasoningEffort`. |
+| `src/types/kanban.ts` | Kanban task/board domain types. |
 
 ## Related checks
 

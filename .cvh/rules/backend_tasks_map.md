@@ -9,10 +9,11 @@ Commands coordinate task state, stage hooks and agent sessions. `runner.rs` star
 | --- | --- |
 | `src-tauri/src/commands/state.rs` | `AppState`, connection pool, workspace root, active session registry. |
 | `src-tauri/src/commands/tasks.rs` | IPC invoke gateway routing for tasks and agent lifecycle. |
-| `src-tauri/src/commands/tasks/transitions.rs` | `TaskTransitionPipeline`, hooks, lifecycle execution. |
-| `src-tauri/src/commands/tasks/lifecycle.rs` | Backend-authoritative card lifecycle, auto-unlock. |
+| `src-tauri/src/commands/tasks/transitions.rs` | Stage movement and lifecycle execution using `TaskTransitionPipeline`. |
+| `src-tauri/src/commands/tasks/transition_hooks.rs` | `TaskTransitionPipeline` definition (line 274), hooks and transition execution. |
+| `src-tauri/src/commands/tasks/lifecycle.rs` | Backend-authoritative card lifecycle, auto-unlock; `list_tasks` (line 25). |
 | `src-tauri/src/commands/tasks/runner.rs` | Model/persona resolution, run, abort, steer and manual compaction. |
-| `src-tauri/src/commands/tasks/storage.rs` | `list_tasks`, `sync_tasks_to_disk`, foreign task filtration. |
+| `src-tauri/src/commands/tasks/storage.rs` | Foreign task filtration. |
 | `src-tauri/src/commands/tasks/healing.rs` | Orphan board/column resolution on load. |
 | `src-tauri/src/commands/boards.rs` | Multi-board CRUD, column settings, pipeline sync. |
 | `src-tauri/src/commands/dialogs.rs` | Dialogue history, steer persistence and stopped-dialog item deletion. |

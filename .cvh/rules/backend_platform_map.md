@@ -9,7 +9,7 @@ Register commands and shared state in the Tauri entrypoint. Keep native notifica
 | --- | --- |
 | `src-tauri/src/commands/mod.rs` | Top-level IPC command module aggregation. |
 | `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration. |
-| `src-tauri/src/udf.rs` | Custom regex and search functions for SQLite connection. |
+| `src-tauri/src/udf.rs` | WebView2 User Data Folder resolution, writability/lock checks and stale-lock cleanup. |
 | `src-tauri/src/logger.rs` | Rotating file & terminal logging configuration. |
 | `src-tauri/src/error.rs` | Domain errors and Tauri IPC error formatting. |
 | `src-tauri/src/lib.rs` | Tauri invoke handler wiring and application setup. |

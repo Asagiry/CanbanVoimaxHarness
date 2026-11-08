@@ -11,9 +11,9 @@ Agent orchestration assembles prompts and dispatches tools. The ReAct engine coo
 | `src-tauri/src/agent/session_registry.rs` | Active & background subagents, completion channels, lifecycle. |
 | `src-tauri/src/agent/react_engine.rs` | Shared ReAct streaming, tool dispatch and telemetry drivers. |
 | `src-tauri/src/agent/compactor.rs` | Token estimates, compaction reports and history reduction. |
-| `src-tauri/src/agent/sanitizer.rs` | Tag stripping, unclosed JSON repairs. |
+| `src-tauri/src/agent/sanitizer.rs` | `sanitize_unclosed_tool_calls` only. |
 | `src-tauri/src/agent/telemetry.rs` | Frozen TPS on generation stop, TTFT split. |
-| `src-tauri/src/agent/text_match.rs` | CRLF/LF adaptation, whitespace relaxation. |
+| `src-tauri/src/agent/text_match.rs` | `tokenize_line` / `line_similarity` for line matching. |
 | `src-tauri/src/agent/tool_schemas.rs` | Tool parameter schemas and rule catalog descriptions. |
 | `src-tauri/src/agent/tools/mod.rs` | Tool executors re-exports and dispatch contracts. |
 | `src-tauri/src/agent/tools/file_ops.rs` | `read_file`, `write_file`, `edit_file`, `glob`, `grep`. |
