@@ -260,7 +260,7 @@ export function normalizeKanbanTask(
     model: raw.model || undefined,
     providerId: raw.providerId ?? raw.provider_id ?? undefined,
     reasoningEffort: raw.reasoningEffort ?? raw.reasoning_effort ?? undefined,
-    parentId: raw.parentId ?? raw.parent_id ?? undefined,
+    parentId: rawParentId,
     subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
     waitingForSubtaskId: effectiveWaitingForSubtaskId,
     todos: Array.isArray(raw.todos)

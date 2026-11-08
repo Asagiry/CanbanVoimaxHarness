@@ -325,6 +325,25 @@ describe('taskNormalizer dynamic persona resolution', () => {
     expect(task?.waitingForSubtaskId).toBe('CVH-032.1');
   });
 
+  it('derives parentId from id split when DTO omits parent_id', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-066.1',
+      title: 'Child without parent_id',
+      stageId: 'dev',
+      boardId: 'canban-pipeline',
+      status: 'running',
+    };
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [multiStageBoard],
+      activeBoardId: 'canban-pipeline',
+      columns: multiStageColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.parentId).toBe('CVH-066');
+  });
+
   it('clears waitingForSubtaskId when task is in terminal ready column', () => {
     const rawDto: BackendTaskDTO = {
       id: 'CVH-033',

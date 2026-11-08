@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import KanbanCard from '../KanbanCard';
+import { isFamilyHighlighted } from '../cardFamily';
 import { KanbanTask } from '../../../types';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useDrawerStore } from '../../../stores/drawerStore';
@@ -122,5 +123,54 @@ describe('KanbanCard agentQuestion badge (exact-match invariant)', () => {
     const reviewer = createSampleTask({ id: 'CVH-076.3', parentId: 'CVH-076', stageId: 'review', status: 'running' });
     const html = renderToString(<KanbanCard task={reviewer} index={0} />);
     expect(html).toContain('CVH-076.3');
+  });
+});
+
+describe('KanbanCard family highlight (hoveredTaskId)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useBoardStore.setState({
+      boards: [DEFAULT_BOARD],
+      activeBoardId: 'development',
+      stages: CANONICAL_BOARD_COLUMNS,
+      columns: CANONICAL_BOARD_COLUMNS,
+      tasks: [],
+      selectedTaskId: null,
+      hoveredTaskId: null,
+      searchQuery: '',
+      hookStates: {},
+      activeQuestions: {},
+    });
+    useDrawerStore.setState({ activeTaskId: null, isOpen: false });
+  });
+
+  const family = [
+    createSampleTask({ id: 'CVH-066' }),
+    createSampleTask({ id: 'CVH-066.1', parentId: 'CVH-066' }),
+    createSampleTask({ id: 'CVH-066.2', parentId: 'CVH-066' }),
+  ];
+  const unrelated = createSampleTask({ id: 'CVH-063' });
+
+  it.each(['CVH-066', 'CVH-066.1', 'CVH-066.2'])(
+    'hovering %s highlights all family members',
+    (hoveredTaskId) => {
+      useBoardStore.setState({ hoveredTaskId });
+      const hovered = useBoardStore.getState().hoveredTaskId;
+      for (const task of family) {
+        expect(isFamilyHighlighted(task, hovered)).toBe(true);
+      }
+    }
+  );
+
+  it('unrelated task is not highlighted', () => {
+    useBoardStore.setState({ hoveredTaskId: 'CVH-066.1' });
+    expect(isFamilyHighlighted(unrelated, useBoardStore.getState().hoveredTaskId)).toBe(false);
+  });
+
+  it('no highlight when hoveredTaskId is null', () => {
+    useBoardStore.setState({ hoveredTaskId: null });
+    for (const task of family) {
+      expect(isFamilyHighlighted(task, useBoardStore.getState().hoveredTaskId)).toBe(false);
+    }
   });
 });

@@ -13,6 +13,7 @@ import { CardSubtaskBadge } from './CardSubtaskBadge';
 import { CardHookNode } from './CardHookNode';
 import { useCardHooks } from './useCardHooks';
 import { areCardPropsEqual, KanbanCardProps } from './cardComparators';
+import { isFamilyHighlighted } from './cardFamily';
 import { resolveStageColor } from '../../lib/agentPalette';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
@@ -29,12 +30,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const { t } = useTranslation();
 
   const hoveredTaskId = useBoardStore((s) => s.hoveredTaskId);
-  const isHighlighted = Boolean(
-    hoveredTaskId &&
-      (hoveredTaskId === task.id ||
-        (task.parentId && hoveredTaskId === task.parentId) ||
-        (task.waitingForSubtaskId && hoveredTaskId === task.waitingForSubtaskId))
-  );
+  const isHighlighted = isFamilyHighlighted(task, hoveredTaskId);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
