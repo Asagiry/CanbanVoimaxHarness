@@ -25,7 +25,7 @@ export default function ActivityItemActions({ taskId, itemId, disabled, children
   };
   return (
     <div className="group/activity min-w-0">
-      <div className="flex items-start gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         <div className="flex-1 min-w-0">{children}</div>
         <button
           type="button"
@@ -33,9 +33,9 @@ export default function ActivityItemActions({ taskId, itemId, disabled, children
           disabled={disabled || deleting}
           title={disabled ? t('drawer.stopBeforeDelete') : t('drawer.deleteMessage')}
           aria-label={t('drawer.deleteMessage')}
-          className="mt-1 p-1.5 shrink-0 rounded text-[#71717a] hover:text-red-500 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] disabled:cursor-not-allowed disabled:opacity-30 opacity-50 group-hover/activity:opacity-100 focus-visible:opacity-100 transition"
+          className="self-center p-1.5 shrink-0 rounded text-[#71717a] hover:text-red-500 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] disabled:cursor-not-allowed disabled:opacity-30 opacity-50 group-hover/activity:opacity-100 focus-visible:opacity-100 transition"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-3.5 w-3.5 leading-none" />
         </button>
       </div>
       {error && <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400 break-words">{error}</p>}
