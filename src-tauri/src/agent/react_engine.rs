@@ -710,9 +710,6 @@ impl<D: AgentSessionDriver> ReActEngine<D> {
     }
 }
 
-/// Hard ceiling on subagent ReAct turns before forcing final report synthesis.
-pub const MAX_SUBAGENT_TURNS: usize = 35;
-
 /// Determines whether an LLM stream error is transient (rate limit 429, 5xx overload, or timeout)
 /// and therefore eligible for automatic backoff retry or session pause.
 pub fn is_transient_llm_error(err: &str) -> bool {

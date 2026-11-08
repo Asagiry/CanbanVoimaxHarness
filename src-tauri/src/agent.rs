@@ -1615,13 +1615,6 @@ Task Title: {}
 
     loop {
         sub_turn += 1;
-        if sub_turn > MAX_SUBAGENT_TURNS {
-            eprintln!(
-                "CVH [agent]: Subagent [{}] reached MAX_SUBAGENT_TURNS ({}), breaking to force final synthesis.",
-                subagent_id, MAX_SUBAGENT_TURNS
-            );
-            break;
-        }
         if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
             let mut info = session.retry_info.lock().await;
             info.steps = sub_turn;
@@ -2325,6 +2318,23 @@ Task Title: {}
             final_sub_response = collected.join("
 
 ");
+            let out_item = ActivityItem {
+                id: format!("sub-out-{}", subagent_suffix),
+                item_type: "output".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(final_sub_response.clone()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&out_item));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": &parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &out_item,
+                }));
+            }
         }
     }
 
