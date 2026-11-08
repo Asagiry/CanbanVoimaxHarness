@@ -81,6 +81,7 @@ if not "%TARGET_WT%"=="" if exist "%TARGET_WT%" (
     echo [CVH Merge Hook] Tearing down worktree: %TARGET_WT%
     git worktree remove "%TARGET_WT%" --force >nul 2>&1
     git worktree prune >nul 2>&1
+    if exist "%TARGET_WT%" rmdir /s /q "%TARGET_WT%" >nul 2>&1
 )
 
 if not "%CVH_BRANCH%"=="" (

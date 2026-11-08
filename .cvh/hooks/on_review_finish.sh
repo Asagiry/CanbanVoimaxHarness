@@ -65,6 +65,9 @@ if [ -n "$TARGET_WT" ] && [ -d "$TARGET_WT" ]; then
     echo "[CVH Merge Hook] Tearing down worktree: $TARGET_WT"
     git worktree remove "$TARGET_WT" --force >/dev/null 2>&1 || true
     git worktree prune >/dev/null 2>&1 || true
+    if [ -d "$TARGET_WT" ]; then
+        rm -rf "$TARGET_WT" >/dev/null 2>&1 || true
+    fi
 fi
 
 if [ -n "$BRANCH" ]; then
