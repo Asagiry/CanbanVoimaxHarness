@@ -2,9 +2,9 @@ use crate::commands::state::AppState;
 use crate::commands::tasks::load_tasks_from_disk;
 pub use crate::config::ensure_project_gitignore;
 use crate::config::{
-    init_project_harness as cfg_init_project_harness, load_project_config, load_project_registry,
-    persist_active_project, register_or_update_project, scaffold_cvh_project, ProjectConfig,
-    ProjectEntry,
+    clear_active_project, init_project_harness as cfg_init_project_harness, load_project_config,
+    load_project_registry, persist_active_project, register_or_update_project,
+    remove_project_from_registry, scaffold_cvh_project, ProjectConfig, ProjectEntry,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -290,6 +290,31 @@ pub async fn open_project(
     let new_path = PathBuf::from(path.trim());
     let _ = ensure_project_gitignore(&new_path);
     set_active_project(path, state, app_handle).await
+}
+
+#[tauri::command]
+pub async fn remove_project(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Cannot remove project with empty path".to_string());
+    }
+    let target = PathBuf::from(trimmed);
+    if crate::config::is_binary_or_target_dir(&target) {
+        return Err(format!("Cannot remove binary or build directory as project: {:?}", target));
+    }
+    if crate::config::is_app_own_directory(&target) {
+        return Err(format!("Cannot remove CanbanVoimaxHarness application directory as project: {:?}", target));
+    }
+    let current = state.get_root();
+    let is_current = !current.as_os_str().is_empty()
+        && current.to_string_lossy().to_lowercase() == target.to_string_lossy().to_lowercase();
+    remove_project_from_registry(None, &target)
+        .await
+        .map_err(|e| format!("Failed to remove project from registry: {}", e))?;
+    if is_current {
+        clear_active_project();
+    }
+    Ok(())
 }
 
 /// Project initialization command (ensures .gitignore synchronization and scaffolds CVH structure)

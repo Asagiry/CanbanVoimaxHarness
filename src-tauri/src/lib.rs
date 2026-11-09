@@ -119,6 +119,7 @@ pub fn run() {
             switch_project,
             set_project_root,
             list_projects,
+            remove_project,
             open_project,
             init_project_harness,
         ])
