@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Globe, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, FolderOpen, Globe, Plus, Trash2, RotateCcw } from 'lucide-react';
 import type { CortexAgentFile } from '../../types';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
@@ -42,11 +42,27 @@ export function GlobalRulesSection({
   const [ruleName, setRuleName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createFolder, setCreateFolder] = useState<string | undefined>(undefined);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
-  const handleStartCreate = (e: React.MouseEvent) => {
+  const handleStartCreate = (e: React.MouseEvent, folder?: string) => {
     e.stopPropagation();
     if (!isOpen) onToggle();
-    setIsCreating((prev) => !prev);
+    setIsCreatingFolder(false);
+    setCreateFolder(folder);
+    setIsCreating((prev) => (folder ? true : !prev));
+    setRuleName('');
+    setCreateError(null);
+  };
+
+  const handleStartCreateFolder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOpen) onToggle();
+    setIsCreating(false);
+    setIsCreatingFolder((prev) => !prev);
+    setFolderName('');
     setRuleName('');
     setCreateError(null);
   };
@@ -63,13 +79,27 @@ export function GlobalRulesSection({
       setCreateError(t('cortex.latinDigitsOnly'));
       return;
     }
+    const folder = isCreatingFolder ? folderName.trim() : createFolder;
+    if (isCreatingFolder) {
+      if (!folder) {
+        setCreateError(t('cortex.enterFileName'));
+        return;
+      }
+      if (!/^[A-Za-z0-9-_]+$/.test(folder)) {
+        setCreateError(t('cortex.latinDigitsOnly'));
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setCreateError(null);
     try {
-      await createGlobalRule(trimmed);
+      await createGlobalRule(trimmed, folder);
       setIsCreating(false);
+      setIsCreatingFolder(false);
       setRuleName('');
+      setFolderName('');
+      setCreateFolder(undefined);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setCreateError(msg);
@@ -113,33 +143,54 @@ export function GlobalRulesSection({
           {sectionDirty && <DirtyDot />}
         </button>
 
-        <button
-          type="button"
-          onClick={handleStartCreate}
-          aria-label={t('cortex.newGlobalRule')}
-          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer shrink-0"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleStartCreateFolder}
+            aria-label={t('cortex.newFolder')}
+            title={t('cortex.newFolder')}
+            className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer"
+          >
+            <Folder className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleStartCreate(e)}
+            aria-label={t('cortex.newGlobalRule')}
+            className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {isOpen && (
         <div className="space-y-1">
           {/* Inline Form for creating a new global rule */}
-          {isCreating && (
+          {(isCreating || isCreatingFolder) && (
             <form
               onSubmit={handleCreateSubmit}
               className="mx-1 mt-1 p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] space-y-1.5 shadow-xs"
             >
               <div className="text-[10px] font-sans font-medium text-[#71717a] dark:text-[#71717a]">
-                {t('cortex.newGlobalRule')}
+                {isCreatingFolder ? t('cortex.newFolder') : createFolder ? t('cortex.newRuleInFolder') : t('cortex.newGlobalRule')}
               </div>
+              {isCreatingFolder && (
+                <input
+                  type="text"
+                  value={folderName}
+                  onChange={(e) => setFolderName(e.target.value)}
+                  placeholder={t('cortex.folderNamePlaceholder')}
+                  autoFocus
+                  className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5]"
+                />
+              )}
               <input
                 type="text"
                 value={ruleName}
                 onChange={(e) => setRuleName(e.target.value)}
                 placeholder="architecture.md"
-                autoFocus
+                autoFocus={!isCreatingFolder}
                 className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5]"
               />
               {createError && (
@@ -157,7 +208,7 @@ export function GlobalRulesSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsCreating(false)}
+                  onClick={() => { setIsCreating(false); setIsCreatingFolder(false); setCreateFolder(undefined); }}
                   className="px-2 py-0.5 text-[10px] font-mono rounded border border-[#ebebeb] dark:border-[#2c2c33] text-[#71717a] dark:text-[#71717a] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
                 >
                   {t('common.cancel')}
@@ -167,13 +218,16 @@ export function GlobalRulesSection({
           )}
 
           {/* List of Global Rules */}
-          {rules.length === 0 && !isSearching && !isCreating && (
+          {rules.length === 0 && !isSearching && !isCreating && !isCreatingFolder && (
             <div className="mx-1 mt-1 p-3 text-center rounded-md border border-dashed border-[#ebebeb] dark:border-[#2c2c33] text-[11px] text-[#8f8f8f] dark:text-[#71717a] font-sans">
               {t('cortex.noGlobalRules')}
             </div>
           )}
 
-          {rules.map((rule) => {
+          {(() => {
+            const rootRules = rules.filter((r) => !r.folder);
+            const folders = [...new Set(rules.map((r) => r.folder).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b));
+            const renderRule = (rule: CortexAgentFile) => {
             const isActive = activeFile?.id === rule.id;
             const isRuntime = isRuntimeRule(rule.name);
             return (
@@ -235,7 +289,43 @@ export function GlobalRulesSection({
                 )}
               </div>
             );
-          })}
+            };
+            return (
+              <>
+                {rootRules.map(renderRule)}
+                {folders.map((folder) => {
+                  const folderRules = rules.filter((r) => r.folder === folder);
+                  const expanded = isSearching || openFolders[folder] !== false;
+                  return (
+                    <div key={folder}>
+                      <div className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition">
+                        <button
+                          type="button"
+                          onClick={() => setOpenFolders((prev) => ({ ...prev, [folder]: !(prev[folder] !== false) }))}
+                          aria-expanded={expanded}
+                          className="flex-1 flex items-center gap-1.5 text-left cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
+                        >
+                          {expanded ? <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" /> : <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />}
+                          <span className="text-xs font-sans font-semibold leading-none">{folder}</span>
+                          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">({folderRules.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleStartCreate(e, folder)}
+                          aria-label={t('cortex.newRuleInFolder')}
+                          title={t('cortex.newRuleInFolder')}
+                          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer shrink-0"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {expanded && <div className="ml-3">{folderRules.map(renderRule)}</div>}
+                    </div>
+                  );
+                })}
+              </>
+            );
+          })()}
         </div>
       )}
     </section>

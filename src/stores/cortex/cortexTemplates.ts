@@ -238,6 +238,7 @@ export async function createGlobalRuleAction(
   set: CortexSet,
   get: CortexGet,
   rawName: string,
+  folder?: string,
 ): Promise<void> {
   const { globalRules } = get();
   const { base, fileName } = normalizeCortexFileName(rawName);
@@ -245,8 +246,12 @@ export async function createGlobalRuleAction(
   if (!/^[A-Za-z0-9-_]+$/.test(base)) {
     throw new Error('Только латиница, цифры, - и _');
   }
+  const cleanFolder = folder?.trim() || undefined;
+  if (cleanFolder && !/^[A-Za-z0-9-_]+$/.test(cleanFolder)) {
+    throw new Error('Только латиница, цифры, - и _');
+  }
 
-  const targetPath = `.cvh/rules/${fileName}`;
+  const targetPath = cleanFolder ? `.cvh/rules/${cleanFolder}/${fileName}` : `.cvh/rules/${fileName}`;
   const content = buildGlobalRuleTemplate(base);
 
   const duplicate = globalRules.some(
@@ -265,13 +270,14 @@ export async function createGlobalRuleAction(
   }
 
   const created: CortexAgentFile = {
-    id: `global-rule-${fileName}`,
+    id: cleanFolder ? `global-rule-${cleanFolder}/${fileName}` : `global-rule-${fileName}`,
     name: fileName,
     stageId: 'global',
     type: 'rule',
     path: targetPath,
     content,
     isDirty: false,
+    folder: cleanFolder,
   };
 
   set((state) => ({

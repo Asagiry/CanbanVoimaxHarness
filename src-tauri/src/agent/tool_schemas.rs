@@ -423,6 +423,20 @@ pub fn get_available_rules_with_descriptions(
                                 .and_then(|text| extract_frontmatter_description(&text));
                             rules.push((stem.to_string(), desc));
                         }
+                    } else if path.is_dir() {
+                        if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                            for sub in sub_entries.flatten() {
+                                let sp = sub.path();
+                                if sp.is_file() && sp.extension().and_then(|e| e.to_str()) == Some("md") {
+                                    if let Some(stem) = sp.file_stem().and_then(|s| s.to_str()) {
+                                        let desc = std::fs::read_to_string(&sp)
+                                            .ok()
+                                            .and_then(|text| extract_frontmatter_description(&text));
+                                        rules.push((stem.to_string(), desc));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

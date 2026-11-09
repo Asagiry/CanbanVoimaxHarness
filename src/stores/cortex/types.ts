@@ -65,7 +65,7 @@ export interface RulesActions {
     kind: 'rule' | 'hook',
     opts?: { hookMoment?: CortexHookMoment; hookExt?: CortexHookExt },
   ) => Promise<void>;
-  createGlobalRule: (rawName: string) => Promise<void>;
+  createGlobalRule: (rawName: string, folder?: string) => Promise<void>;
   updateActiveFileContent: (content: string) => void;
   saveRules: () => Promise<void>;
   deleteRule: (stageId: string, ruleName: string) => Promise<void>;

@@ -7,10 +7,13 @@ import {
 } from '../../lib/agentPalette';
 import { isRuntimeRule } from '../../components/common/RuntimeRuleIcon';
 
-export function compareGlobalRules(a: { name: string }, b: { name: string }): number {
+export function compareGlobalRules(a: { name: string; folder?: string }, b: { name: string; folder?: string }): number {
   const ra = isRuntimeRule(a.name);
   const rb = isRuntimeRule(b.name);
   if (ra !== rb) return ra ? -1 : 1;
+  const fa = a.folder ?? '';
+  const fb = b.folder ?? '';
+  if (fa !== fb) return fa.localeCompare(fb);
   return a.name.localeCompare(b.name);
 }
 

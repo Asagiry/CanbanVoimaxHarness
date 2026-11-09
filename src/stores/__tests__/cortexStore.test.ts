@@ -513,6 +513,34 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(globalRules[2].id).toBe('global-rule-frontend.md');
     });
 
+    it('loadGlobalRules maps folder from IPC and createGlobalRule writes into folder', async () => {
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_global_rules') {
+          return [
+            { name: 'rust.md', path: '.cvh/rules/backend/rust.md', fileType: 'rule', folder: 'backend' },
+            { name: 'runtime.md', path: '.cvh/rules/runtime.md', fileType: 'rule' },
+          ];
+        }
+        return true;
+      });
+
+      await useCortexStore.getState().loadGlobalRules();
+      const loaded = useCortexStore.getState().globalRules;
+      expect(loaded[0].name).toBe('runtime.md');
+      const nested = loaded.find((f) => f.name === 'rust.md');
+      expect(nested?.folder).toBe('backend');
+      expect(nested?.id).toBe('global-rule-backend/rust.md');
+      expect(nested?.path).toBe('.cvh/rules/backend/rust.md');
+
+      await useCortexStore.getState().createGlobalRule('x', 'backend');
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'save_cortex_file',
+        expect.objectContaining({ path: '.cvh/rules/backend/x.md' }),
+      );
+
+      await expect(useCortexStore.getState().createGlobalRule('rust', 'frontend')).rejects.toThrow('уже есть в глобальных правилах');
+    });
+
     it('createGlobalRule keeps runtime.md first', async () => {
       mockInvoke.mockImplementation(async (cmd) => {
         if (cmd === 'list_global_rules') {

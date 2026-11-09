@@ -619,6 +619,24 @@ pub async fn compile_primed_system_prompt_with_tools(
                 if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
                     while let Ok(Some(entry)) = entries.next_entry().await {
                         let path = entry.path();
+                        if path.is_dir() {
+                            if let Ok(mut sub) = tokio::fs::read_dir(&path).await {
+                                while let Ok(Some(sub_entry)) = sub.next_entry().await {
+                                    let sp = sub_entry.path();
+                                    if !sp.is_file() || sp.extension().and_then(|e| e.to_str()) != Some("md") {
+                                        continue;
+                                    }
+                                    let fname = sub_entry.file_name().to_string_lossy().to_string();
+                                    if fname == "runtime.md" {
+                                        continue;
+                                    }
+                                    if let Ok(content) = tokio::fs::read_to_string(&sp).await {
+                                        rules.push((fname, content));
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         if !path.is_file() {
                             continue;
                         }

@@ -41,6 +41,27 @@ pub async fn execute_load_rule(
     candidates.push(repo_root.join(".cvh").join("rules").join(format!("{}.md", rule_clean)));
     candidates.push(repo_root.join(".cvh").join("agents").join(role).join("rules").join(rule_raw));
 
+    // Global rules subfolders (1 level): .cvh/rules/<folder>/<rule>.md
+    let mut global_bases = vec![repo_root.join(".cvh").join("rules")];
+    if worktree_dir != repo_root {
+        global_bases.insert(0, worktree_dir.join(".cvh").join("rules"));
+    }
+    for base in &global_bases {
+        if base.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let cand = path.join(format!("{}.md", rule_clean));
+                        if !candidates.contains(&cand) {
+                            candidates.push(cand);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Fallback: search across any agents' rules directory in worktree and repo_root
     let mut search_bases = vec![repo_root.join(".cvh").join("agents")];
     if worktree_dir != repo_root {

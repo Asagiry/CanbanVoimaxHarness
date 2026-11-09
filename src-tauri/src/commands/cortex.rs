@@ -13,6 +13,7 @@ pub struct CortexDiskFile {
     pub name: String,
     pub path: String,
     pub file_type: String,
+    pub folder: Option<String>,
 }
 
 #[tauri::command]
@@ -153,7 +154,26 @@ pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, St
                         name: name.to_string(),
                         path: format!(".cvh/rules/{}", name),
                         file_type: "rule".to_string(),
+                        folder: None,
                     });
+                }
+            } else if p.is_dir() {
+                if let Some(folder) = entry.file_name().to_str() {
+                    if let Ok(mut sub) = tokio::fs::read_dir(&p).await {
+                        while let Ok(Some(sub_entry)) = sub.next_entry().await {
+                            let sp = sub_entry.path();
+                            if sp.is_file() && sp.extension().and_then(|e| e.to_str()) == Some("md") {
+                                if let Some(name) = sub_entry.file_name().to_str() {
+                                    files.push(CortexDiskFile {
+                                        name: name.to_string(),
+                                        path: format!(".cvh/rules/{}/{}", folder, name),
+                                        file_type: "rule".to_string(),
+                                        folder: Some(folder.to_string()),
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -161,7 +181,9 @@ pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, St
     files.sort_by(|a, b| {
         let ra = a.name.eq_ignore_ascii_case("runtime.md");
         let rb = b.name.eq_ignore_ascii_case("runtime.md");
-        rb.cmp(&ra).then_with(|| a.name.cmp(&b.name))
+        rb.cmp(&ra)
+            .then_with(|| a.folder.cmp(&b.folder))
+            .then_with(|| a.name.cmp(&b.name))
     });
     Ok(files)
 }
