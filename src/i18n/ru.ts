@@ -149,6 +149,7 @@ export const ru = {
   'card.parentTask': 'Родительская задача: {id}',
   'card.agentQuestion': 'Вопрос от агента',
   'card.model': 'Модель: {model}',
+  'card.modelWithProvider': 'Модель: {provider} / {model}',
   'card.created': 'созд. {date}',
   'card.elapsed': 'идёт {time}',
   'card.completedDuration': 'за {time}',

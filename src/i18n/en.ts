@@ -147,6 +147,7 @@ export const en = {
   'card.parentTask': 'Parent task: {id}',
   'card.agentQuestion': 'Agent Question',
   'card.model': 'Model: {model}',
+  'card.modelWithProvider': 'Model: {provider} / {model}',
   'card.created': 'created {date}',
   'card.elapsed': 'running {time}',
   'card.completedDuration': 'took {time}',

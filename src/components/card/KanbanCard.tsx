@@ -4,7 +4,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { resolveCardModel } from './cardModel';
+import { resolveCardModel, formatCardModel } from './cardModel';
 import { useTranslation } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitBranch } from 'lucide-react';
@@ -41,11 +41,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona) : undefined
   );
   const globalModel = useSettingsStore((s) => s.settings.model);
+  const globalProvider = useSettingsStore((s) => s.settings.provider);
   const providers = useSettingsStore(useShallow((s) => s.providers));
   const cardModel = useMemo(
-    () => resolveCardModel(task, taskColumn, assignedPersona, globalModel, providers),
-    [task.model, task.providerId, taskColumn?.modelOverride, assignedPersona?.model, globalModel, providers]
+    () => resolveCardModel(task, taskColumn, assignedPersona, globalModel, providers, globalProvider),
+    [task.model, task.providerId, taskColumn?.modelOverride, assignedPersona?.model, assignedPersona?.providerId, globalModel, globalProvider, providers]
   );
+  const cardModelText = cardModel ? formatCardModel(cardModel) : undefined;
   const assignedAgentColor = resolveStageColor(taskColumn, assignedPersona);
   const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
     ? `${assignedAgentColor}50`
@@ -179,12 +181,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
 
               {/* Footer: model, branch, created & elapsed time */}
               <div className="pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
-                {cardModel && (
+                {cardModel && cardModelText && (
                   <div
                     className="truncate font-mono text-[10px] text-[#666666] dark:text-[#71717a] mb-1"
-                    aria-label={t('card.model', { model: cardModel })}
+                    aria-label={cardModel.providerName
+                      ? t('card.modelWithProvider', { provider: cardModel.providerName, model: cardModel.label })
+                      : t('card.model', { model: cardModel.label })}
                   >
-                    {cardModel}
+                    {cardModelText}
                   </div>
                 )}
                 {cardBranch && (
