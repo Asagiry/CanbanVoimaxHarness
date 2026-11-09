@@ -7,6 +7,44 @@ export function isOldActivity(idx: number, total: number): boolean {
   return idx < total - OLD_ACTIVITY_COLLAPSE_THRESHOLD;
 }
 
+export function isAutoCollapsible(
+  activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+): boolean {
+  const type = typeof activity === 'string' ? activity : activity?.type;
+  return type === 'thought' || type === 'output';
+}
+
+export function resolveIsCollapsed(args: {
+  id: string;
+  idx: number;
+  total: number;
+  activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null;
+  collapsedOutputs: Set<string>;
+  expandedOverrides: Set<string>;
+}): boolean {
+  const { id, idx, total, activity, collapsedOutputs, expandedOverrides } = args;
+  if (expandedOverrides.has(id)) return false;
+  if (collapsedOutputs.has(id)) return true;
+  if (!isAutoCollapsible(activity)) return false;
+  return isOldActivity(idx, total);
+}
+
+export function applyToggle(
+  currentlyCollapsed: boolean,
+  id: string,
+  collapsedOutputs: Set<string>,
+  expandedOverrides: Set<string>
+): { collapsedOutputs: Set<string>; expandedOverrides: Set<string> } {
+  if (currentlyCollapsed) {
+    const nextCollapsed = new Set(collapsedOutputs);
+    nextCollapsed.delete(id);
+    return { collapsedOutputs: nextCollapsed, expandedOverrides: new Set(expandedOverrides).add(id) };
+  }
+  const nextExpanded = new Set(expandedOverrides);
+  nextExpanded.delete(id);
+  return { collapsedOutputs: new Set(collapsedOutputs).add(id), expandedOverrides: nextExpanded };
+}
+
 export function useActivityScroll(displayActivities: DrawerActivityItem[], taskId?: string) {
   const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
   const [expandedOverrides, setExpandedOverrides] = useState<Set<string>>(() => new Set());
@@ -27,29 +65,24 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
     });
   };
 
-  const isCollapsed = (id: string, idx: number, total: number): boolean => {
-    if (expandedOverrides.has(id)) return false;
-    if (collapsedOutputs.has(id)) return true;
-    return isOldActivity(idx, total);
-  };
+  const isCollapsed = (
+    id: string,
+    idx: number,
+    total: number,
+    activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+  ): boolean =>
+    resolveIsCollapsed({ id, idx, total, activity, collapsedOutputs, expandedOverrides });
 
-  const toggleCollapsed = (id: string, idx: number, total: number) => {
-    const currentlyCollapsed = isCollapsed(id, idx, total);
-    if (currentlyCollapsed) {
-      setExpandedOverrides((prev) => new Set(prev).add(id));
-      setCollapsedOutputs((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    } else {
-      setExpandedOverrides((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      setCollapsedOutputs((prev) => new Set(prev).add(id));
-    }
+  const toggleCollapsed = (
+    id: string,
+    idx: number,
+    total: number,
+    activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+  ) => {
+    const currentlyCollapsed = isCollapsed(id, idx, total, activity);
+    const next = applyToggle(currentlyCollapsed, id, collapsedOutputs, expandedOverrides);
+    setCollapsedOutputs(next.collapsedOutputs);
+    setExpandedOverrides(next.expandedOverrides);
   };
 
   const scrollToBottom = () => {
