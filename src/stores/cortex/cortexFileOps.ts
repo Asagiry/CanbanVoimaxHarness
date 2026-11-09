@@ -24,11 +24,16 @@ export async function loadGlobalRulesAction(set: CortexSet, get: CortexGet): Pro
     const mapped: CortexAgentFile[] = (files ?? []).map((file) => {
       const prev = prevMap.get(file.path);
       const folder = file.folder || undefined;
+      const isFolder = file.fileType === 'folder';
       return {
-        id: folder ? `global-rule-${folder}/${file.name}` : `global-rule-${file.name}`,
+        id: isFolder
+          ? `global-folder-${folder}`
+          : folder
+            ? `global-rule-${folder}/${file.name}`
+            : `global-rule-${file.name}`,
         name: file.name,
         stageId: 'global',
-        type: 'rule',
+        type: (isFolder ? 'folder' : 'rule') as CortexAgentFile['type'],
         path: file.path,
         content: prev?.content ?? '',
         isDirty: prev?.isDirty ?? false,
@@ -244,4 +249,42 @@ export function reorderFilesInStage(
   );
 
   return [...personaFiles, ...hookFiles, ...rules, ...otherFiles, ...settingFiles];
+}
+
+export async function createGlobalFolderAction(
+  _set: CortexSet,
+  get: CortexGet,
+  folderName: string,
+): Promise<void> {
+  const trimmed = folderName.trim();
+  if (!trimmed) throw new Error('Введите имя папки');
+  if (!/^[A-Za-z0-9-_]+$/.test(trimmed)) {
+    throw new Error('Только латиница, цифры, - и _');
+  }
+  const { globalRules } = get();
+  if (globalRules.some((r) => r.folder?.toLowerCase() === trimmed.toLowerCase())) {
+    throw new Error(`Папка ${trimmed} уже существует`);
+  }
+
+  const targetPath = `.cvh/rules/${trimmed}/.gitkeep`;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('save_cortex_file', { path: targetPath, content: '' });
+  await get().loadGlobalRules();
+}
+
+export async function deleteGlobalFolderAction(
+  set: CortexSet,
+  _get: CortexGet,
+  folderName: string,
+): Promise<void> {
+  const trimmed = folderName.trim();
+  const folderPath = `.cvh/rules/${trimmed}`;
+  const key = `folder:${trimmed}`;
+  set((state) => ({
+    globalRules: state.globalRules.filter((f) => f.folder !== trimmed),
+    pendingDeletes: {
+      ...state.pendingDeletes,
+      [key]: { path: folderPath, kind: 'globalRule' as const, stageId: 'global', fileId: key },
+    },
+  }));
 }

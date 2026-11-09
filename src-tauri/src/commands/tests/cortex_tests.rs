@@ -536,8 +536,12 @@ Write code.
         tokio::fs::create_dir_all(&backend_dir).await.expect("backend dir");
         tokio::fs::write(backend_dir.join("rust.md"), "# Rust").await.expect("write rust.md");
 
+        let empty_dir = rules_dir.join("empty_topic");
+        tokio::fs::create_dir_all(&empty_dir).await.expect("empty dir");
+        tokio::fs::write(empty_dir.join(".gitkeep"), "").await.expect("write .gitkeep");
+
         let files = list_global_rules_in(&base).await.expect("list_global_rules_in");
-        assert_eq!(files.len(), 4);
+        assert_eq!(files.len(), 5);
         assert_eq!(files[0].name, "runtime.md");
         assert_eq!(files[0].path, ".cvh/rules/runtime.md");
         assert_eq!(files[0].file_type, "rule");
@@ -557,6 +561,14 @@ Write code.
         assert_eq!(files[3].path, ".cvh/rules/backend/rust.md");
         assert_eq!(files[3].file_type, "rule");
         assert_eq!(files[3].folder, Some("backend".to_string()));
+
+        assert_eq!(files[4].name, "empty_topic");
+        assert_eq!(files[4].path, ".cvh/rules/empty_topic");
+        assert_eq!(files[4].file_type, "folder");
+        assert_eq!(files[4].folder, Some("empty_topic".to_string()));
+
+        delete_cortex_file_at(&base, ".cvh/rules/empty_topic").await.expect("delete folder");
+        assert!(!empty_dir.exists());
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

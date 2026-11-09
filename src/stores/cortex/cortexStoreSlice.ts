@@ -10,6 +10,8 @@ import {
 } from './cortexSync';
 import {
   deleteGlobalRuleAction,
+  createGlobalFolderAction,
+  deleteGlobalFolderAction,
   loadGlobalRulesAction,
   openFileAction,
   reorderFilesInStage,
@@ -298,6 +300,8 @@ export const createCortexSlice: StateCreator<
   },
 
   deleteGlobalRule: (fileName) => deleteGlobalRuleAction(set, get, fileName),
+  createGlobalFolder: (folderName) => createGlobalFolderAction(set, get, folderName),
+  deleteGlobalFolder: (folderName) => deleteGlobalFolderAction(set, get, folderName),
 
   reorderRules: (stageId: string, ruleNames: string[]) => {
     set((state) => ({

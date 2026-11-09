@@ -159,11 +159,13 @@ pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, St
                 }
             } else if p.is_dir() {
                 if let Some(folder) = entry.file_name().to_str() {
+                    let mut has_md = false;
                     if let Ok(mut sub) = tokio::fs::read_dir(&p).await {
                         while let Ok(Some(sub_entry)) = sub.next_entry().await {
                             let sp = sub_entry.path();
                             if sp.is_file() && sp.extension().and_then(|e| e.to_str()) == Some("md") {
                                 if let Some(name) = sub_entry.file_name().to_str() {
+                                    has_md = true;
                                     files.push(CortexDiskFile {
                                         name: name.to_string(),
                                         path: format!(".cvh/rules/{}/{}", folder, name),
@@ -173,6 +175,14 @@ pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, St
                                 }
                             }
                         }
+                    }
+                    if !has_md {
+                        files.push(CortexDiskFile {
+                            name: folder.to_string(),
+                            path: format!(".cvh/rules/{}", folder),
+                            file_type: "folder".to_string(),
+                            folder: Some(folder.to_string()),
+                        });
                     }
                 }
             }
@@ -224,9 +234,15 @@ pub async fn delete_cortex_file_at(root: &Path, rel_path: &str) -> Result<(), St
         return Err("Forbidden: path outside repository root".to_string());
     }
 
-    tokio::fs::remove_file(&target_canon)
-        .await
-        .map_err(|e| format!("Failed to delete cortex file {:?}: {}", target_canon, e))?;
+    if target_canon.is_dir() {
+        tokio::fs::remove_dir_all(&target_canon)
+            .await
+            .map_err(|e| format!("Failed to delete cortex folder {:?}: {}", target_canon, e))?;
+    } else {
+        tokio::fs::remove_file(&target_canon)
+            .await
+            .map_err(|e| format!("Failed to delete cortex file {:?}: {}", target_canon, e))?;
+    }
 
     if trimmed.starts_with(".cvh/") {
         if let Ok(wts) = crate::git::list_worktrees(root).await {

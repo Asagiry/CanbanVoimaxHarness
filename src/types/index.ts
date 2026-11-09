@@ -256,7 +256,7 @@ export interface CortexAgentFile {
   // Новая схема хранения: `.cvh/agents/<role>/agent.md` (persona),
   // `.cvh/agents/<role>/rules/*.md` (rule), `.cvh/agents/<role>/hooks/*` (hook),
   // `.cvh/agents/<role>/setting` (settings, JSON без расширения).
-  type: 'persona' | 'rule' | 'settings' | 'hook';
+  type: 'persona' | 'rule' | 'settings' | 'hook' | 'folder';
   hookMoment?: CortexHookMoment;
   path: string;
   content: string;

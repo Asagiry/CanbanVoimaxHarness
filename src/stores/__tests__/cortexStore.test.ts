@@ -541,6 +541,42 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       await expect(useCortexStore.getState().createGlobalRule('rust', 'frontend')).rejects.toThrow('уже есть в глобальных правилах');
     });
 
+    it('createGlobalFolder saves .gitkeep in target folder and reloads rules', async () => {
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_global_rules') {
+          return [
+            { name: '', path: '.cvh/rules/backend', fileType: 'folder', folder: 'backend' },
+          ];
+        }
+        return true;
+      });
+      await useCortexStore.getState().createGlobalFolder('backend');
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'save_cortex_file',
+        expect.objectContaining({ path: '.cvh/rules/backend/.gitkeep' }),
+      );
+      const state = useCortexStore.getState();
+      expect(state.globalRules.some((r) => r.folder === 'backend')).toBe(true);
+
+      await expect(useCortexStore.getState().createGlobalFolder('invalid/name')).rejects.toThrow();
+      await expect(useCortexStore.getState().createGlobalFolder('')).rejects.toThrow();
+    });
+
+    it('deleteGlobalFolder adds pending delete for folder', async () => {
+      useCortexStore.setState({
+        globalRules: [
+          { id: 'global-folder-test', name: '', stageId: 'global', type: 'folder' as any, path: '.cvh/rules/test', content: '', folder: 'test' },
+        ],
+        pendingDeletes: {},
+      });
+      await useCortexStore.getState().deleteGlobalFolder('test');
+      const state = useCortexStore.getState();
+      expect(state.globalRules).toHaveLength(0);
+      expect(state.pendingDeletes['folder:test']).toEqual(
+        expect.objectContaining({ path: '.cvh/rules/test', kind: 'globalRule' }),
+      );
+    });
+
     it('createGlobalRule keeps runtime.md first', async () => {
       mockInvoke.mockImplementation(async (cmd) => {
         if (cmd === 'list_global_rules') {
