@@ -178,12 +178,12 @@ function KanbanColumn({
         {/* Center Slot: Agent icon + Column Title + Task count */}
         <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1 overflow-hidden">
           <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
-          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f4f4f5] truncate text-center leading-[1.35]">
+          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f4f4f5] truncate text-center leading-none">
             {column.title}
           </h3>
           {/* Task Counter (same baseline as the title) */}
           <span
-            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-[1.35] shrink-0 translate-y-[1px] ${
+            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-none shrink-0 ${
               isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#71717a]'
             }`}
           >

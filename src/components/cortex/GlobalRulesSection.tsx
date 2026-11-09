@@ -100,8 +100,8 @@ export function GlobalRulesSection({
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
           )}
-          <span className="font-sans text-xs font-semibold">{t('cortex.globalRulesSection')}</span>
-          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
+          <span className="font-sans text-xs font-semibold leading-none">{t('cortex.globalRulesSection')}</span>
+          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
             ({totalCount})
           </span>
         </button>
@@ -189,7 +189,7 @@ export function GlobalRulesSection({
                   ) : (
                     <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
-                  <span className="text-xs font-mono truncate">{rule.name}</span>
+                  <span className="text-xs font-mono truncate leading-none">{rule.name}</span>
                   {isRuntime && (
                     <span
                       title={t('cortex.runtimeRuleTooltip')}

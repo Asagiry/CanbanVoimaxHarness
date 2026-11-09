@@ -236,8 +236,8 @@ export default function BoardTabsHeader({
               className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#2c2c33] hover:border-[#171717] dark:hover:border-[#f4f4f5] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] text-xs font-medium transition cursor-pointer select-none"
               aria-label={t('board.newBoardTitle')}
             >
-              <Plus className="h-3 w-3" />
-              <span>{t('board.newBoard')}</span>
+              <Plus className="h-3 w-3 shrink-0" />
+              <span className="leading-none">{t('board.newBoard')}</span>
             </button>
           )}
         </div>
@@ -246,7 +246,7 @@ export default function BoardTabsHeader({
         <div className="flex items-center space-x-3 shrink-0">
           <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#71717a] text-xs">
             <span>{t('board.tasksOnBoard')}</span>
-            <span className="text-[#171717] dark:text-[#f4f4f5] font-semibold tabular-nums font-mono leading-none translate-y-px">
+            <span className="text-[#171717] dark:text-[#f4f4f5] font-semibold tabular-nums font-mono leading-none">
               {tasksCount}
             </span>
           </div>
@@ -257,16 +257,16 @@ export default function BoardTabsHeader({
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
               aria-label={t('board.addColumnTitle')}
             >
-              <Plus className="h-3.5 w-3.5" />
-              <span>{t('board.addColumn')}</span>
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span className="leading-none">{t('board.addColumn')}</span>
             </button>
             <button
               onClick={onOpenAddTask}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99] border border-transparent dark:border-[#2c2c33]"
               aria-label={t('board.newTaskTitle')}
             >
-              <Plus className="h-3.5 w-3.5 text-white" />
-              <span>{t('board.newTask')}</span>
+              <Plus className="h-3.5 w-3.5 text-white shrink-0" />
+              <span className="leading-none">{t('board.newTask')}</span>
             </button>
           </div>
         </div>

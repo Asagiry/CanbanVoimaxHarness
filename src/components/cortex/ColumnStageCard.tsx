@@ -168,13 +168,13 @@ export function ColumnStageCard({
               />
             )}
 
-            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
+            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none">
               {stage.stageTitle}
             </span>
           </div>
 
           {stage.personaName !== '' && (
-            <span className="text-[10px] font-mono text-[#666666] dark:text-[#71717a] truncate ml-1">
+            <span className="text-[10px] font-mono text-[#666666] dark:text-[#71717a] truncate ml-1 leading-none">
               {stage.personaName}
             </span>
           )}
@@ -258,9 +258,9 @@ export function ColumnStageCard({
                   ) : (
                     <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
-                  <span className="text-xs font-mono">{t('cortex.hooks')}</span>
-                  <span className="text-[10px] font-mono text-[#8f8f8f]">hooks/</span>
-                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none translate-y-px">({hookFiles.length})</span>
+                  <span className="text-xs font-mono leading-none">{t('cortex.hooks')}</span>
+                  <span className="text-[10px] font-mono text-[#8f8f8f] leading-none">hooks/</span>
+                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none">({hookFiles.length})</span>
                 </button>
                 <button
                   type="button"
