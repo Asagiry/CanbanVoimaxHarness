@@ -14,7 +14,7 @@ use crate::commands::state::{ActiveAgentHandle, AppState};
 use crate::config::{
     load_boards_config, load_llm_settings, load_pipeline_config, load_project_config, ProjectConfig,
 };
-use super::healing::task_id_matches;
+use super::healing::{stage_id_matches, task_id_matches};
 use super::storage::{load_tasks_from_disk, save_tasks_to_disk};
 
 pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
@@ -473,6 +473,8 @@ async fn run_agent_inner(
         let mut all_tasks = load_tasks_from_disk(&root).await;
         if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
             t.status = Some("running".to_string());
+            t.completed_at = None;
+            t.waiting_for_subtask_id = None;
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &all_tasks).await;
         }
@@ -1285,30 +1287,32 @@ pub async fn steer_agent(
     let disk_tasks = load_tasks_from_disk(&root).await;
     let current_task = disk_tasks.iter().find(|t| task_id_matches(&t.id, &task_id)).cloned();
     if let Some(ref t) = current_task {
-        let is_terminal = t.completed_at.is_some() && (t.status.as_deref() == Some("done") || t.stage_id == "ready");
+        let is_terminal_stage = stage_id_matches(&t.stage_id, "ready") || stage_id_matches(&t.stage_id, "done");
+        let is_terminal = t.completed_at.is_some() && is_terminal_stage;
         if is_terminal {
             return Ok(format!("Task completed; steer saved to dialog, reopen to continue {}", task_id));
         }
-        let waiting_sub = t.waiting_for_subtask_id.as_deref().filter(|s| !s.trim().is_empty()).map(str::to_string);
-        if let Some(sub_id) = waiting_sub {
-            if disk_tasks.iter().any(|c| task_id_matches(&c.id, &sub_id)) {
-                crate::logger::cvh_log(Some(&root), "INFO", "STEER_AGENT", &format!("steer rerouted from waiting parent {} to subtask {}", task_id, sub_id));
-                let _ = app_handle.emit("agent:status", serde_json::json!({ "taskId": sub_id, "status": "running", "projectPath": root.to_string_lossy().to_string() }));
-                return Box::pin(steer_agent(sub_id, message, images, None, app_handle, state)).await;
-            }
+        let is_waiting_subtask = t.status.as_deref() == Some("waiting_subtask")
+            || t.status.as_deref() == Some("waiting_subagent");
+        if is_waiting_subtask {
+            return Ok(format!("Steer queued for task {} waiting for subtask to finish", task_id));
         }
     }
 
     {
         let mut current_tasks = load_tasks_from_disk(&root).await;
-        if let Some(t) = current_tasks.iter_mut().find(|t| t.id == task_id) {
+        if let Some(t) = current_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
             t.updated_at = Utc::now().timestamp_millis();
+            t.waiting_for_subtask_id = None;
+            t.completed_at = None;
             let _ = save_tasks_to_disk(&root, &current_tasks).await;
         }
         if state.get_root() == root {
             if let Ok(mut guard) = state.tasks.lock() {
-                if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                     t.updated_at = Utc::now().timestamp_millis();
+                    t.waiting_for_subtask_id = None;
+                    t.completed_at = None;
                 }
             }
         }

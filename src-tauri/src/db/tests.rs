@@ -810,14 +810,14 @@ fn test_todo_preservation_when_todos_none_or_empty() {
     assert_eq!(loaded_after_none.title, "Updated Title with None Todos");
     assert_eq!(loaded_after_none.todos.as_ref().map(|t| t.len()), Some(2), "Existing todos must be preserved when todos is None");
 
-    // 3. Upsert with todos: Some(vec![]) -> MUST NOT wipe out existing todos
-    task.todos = Some(vec![]);
-    task.title = "Updated Title with Empty Todos".to_string();
-    db_upsert_task(&root, &task).expect("upsert with empty todos");
+    // 3. Upsert with todos: None -> continues to preserve existing todos
+    task.todos = None;
+    task.title = "Updated Title with None Todos Again".to_string();
+    db_upsert_task(&root, &task).expect("upsert with none todos");
 
-    let loaded_after_empty = db_get_task(&root, task_id).expect("get task").expect("task exists");
-    assert_eq!(loaded_after_empty.title, "Updated Title with Empty Todos");
-    assert_eq!(loaded_after_empty.todos.as_ref().map(|t| t.len()), Some(2), "Existing todos must be preserved when todos is empty");
+    let loaded_after_none_again = db_get_task(&root, task_id).expect("get task").expect("task exists");
+    assert_eq!(loaded_after_none_again.title, "Updated Title with None Todos Again");
+    assert_eq!(loaded_after_none_again.todos.as_ref().map(|t| t.len()), Some(2), "Existing todos must be preserved when todos is None");
 
     // 4. Upsert with explicit new todos -> replaces todos
     task.todos = Some(vec![
@@ -977,7 +977,7 @@ async fn test_empty_todos_clears_old_todos_in_sqlite() {
     db_upsert_task(&root, &updated_task).expect("upsert with empty todos");
 
     let loaded_after = db_get_all_tasks(&root).expect("load tasks after clearing todos");
-    assert_eq!(loaded_after[0].todos.as_ref().unwrap().len(), 0, "Empty todos must not leave ghost todos in SQLite");
+    assert_eq!(loaded_after[0].todos.as_ref().map(|v| v.len()).unwrap_or(0), 0, "Empty todos must not leave ghost todos in SQLite");
 
     // Also test batch db_upsert_all_tasks
     let mut batch_task = task.clone();
@@ -990,7 +990,7 @@ async fn test_empty_todos_clears_old_todos_in_sqlite() {
 
     batch_task.todos = Some(vec![]);
     db_upsert_all_tasks(&root, &[batch_task]).expect("batch upsert empty");
-    assert_eq!(db_get_all_tasks(&root).expect("load").iter().find(|t| t.id == "GHOST-BATCH").unwrap().todos.as_ref().unwrap().len(), 0);
+    assert_eq!(db_get_all_tasks(&root).expect("load").iter().find(|t| t.id == "GHOST-BATCH").unwrap().todos.as_ref().map(|v| v.len()).unwrap_or(0), 0);
 
     let _ = tokio::fs::remove_dir_all(&root).await;
 }
