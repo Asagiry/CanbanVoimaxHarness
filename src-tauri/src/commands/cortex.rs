@@ -127,7 +127,11 @@ pub async fn save_cortex_file(
         let _ = app.emit("cortex:rules_updated", serde_json::json!({ "path": &norm_path }));
     }
 
+    // File Save is disk-only: it must NEVER git-commit/push. Only cvh_git_save
+    // may commit/push. sync_cvh_to_all_worktrees is runtime-state propagation
+    // (worktree copies), not version control.
     if norm_path.starts_with(".cvh/") || norm_path.contains("/.cvh/") {
+        eprintln!("[cortex] save_cortex_file: disk write only (no git commit/push); syncing runtime state to worktrees");
         crate::git::sync_cvh_to_all_worktrees(&root).await;
     }
 

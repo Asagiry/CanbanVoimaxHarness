@@ -363,6 +363,7 @@ export default function RuleEditorModal() {
               disabled={isSaving}
               className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-medium transition cursor-pointer shadow-xs disabled:opacity-50"
               aria-label={t('ruleEditor.saveHint')}
+              title={t('ruleEditor.saveHint')}
             >
               <Save className="h-3.5 w-3.5" />
               <span>{isSaving ? t('common.saving') : t('common.save')}</span>

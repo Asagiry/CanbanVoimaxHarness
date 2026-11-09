@@ -159,6 +159,20 @@ mod tests {
         assert_eq!(paths, vec![".cvh/agents/dev/rules/a.md", ".cvh/boards.json", ".cvh/rules/x.md"]);
     }
 
+    #[test]
+    fn parse_porcelain_includes_setting_and_agent_md() {
+        let out = " M .cvh/agents/dev/setting\n M .cvh/agents/dev/agent.md\n M .cvh/agents/dev/persona.md\n";
+        let paths = parse_porcelain(out);
+        assert_eq!(
+            paths,
+            vec![
+                ".cvh/agents/dev/agent.md",
+                ".cvh/agents/dev/persona.md",
+                ".cvh/agents/dev/setting"
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn status_detects_rule_change_and_excludes_db() {
         let dir = init_repo("status");

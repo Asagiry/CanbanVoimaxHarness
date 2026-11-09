@@ -35,7 +35,7 @@ export default function CvhSaveButton() {
   const title = cvhGitError
     ? `${t('cortex.gitSaveError')}: ${cvhGitError}`
     : hasChanges
-      ? `${t('cortex.saveToGit')}${branch ? ` (${branch} → main)` : ''}`
+      ? `${t('cortex.saveToGit')}${branch ? ` (${branch} → main)` : ''} — ${t('cortex.uncommittedChangesHint')}`
       : t('cortex.allSaved');
 
   return (
