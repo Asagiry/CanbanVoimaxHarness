@@ -427,7 +427,7 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
   return (
     <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] p-3 shadow-xs my-2 select-none transition-all duration-150">
       <div
-        onClick={() => setIsExpanded((prev) => !prev)}
+        onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between gap-2.5 cursor-pointer"
       >
         <div className="flex items-center space-x-2 min-w-0 flex-1">

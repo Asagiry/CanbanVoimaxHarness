@@ -23,7 +23,7 @@ export function useToolExpanded(
     if (onToggleExpanded) {
       onToggleExpanded();
     } else {
-      setInternalExpanded(typeof v === 'function' ? (v as (p: boolean) => boolean)(internalExpanded) : v);
+      setInternalExpanded((prev) => (typeof v === 'function' ? (v as (p: boolean) => boolean)(prev) : v));
     }
   };
   return [isExpanded, setIsExpanded];

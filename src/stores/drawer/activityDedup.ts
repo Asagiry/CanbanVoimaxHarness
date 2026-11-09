@@ -173,16 +173,30 @@ export function mergeToolExecutionIntoState(
     durationMs: toolWithCreatedAt.durationMs || undefined,
   };
 
-  const feedExists = existingFeed.some(
+  const existingMatch = existingFeed.find(
     (item) => item.id === toolWithCreatedAt.id || item.tool?.id === toolWithCreatedAt.id
   );
-  const updatedFeed = feedExists
-    ? existingFeed.map((item) =>
-        item.id === toolWithCreatedAt.id || item.tool?.id === toolWithCreatedAt.id
-          ? { ...item, tool: { ...item.tool, ...toolWithCreatedAt } }
-          : item
-      )
-    : [...existingFeed, feedItem];
+  const isCollision =
+    Boolean(existingMatch) &&
+    existingMatch!.tool?.id !== undefined &&
+    existingMatch!.tool!.id !== toolWithCreatedAt.id;
+  const updatedFeed = isCollision
+    ? [
+        ...existingFeed,
+        {
+          ...feedItem,
+          id: toolWithCreatedAt.batch
+            ? `${toolWithCreatedAt.id}::batch-${toolWithCreatedAt.batch.index}`
+            : `${toolWithCreatedAt.id}::${existingFeed.length}`,
+        },
+      ]
+    : existingMatch
+      ? existingFeed.map((item) =>
+          item.id === toolWithCreatedAt.id || item.tool?.id === toolWithCreatedAt.id
+            ? { ...item, tool: { ...item.tool, ...toolWithCreatedAt } }
+            : item
+        )
+      : [...existingFeed, feedItem];
 
   const toolExists = existingTools.some((t) => t.id === toolWithCreatedAt.id);
   const updatedTools = toolExists

@@ -10,6 +10,7 @@ import DrawerActivityStream from '../DrawerActivityStream';
 import { ToolExecution, KanbanTask } from '../../../types';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { filterDisplayActivities } from '../stream/streamHelpers';
+import { activityCollapseKey } from '../useActivityScroll';
 import { useLanguageStore } from '../../../stores/languageStore';
 
 // Mock Tauri invoke and store APIs
@@ -509,6 +510,17 @@ describe('Visual Batch Tool Execution: DrawerActivityStream Chain Connector', ()
     );
 
     expect(html).not.toContain('data-testid="batch-chain-connector"');
+  });
+});
+
+describe('Batch tool collapse keys are unique per tool', () => {
+  it('three batch tools with distinct tool ids produce distinct collapse keys', () => {
+    const mk = (id: string, toolId: string, index: number) => ({
+      id, type: 'tool' as const, timestamp: '12:00:00',
+      tool: { id: toolId, toolName: 'read_file', timestamp: '12:00:00', durationMs: 1, status: 'success' as const, params: {}, batch: { index, total: 3 } },
+    });
+    const keys = [mk('a', 'call-1', 1), mk('b', 'call-2', 2), mk('c', 'call-3', 3)].map((a, i) => activityCollapseKey(a, i));
+    expect(new Set(keys).size).toBe(3);
   });
 });
 
