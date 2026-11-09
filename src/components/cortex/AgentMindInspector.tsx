@@ -118,12 +118,12 @@ export function AgentMindInspector({
               />
             )}
 
-            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
+            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none">
               {stage.stageTitle}
             </span>
 
             {isBuiltin && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center translate-y-[0.5px] leading-tight">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center leading-none">
                 {t('cortex.builtinBadge')}
               </span>
             )}
@@ -191,9 +191,9 @@ export function AgentMindInspector({
                   ) : (
                     <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
-                  <span className="text-xs font-mono">{t('cortex.rules')}</span>
-                  <span className="text-[10px] font-mono text-[#8f8f8f]">rules/</span>
-                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none translate-y-px">({ruleFiles.length})</span>
+                  <span className="text-xs font-mono leading-none">{t('cortex.rules')}</span>
+                  <span className="text-[10px] font-mono text-[#8f8f8f] leading-none">rules/</span>
+                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none">({ruleFiles.length})</span>
                 </button>
                 <button
                   type="button"
@@ -288,7 +288,7 @@ function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileR
     >
       <div className="flex items-center space-x-1.5 min-w-0">
         {icon}
-        <span className="text-xs font-mono truncate">{file.name}</span>
+        <span className="text-xs font-mono truncate leading-none">{file.name}</span>
         {typeof badge === 'string' ? (
           <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
             {badge}

@@ -266,8 +266,8 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               )}
-              <span className="font-sans text-xs font-semibold">{t('cortex.columnsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
+              <span className="font-sans text-xs font-semibold leading-none">{t('cortex.columnsSection')}</span>
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
                 ({stages.length})
               </span>
             </button>
@@ -329,8 +329,8 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               )}
-              <span className="font-sans text-xs font-semibold">{t('cortex.agentsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
+              <span className="font-sans text-xs font-semibold leading-none">{t('cortex.agentsSection')}</span>
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
                 ({agentStages.length})
               </span>
             </button>
