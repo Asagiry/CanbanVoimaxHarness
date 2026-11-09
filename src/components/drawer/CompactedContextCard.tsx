@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { MarkdownContent } from './stream';
 import { useTranslation } from '../../stores/languageStore';
@@ -14,7 +14,7 @@ interface CompactedContextCardProps {
   activity: DrawerActivityItem;
 }
 
-export default function CompactedContextCard({ activity }: CompactedContextCardProps) {
+function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
   const { t, language } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -168,3 +168,6 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
     </div>
   );
 }
+
+const CompactedContextCard = memo(CompactedContextCardInner);
+export default CompactedContextCard;

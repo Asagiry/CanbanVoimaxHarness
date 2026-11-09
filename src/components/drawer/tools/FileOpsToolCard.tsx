@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronRight, FileCode2, FileText } from 'lucide-react';
 import { FileExtensionBadge, getLanguageBadgeConfig } from '../../common/BrandFileIcons';
 import {
@@ -10,12 +9,13 @@ import {
   BatchBadge,
   ToolParamsView,
   formatDurationCompact,
+  useToolExpanded,
 } from './shared';
 
 const getLanguageBadge = getLanguageBadgeConfig;
 
-export default function FileOpsToolCard({ tool }: ToolCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   const toolName = tool.toolName ?? 'file_op';
   const params: Record<string, unknown> =

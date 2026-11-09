@@ -1587,3 +1587,109 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_subtask_stage_never_inherits_parent_stage_on_board_mismatch() {
+        let base = PathBuf::from("target").join(format!("cvh_board_mismatch_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let mk_col = |id: &str, title: &str, persona: Option<&str>, auto_run: Option<bool>, terminal: Option<bool>, is_intake: Option<bool>| {
+            crate::config::PipelineColumn {
+                id: id.to_string(),
+                title: title.to_string(),
+                color: None,
+                icon: None,
+                persona: persona.map(|s| s.to_string()),
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run,
+                terminal,
+                is_intake,
+            }
+        };
+
+        let dev_board = crate::config::BoardDef {
+            id: "development".to_string(),
+            name: "Development".to_string(),
+            stages: vec![
+                mk_col("backlog", "Backlog", None, None, None, Some(true)),
+                mk_col("dev", "Developer", Some("developer"), Some(true), None, None),
+                mk_col("review", "Review", Some("reviewer"), Some(true), None, None),
+                mk_col("ready", "Ready", None, None, Some(true), None),
+            ],
+        };
+        let setup_board = crate::config::BoardDef {
+            id: "nastroyka".to_string(),
+            name: "Setup".to_string(),
+            stages: vec![
+                mk_col("backlog", "Backlog", None, None, None, Some(true)),
+                mk_col("dev", "CVH Development", Some("cvh-dev"), None, None, None),
+                mk_col("ready", "Ready", None, None, Some(true), None),
+            ],
+        };
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "nastroyka".to_string(),
+            boards: vec![dev_board, setup_board],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let parent = Task {
+            id: "CVH-091".to_string(),
+            title: "Lag fix".to_string(),
+            description: "desc".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: Some("C:\\fake\\worktree".to_string()),
+            branch: Some("feat/CVH-091".to_string()),
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            provider_id: None,
+            reasoning_effort: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 1000,
+            updated_at: 1000,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+            project_path: None,
+            stage_durations: None,
+            total_elapsed: None,
+        };
+        save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
+
+        let adv_res = internal_advance_task(&base, "CVH-091", "Handover to review", None)
+            .await
+            .expect("advance must succeed");
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача CVH-091.1"), "{}", adv_res);
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let sub = loaded.iter().find(|t| t.id == "CVH-091.1").expect("subtask exists");
+        assert_eq!(sub.stage_id, "review", "Subtask must be in review, never inherit parent dev stage");
+        assert_eq!(sub.board_id.as_deref(), Some("development"));
+        let parent_after = loaded.iter().find(|t| t.id == "CVH-091").unwrap();
+        assert_eq!(parent_after.stage_id, "dev");
+        assert_eq!(parent_after.status.as_deref(), Some("done"));
+        assert_eq!(parent_after.waiting_for_subtask_id.as_deref(), Some("CVH-091.1"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

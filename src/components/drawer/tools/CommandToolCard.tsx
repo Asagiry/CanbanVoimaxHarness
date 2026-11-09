@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronRight, Terminal } from 'lucide-react';
 import {
   ToolCardProps,
@@ -9,6 +8,7 @@ import {
   BatchBadge,
   ToolParamsView,
   formatDurationCompact,
+  useToolExpanded,
 } from './shared';
 
 function formatCommandPreview(cmd: string): string {
@@ -16,8 +16,8 @@ function formatCommandPreview(cmd: string): string {
   return stripped || cmd.trim();
 }
 
-export default function CommandToolCard({ tool }: ToolCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function CommandToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   const toolName = tool.toolName ?? 'cmd';
   const params: Record<string, unknown> =

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronRight, Wrench } from 'lucide-react';
 import {
   ToolCardProps,
@@ -9,10 +8,11 @@ import {
   BatchBadge,
   ToolParamsView,
   formatDurationCompact,
+  useToolExpanded,
 } from './shared';
 
-export default function GenericToolCard({ tool }: ToolCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function GenericToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   const toolName = tool.toolName ?? 'tool';
   const params: Record<string, unknown> =

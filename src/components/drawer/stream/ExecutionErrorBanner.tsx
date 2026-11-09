@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTranslation } from '../../../stores/languageStore';
 import { AlertTriangle, Play, X } from 'lucide-react';
 
@@ -7,7 +8,7 @@ export interface ExecutionErrorBannerProps {
   onDismiss: () => void;
 }
 
-export function ExecutionErrorBanner({
+function ExecutionErrorBannerInner({
   error,
   onRetry,
   onDismiss,
@@ -43,3 +44,5 @@ export function ExecutionErrorBanner({
     </div>
   );
 }
+
+export const ExecutionErrorBanner = memo(ExecutionErrorBannerInner);

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { CheckCircle2, RotateCcw } from 'lucide-react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
@@ -9,7 +10,7 @@ export interface StageSummaryCardProps {
   onImageClick?: (src: string, alt?: string) => void;
 }
 
-export default function StageSummaryCard({
+function StageSummaryCardInner({
   activity,
   durationMs,
   onImageClick,
@@ -61,3 +62,6 @@ export default function StageSummaryCard({
     </div>
   );
 }
+
+const StageSummaryCard = memo(StageSummaryCardInner);
+export default StageSummaryCard;

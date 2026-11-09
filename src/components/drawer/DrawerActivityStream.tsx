@@ -1,34 +1,23 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
-import ToolExecutionCard from './ToolExecutionCard';
-import QuestionPromptCard from './QuestionPromptCard';
-import CompactedContextCard from './CompactedContextCard';
 import ImageLightboxModal from './ImageLightboxModal';
-import ActivityItemActions from './stream/ActivityItemActions';
 import { useShallow } from 'zustand/react/shallow';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { ArrowDown, AlertTriangle, Info, WifiOff } from 'lucide-react';
+import { ArrowDown, WifiOff } from 'lucide-react';
 import { useActivityScroll } from './useActivityScroll';
 import {
-  ThoughtStreamCard,
-  SteerDirectiveCard,
   SubagentActivityCard,
   LightboxContext,
-  AgentExplanationCard,
-  TerminalResponseCard,
   TaskObjectiveCard,
   ExecutionErrorBanner,
-  StageSummaryCard,
-  isFinalResponseItem,
-  hasNearbyTodoWrite,
-  shouldSuppressExplanation,
+  ActivityItem,
   filterDisplayActivities,
   computeActivityDurations,
+  computeActivityFlags,
 } from './stream';
-import { tryExtractTodos } from '../../lib/markdown';
 
 export { MarkdownContent, LightboxContext } from './stream';
 
@@ -79,7 +68,6 @@ export default function DrawerActivityStream({
           useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.attachments
         : undefined;
 
-  // Image Lightbox state & handlers (§ 2.13 Viewport Overlay & Image Lightbox Invariant)
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
 
   const handleOpenLightbox = useCallback((src: string, alt?: string) => {
@@ -98,26 +86,34 @@ export default function DrawerActivityStream({
     }
   }, [handleOpenLightbox]);
 
-  // Obeying § 2.20 & Question Tool Dedup:
   const displayActivities = useMemo(
     () => filterDisplayActivities(unifiedActivities, task?.id),
     [unifiedActivities, task?.id]
   );
 
-  // Pre-compute elapsed duration for each activity item
   const activityDurations = useMemo(
     () => computeActivityDurations(displayActivities, isRunning),
     [displayActivities, isRunning]
   );
 
+  const activityFlags = useMemo(
+    () => computeActivityFlags(displayActivities ?? [], isRunning),
+    [displayActivities, isRunning]
+  );
+
   const {
     scrollRef,
-    collapsedOutputs,
     showNewButton,
-    toggleOutput,
+    isCollapsed,
+    toggleCollapsed,
     scrollToBottom,
     handleFeedScroll,
   } = useActivityScroll(displayActivities, task?.id);
+
+  const handleToggleOutput = useCallback(
+    (key: string, idx: number, total: number) => toggleCollapsed(key, idx, total),
+    [toggleCollapsed]
+  );
 
   return (
     <LightboxContext.Provider value={handleOpenLightbox}>
@@ -128,7 +124,6 @@ export default function DrawerActivityStream({
             <span>{t('drawer.waitingForConnection')}</span>
           </div>
         )}
-        {/* Warning Banner on agent run error */}
         {runError && (
           <ExecutionErrorBanner
             error={runError}
@@ -137,7 +132,6 @@ export default function DrawerActivityStream({
           />
         )}
 
-        {/* Main Unified Activity Feed Scrollable Area */}
         <div
           ref={scrollRef}
           onScroll={handleFeedScroll}
@@ -162,194 +156,40 @@ export default function DrawerActivityStream({
               />
             )}
 
-            {/* Unified Chronological Activity Stream */}
             {(displayActivities ?? []).map((activity, idx) => {
               const key = activity?.id ?? `activity-${idx}`;
-              const renderCard = () => {
-
-              // e) Interactive Question Prompt Card (Human-in-the-Loop)
-              if (
-                activity?.type === 'question' ||
-                (activity?.type === 'tool' &&
-                  (activity.tool?.toolName === 'question' || activity.tool?.toolName === 'ask_user'))
-              ) {
-                return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none">
-                    <QuestionPromptCard activity={activity} taskId={task.id} />
-                  </div>
-                );
-              }
-
-              // Compacted context accordion card
-              if (activity?.type === 'compacted') {
-                return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none">
-                    <CompactedContextCard activity={activity} />
-                  </div>
-                );
-              }
-
-              // b) Live Streaming Thinking Block
-              if (activity?.type === 'thought') {
-                const isLastActivity = idx === ((displayActivities?.length ?? 1) - 1);
-                return (
-                  <ThoughtStreamCard
-                    key={key}
-                    activity={activity}
-                    isTaskRunning={isRunning}
-                    isLive={isRunning && isLastActivity}
-                    taskId={task.id}
-                    durationMs={activityDurations[idx] || activity.durationMs}
-                  />
-                );
-              }
-
-              // d) Inline Tool Execution Card (including subagent tool executions)
-              if (activity?.type === 'tool' && activity?.tool) {
-                // Suppress duplicate tool card when compaction succeeded — CompactedContextCard already displays the full report
-                if (activity.tool.toolName === 'compact_context' && activity.tool.status === 'success') {
-                  return null;
-                }
-                const toolWithDuration = {
-                  ...activity.tool,
-                  durationMs: activity.tool.durationMs || activityDurations[idx] || 0,
-                };
-                const currentBatch = activity.tool.batch;
-                const nextActivity = displayActivities[idx + 1];
-                const hasNextInBatch = Boolean(
-                  currentBatch &&
-                  currentBatch.total > 1 &&
-                  currentBatch.index < currentBatch.total &&
-                  nextActivity?.type === 'tool' &&
-                  nextActivity.tool?.batch &&
-                  nextActivity.tool.batch.total === currentBatch.total &&
-                  nextActivity.tool.batch.index === currentBatch.index + 1
-                );
-
-                return (
-                  <div key={key} className="relative animate-silk-entrance motion-reduce:animate-none">
-                    <ToolExecutionCard tool={toolWithDuration} />
-                    {hasNextInBatch && (
-                      <div
-                        data-testid="batch-chain-connector"
-                        className="absolute left-4 -bottom-3.5 h-3.5 border-l-2 border-dashed border-blue-500/40 dark:border-blue-400/30 z-10 pointer-events-none"
-                      />
-                    )}
-                  </div>
-                );
-              }
-
-              // User steer message, agent message, or Gatekeeper Sensor rejection
-              if (activity?.type === 'user' || activity?.type === 'steer' || (activity?.type as string) === 'agent') {
-                return (
-                  <SteerDirectiveCard
-                    key={key}
-                    activity={activity}
-                    onImageClick={handleOpenLightbox}
-                  />
-                );
-              }
-
-              // Subagent Activity / Report Item
-              if ((activity?.type as string) === 'subagent') {
-                return (
-                  <SubagentActivityCard
-                    key={key}
-                    activity={activity}
-                    durationMs={activityDurations[idx] || activity.durationMs}
-                    onImageClick={handleOpenLightbox}
-                  />
-                );
-              }
-
-              // System notices
-              if (activity?.type === 'system') {
-                return (
-                  <div
-                    key={key}
-                    className="animate-silk-entrance motion-reduce:animate-none flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f4f4f5] dark:bg-[#17171b] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#a1a1aa] font-mono shadow-xs"
-                  >
-                    <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
-                    <span className="flex-1">{activity?.content ?? ''}</span>
-                  </div>
-                );
-              }
-
-              // Error notices
-              if (activity?.type === 'error') {
-                return (
-                  <div
-                    key={key}
-                    className="animate-silk-entrance motion-reduce:animate-none flex items-start space-x-2 rounded-md border border-[#fecaca] dark:border-[#da3633] bg-[#fef2f2] dark:bg-[#3b1219] p-3 text-xs text-[#991b1b] dark:text-[#ff7b72] font-mono shadow-xs"
-                  >
-                    <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0 mt-0.5" />
-                    <div className="flex-1 whitespace-pre-wrap select-text">
-                      {activity?.content ?? ''}
-                    </div>
-                  </div>
-                );
-              }
-
-              // Dedicated Stage Summary Card (advance_task handover) or Reviewer Verdict Card
-              if ((activity?.type as string) === 'summary' || (activity?.type as string) === 'reject') {
-                return (
-                  <StageSummaryCard
-                    key={key}
-                    activity={activity}
-                    durationMs={activityDurations[idx] || activity.durationMs}
-                    onImageClick={handleOpenLightbox}
-                  />
-                );
-              }
-              // c) Assistant Response: True Final Response vs Intermediate Step Commentary
-              const isFinal = isFinalResponseItem(activity, idx, displayActivities ?? [], isRunning);
-
-              if (!isFinal) {
-                const nearbyTodo = hasNearbyTodoWrite(idx, displayActivities ?? []);
-                if (shouldSuppressExplanation(activity, idx, displayActivities ?? [])) {
-                  return null;
-                }
-                const explanationText = activity?.content;
-                const todoData = explanationText ? tryExtractTodos(explanationText) : null;
-                if (todoData && nearbyTodo && !todoData.leadingText) {
-                  return null;
-                }
-                return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none">
-                    <AgentExplanationCard
-                      activity={activity}
-                      content={activity?.content}
-                      durationMs={activityDurations[idx] || activity?.durationMs}
-                      hasNearbyTodoWrite={nearbyTodo}
-                      onImageClick={handleOpenLightbox}
-                    />
-                  </div>
-                );
-              }
-
-              // True Final Response / Output Markdown Block (collapsible card)
+              const nextActivity = displayActivities[idx + 1];
+              const currentBatch = activity?.tool?.batch;
+              const hasNextInBatch = Boolean(
+                currentBatch &&
+                currentBatch.total > 1 &&
+                currentBatch.index < currentBatch.total &&
+                nextActivity?.type === 'tool' &&
+                nextActivity.tool?.batch &&
+                nextActivity.tool.batch.total === currentBatch.total &&
+                nextActivity.tool.batch.index === currentBatch.index + 1
+              );
               return (
-                <TerminalResponseCard
+                <ActivityItem
                   key={key}
                   activity={activity}
-                  durationMs={activityDurations[idx] || activity?.durationMs}
-                  isExpanded={!collapsedOutputs.has(key)}
-                  onToggleExpanded={() => toggleOutput(key)}
+                  idx={idx}
+                  isRunning={isRunning}
+                  isLast={idx === ((displayActivities?.length ?? 1) - 1)}
+                  durationMs={activityDurations[idx]}
+                  isExpanded={!isCollapsed(key, idx, displayActivities?.length ?? 0)}
+                  onToggleExpanded={() => handleToggleOutput(key, idx, displayActivities?.length ?? 0)}
                   onImageClick={handleOpenLightbox}
+                  taskId={activeSubagentId || task.id}
+                  hasNextInBatch={hasNextInBatch}
+                  nextActivity={nextActivity}
+                  flag={activityFlags[idx]}
                 />
-              );
-              };
-              const card = renderCard();
-              return card && (
-                <ActivityItemActions key={key} taskId={activeSubagentId || task.id} itemId={activity.id} disabled={isRunning}>
-                  {card}
-                </ActivityItemActions>
               );
             })}
           </div>
         </div>
 
-        {/* Floating Scroll to Bottom Button */}
         {showNewButton && (
           <button
             type="button"
@@ -362,7 +202,6 @@ export default function DrawerActivityStream({
           </button>
         )}
 
-        {/* Obeying § 2.13 Viewport Overlay & Image Lightbox Invariants */}
         {lightboxImage && (
           <ImageLightboxModal
             src={lightboxImage.src}

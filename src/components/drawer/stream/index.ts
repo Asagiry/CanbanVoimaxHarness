@@ -12,7 +12,7 @@ export type { SteerDirectiveCardProps } from './SteerDirectiveCard';
 export { SubagentActivityCard } from './SubagentActivityCard';
 export type { SubagentActivityCardProps } from './SubagentActivityCard';
 
-export { MarkdownContent, LightboxContext, renderInlineNodes, formatInline } from './MarkdownContent';
+export { MarkdownContent, LightboxContext, renderInlineNodes, formatInline, getCachedMarkdownTokens, hashContent, clearMarkdownTokenCache } from './MarkdownContent';
 export type { MarkdownContentProps } from './MarkdownContent';
 
 export { AgentExplanationCard } from './AgentExplanationCard';
@@ -37,4 +37,8 @@ export {
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
+  computeActivityFlags,
 } from './streamHelpers';
+export type { ActivityFlag } from './streamHelpers';
+export { ActivityItem } from './ActivityItem';
+export type { ActivityItemProps } from './ActivityItem';

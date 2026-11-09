@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
 import {
@@ -21,7 +21,7 @@ export interface TerminalResponseCardProps {
   onImageClick?: (src: string, alt?: string) => void;
 }
 
-export function TerminalResponseCard({
+function TerminalResponseCardInner({
   activity,
   durationMs,
   model,
@@ -130,3 +130,5 @@ export function TerminalResponseCard({
     </div>
   );
 }
+
+export const TerminalResponseCard = memo(TerminalResponseCardInner);

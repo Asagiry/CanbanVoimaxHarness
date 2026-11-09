@@ -1,4 +1,5 @@
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
+import { tryExtractTodos, type ExtractedTodosResult } from '../../../lib/markdown';
 
 /**
  * Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
@@ -284,3 +285,103 @@ export function filterDisplayActivities(
 }
 
 export { computeActivityDurations } from '../../../stores/drawer/drawerHelpers';
+
+export interface ActivityFlag {
+  isFinal: boolean;
+  nearbyTodo: boolean;
+  suppressed: boolean;
+  todoData: ExtractedTodosResult | null;
+}
+
+export function computeActivityFlags(
+  activities: DrawerActivityItem[],
+  isRunning: boolean
+): ActivityFlag[] {
+  const list = activities ?? [];
+  const n = list.length;
+  const flags: ActivityFlag[] = Array.from({ length: n });
+
+  const isTodoWrite = (act: DrawerActivityItem | undefined): boolean => {
+    if (!act || act.type !== 'tool') return false;
+    const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
+    return tName === 'todo_write';
+  };
+
+  const isTurnEnd = (act: DrawerActivityItem | undefined): boolean =>
+    !!act && (act.type === 'user' || act.type === 'steer' || act.type === 'prompt');
+
+  const isIntervening = (act: DrawerActivityItem | undefined): boolean =>
+    !!act &&
+    (act.type === 'tool' ||
+      !!(act as any).tool ||
+      act.type === 'output' ||
+      (act.type as string) === 'summary');
+
+  const nextTurnEnd = Array.from({ length: n + 1 }, () => false);
+  const nextIntervening = Array.from({ length: n + 1 }, () => false);
+  for (let i = n - 1; i >= 0; i--) {
+    nextTurnEnd[i] = nextTurnEnd[i + 1] || isTurnEnd(list[i]);
+    nextIntervening[i] = nextIntervening[i + 1] || isIntervening(list[i]);
+  }
+
+  const todoIndices: number[] = [];
+  for (let i = 0; i < n; i++) if (isTodoWrite(list[i])) todoIndices.push(i);
+
+  const nearbyTodo = Array.from({ length: n }, () => false);
+  for (const ti of todoIndices) {
+    for (let i = Math.max(0, ti - 3); i <= Math.min(n - 1, ti + 3); i++) {
+      if (i !== ti) nearbyTodo[i] = true;
+    }
+  }
+
+  let prevOutputText: string | null = null;
+  let prevOutputLower: string | null = null;
+  let prevOutputIdx = -1;
+
+  for (let idx = 0; idx < n; idx++) {
+    const activity = list[idx];
+
+    let isFinal = false;
+    if (activity.type === 'output' || (activity.type as string) === 'summary') {
+      const hasIntervening = idx + 1 < n ? nextIntervening[idx + 1] : false;
+      const turnHasEnded = idx + 1 < n ? nextTurnEnd[idx + 1] : false;
+      if (!hasIntervening) {
+        if (activity.isFinal) isFinal = true;
+        else if (!turnHasEnded && isRunning) isFinal = false;
+        else if (turnHasEnded || !isRunning) isFinal = true;
+      }
+    }
+
+    let suppressed = false;
+    const explanationText = (activity?.content || '').trim();
+    if (!explanationText) {
+      suppressed = true;
+    } else if (activity.id.endsWith(':output')) {
+      suppressed = false;
+    } else {
+      const expLower = explanationText.toLowerCase();
+      if (
+        prevOutputText !== null &&
+        prevOutputIdx >= idx - 5 &&
+        (prevOutputText === explanationText || prevOutputLower === expLower)
+      ) {
+        suppressed = true;
+      }
+    }
+
+    const todoData = explanationText ? tryExtractTodos(explanationText) : null;
+
+    flags[idx] = { isFinal, nearbyTodo: nearbyTodo[idx], suppressed, todoData };
+
+    if (activity.type === 'output' || !activity.type) {
+      const prevText = (activity.content || '').trim();
+      if (prevText) {
+        prevOutputText = prevText;
+        prevOutputLower = prevText.toLowerCase();
+        prevOutputIdx = idx;
+      }
+    }
+  }
+
+  return flags;
+}

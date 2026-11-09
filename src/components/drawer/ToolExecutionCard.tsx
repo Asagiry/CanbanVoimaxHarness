@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ToolExecution } from '../../types';
 import CompactContextToolCard from './tools/CompactContextToolCard';
 import SubagentToolCard from './tools/SubagentToolCard';
@@ -14,9 +15,11 @@ export interface ToolExecutionCardProps {
   tool: ToolExecution;
   onRerun?: (tool: ToolExecution) => void;
   isLatest?: boolean;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
 }
 
-export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecutionCardProps) {
+function ToolExecutionCardInner({ tool, onRerun, isLatest, isExpanded, onToggleExpanded }: ToolExecutionCardProps) {
   if (!tool) return null;
 
   const toolName = tool.toolName ?? 'tool';
@@ -25,11 +28,11 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
   switch (toolName) {
     case 'todo_write':
     case 'write_todos':
-      card = <TodoToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <TodoToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'compact_context':
-      card = <CompactContextToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <CompactContextToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'subagent':
@@ -37,7 +40,7 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
     case 'collect_subagent':
     case 'subagent_list':
     case 'list_subagents':
-      card = <SubagentToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <SubagentToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'read':
@@ -48,27 +51,27 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
     case 'edit':
     case 'edit_file':
     case 'str_replace':
-      card = <FileOpsToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <FileOpsToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'glob':
     case 'grep':
-      card = <SearchToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <SearchToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'execute_command':
     case 'bash':
     case 'pwsh':
-      card = <CommandToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <CommandToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     case 'web_search':
     case 'web_fetch':
-      card = <WebToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <WebToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
 
     default:
-      card = <GenericToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <GenericToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
       break;
   }
 
@@ -78,3 +81,6 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
 
   return card;
 }
+
+const ToolExecutionCard = memo(ToolExecutionCardInner);
+export default ToolExecutionCard;

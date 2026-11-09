@@ -39,6 +39,7 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/stream/MarkdownContent.tsx` | Streaming markdown tokens, copyable codeblocks, lightbox. |
 | `src/components/drawer/stream/AgentExplanationCard.tsx` | Intermediate step commentary, action plan, and todo list. |
 | `src/components/drawer/stream/ActivityItemActions.tsx` | Stopped-dialog deletion with visible persistence errors. |
+| `src/components/drawer/stream/ActivityItem.tsx` | Memoized per-item renderer extracted from DrawerActivityStream. |
 | `src/components/drawer/stream/TerminalResponseCard.tsx` | Prominent final response card with copy and duration. |
 | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
 | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |

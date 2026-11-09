@@ -1119,11 +1119,9 @@ pub async fn internal_advance_task_to_stage(
     let _ = upsert_single_task(root, &mut current_task);
     auto_complete_task_todos(root, &mut current_task, app_handle);
 
-    // Mirror internal_move_task_stage: run the legacy on_enter_script
-    // hook on the agent advance path too, otherwise the Review
-    // on_enter (and its hook:start/finish emits) never fire for
-    // advance_task — the card stays in the source column with no
-    // running indicator.
+    // Legacy on_enter_script (col.on_enter_script) is a distinct field from
+    // hooks.on_enter executed by the pipeline above — not a duplicate.
+    // It is best-effort and must not block subtask creation.
     trigger_column_on_enter_script(
         &target_col,
         &mut current_task,

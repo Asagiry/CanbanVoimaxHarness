@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import QuestionPromptCard from '../QuestionPromptCard';
+import { QuestionPromptCardInner } from '../QuestionPromptCard';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useDrawerStore } from '../../../stores/drawerStore';
 
@@ -272,7 +273,7 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
     it('dispatches recordQuestionAnswer when single choice option is clicked', async () => {
       const activity = createActivity();
       const simulator = new ReactDispatcherSimulator();
-      const tree = simulator.render(() => QuestionPromptCard({ activity, taskId: 'CVH-032' }));
+      const tree = simulator.render(() => QuestionPromptCardInner({ activity, taskId: 'CVH-032' }));
 
       // Find option buttons in rendered tree
       const buttons = findElements(
@@ -300,7 +301,7 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
       // Override state call index 2 (customInput)
       const overrides = new Map<number, any>([[2, 'Мой кастомный конфиг']]);
       const tree = simulator.render(
-        () => QuestionPromptCard({ activity, taskId: 'CVH-032' }),
+        () => QuestionPromptCardInner({ activity, taskId: 'CVH-032' }),
         overrides
       );
 

@@ -8,6 +8,25 @@ export interface ToolCardProps {
   tool: ToolExecution;
   onRerun?: (tool: ToolExecution) => void;
   isLatest?: boolean;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
+}
+
+export function useToolExpanded(
+  controlledExpanded: boolean | undefined,
+  onToggleExpanded: (() => void) | undefined,
+  defaultExpanded = false
+): [boolean, (v: boolean | ((prev: boolean) => boolean)) => void] {
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const setIsExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
+    if (onToggleExpanded) {
+      onToggleExpanded();
+    } else {
+      setInternalExpanded(typeof v === 'function' ? (v as (p: boolean) => boolean)(internalExpanded) : v);
+    }
+  };
+  return [isExpanded, setIsExpanded];
 }
 
 export function isToolSkipped(tool: ToolExecution): boolean {

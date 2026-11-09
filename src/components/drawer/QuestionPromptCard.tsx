@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, memo } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { Check, CornerDownLeft, Lock } from 'lucide-react';
@@ -29,7 +29,7 @@ function QuestionMarkIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-export default function QuestionPromptCard({ activity, taskId }: QuestionPromptCardProps) {
+export function QuestionPromptCardInner({ activity, taskId }: QuestionPromptCardProps) {
   const recordQuestionAnswer = useDrawerStore((s) => s.recordQuestionAnswer);
 
   const params = useMemo(() => {
@@ -389,3 +389,6 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
     </div>
   );
 }
+
+const QuestionPromptCard = memo(QuestionPromptCardInner);
+export default QuestionPromptCard;

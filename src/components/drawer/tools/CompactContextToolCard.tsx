@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '../../../stores/languageStore';
 import { formatDurationCompact } from '../ThinkingCard';
 import { ChevronRight, Copy, Check, X, Minimize2 } from 'lucide-react';
-import { ToolCardProps, isToolFailed, isToolSkipped, BatchBadge } from './shared';
+import { ToolCardProps, isToolFailed, isToolSkipped, BatchBadge, useToolExpanded } from './shared';
 
-export default function CompactContextToolCard({ tool }: ToolCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function CompactContextToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeStep, setActiveStep] = useState(1);

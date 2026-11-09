@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
 import {
@@ -22,7 +22,7 @@ export interface AgentExplanationCardProps {
   onImageClick?: (src: string, alt?: string) => void;
 }
 
-export function AgentExplanationCard({
+function AgentExplanationCardInner({
   activity,
   content,
   durationMs,
@@ -126,3 +126,5 @@ export function AgentExplanationCard({
     </div>
   );
 }
+
+export const AgentExplanationCard = memo(AgentExplanationCardInner);
