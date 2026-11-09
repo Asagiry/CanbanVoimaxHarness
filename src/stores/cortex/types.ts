@@ -75,6 +75,21 @@ export interface RulesActions {
 
 export type RulesSlice = RulesState & RulesActions;
 
+export interface CvhGitStatus {
+  hasChanges: boolean;
+  changedPaths: string[];
+  branch: string;
+  ahead?: boolean;
+}
+
+export interface PendingDelete {
+  path: string;
+  kind: 'rule' | 'agent' | 'globalRule';
+  stageId?: string;
+  fileId?: string;
+  role?: string;
+}
+
 export interface CortexFilesState {
   stages: CortexAgentStage[];
   agentStages: CortexAgentStage[];
@@ -85,6 +100,10 @@ export interface CortexFilesState {
   isSaving: boolean;
   saveFeedback: string | null;
   fileMissing: Record<string, boolean>;
+  cvhGitStatus: CvhGitStatus | null;
+  cvhGitSaving: boolean;
+  cvhGitError: string | null;
+  pendingDeletes: Record<string, PendingDelete>;
 }
 
 export interface CortexFilesActions {
@@ -94,6 +113,11 @@ export interface CortexFilesActions {
   syncStagesFromStages?: (stages: PipelineStage[]) => void;
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;
   loadGlobalRules: () => Promise<void>;
+  refreshCvhGitStatus: () => Promise<void>;
+  saveCvhToGit: (message?: string) => Promise<void>;
+  markPendingDelete: (key: string, entry: PendingDelete) => void;
+  restorePendingDelete: (key: string) => void;
+  clearCvhGitError: () => void;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;
   createSettingTemplate: (fileId: string) => Promise<void>;

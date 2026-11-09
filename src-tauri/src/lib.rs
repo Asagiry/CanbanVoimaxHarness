@@ -68,6 +68,8 @@ pub fn run() {
             save_cortex_file,
             list_global_rules,
             delete_cortex_file,
+            cvh_git_status,
+            cvh_git_save,
             list_tasks,
             save_tasks,
             save_task_activity,

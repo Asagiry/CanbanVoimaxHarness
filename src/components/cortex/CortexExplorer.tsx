@@ -9,6 +9,7 @@ import {
   Pencil,
   Trash2,
   RotateCw,
+  RotateCcw,
   Palette,
   ChevronDown,
   ChevronRight,
@@ -20,6 +21,9 @@ import AgentMindInspector from './AgentMindInspector';
 import GlobalRulesSection from './GlobalRulesSection';
 import EditAgentPersonaModal from './EditAgentPersonaModal';
 import CreateAgentModal from './CreateAgentModal';
+import CvhSaveButton from './CvhSaveButton';
+import DirtyDot from './DirtyDot';
+import { isAgentDirty, isColumnDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface CortexExplorerProps {
   className?: string;
@@ -44,6 +48,11 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
   } = useCortexStore();
 
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
+  const refreshCvhGitStatus = useCortexStore((s) => s.refreshCvhGitStatus);
+  const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const pendingDeletes = useCortexStore((s) => s.pendingDeletes);
+  const activeFile = useCortexStore((s) => s.activeFile);
   const { columns, boards } = useBoardStore();
   const { t } = useTranslation();
 
@@ -173,6 +182,18 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
     void loadGlobalRules();
   }, [loadGlobalRules]);
 
+  useEffect(() => {
+    void refreshCvhGitStatus();
+    const onFocus = () => void refreshCvhGitStatus();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshCvhGitStatus]);
+
+  useEffect(() => {
+    const id = setTimeout(() => void refreshCvhGitStatus(), 500);
+    return () => clearTimeout(id);
+  }, [activeFile, refreshCvhGitStatus]);
+
   const toggleSection = (key: 'columns' | 'agents' | 'globalRules') => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -224,6 +245,8 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
         <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5]">
           {t('cortex.title')}
         </span>
+        <div className="flex items-center gap-0.5">
+        <CvhSaveButton />
         <button
           type="button"
           onClick={handleRefreshPersonas}
@@ -232,6 +255,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
         >
           <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
         </button>
+        </div>
       </div>
 
       {/* Filter Search Input */}
@@ -270,6 +294,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
                 ({stages.length})
               </span>
+              {stages.some((s) => isColumnDirty(s, columns.find((c) => c.id === s.stageId), cvhGitStatus)) && <DirtyDot />}
             </button>
           </div>
 
@@ -333,6 +358,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
                 ({agentStages.length})
               </span>
+              {agentStages.some((s) => isAgentDirty(s, cvhGitStatus, pendingDeletes)) && <DirtyDot />}
             </button>
             <button
               type="button"
@@ -405,6 +431,19 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#71717a] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#212126] mb-1 truncate">
             {t('cortex.agentContextMenu', { role: agentContextMenu.role })}
           </div>
+          {pendingDeletes[`agent:${agentContextMenu.role}`] && (
+            <button
+              onClick={() => {
+                const role = agentContextMenu.role;
+                setAgentContextMenu(null);
+                restorePendingDelete(`agent:${role}`);
+              }}
+              className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a]" />
+              <span>{t('cortex.restoreDeleted')}</span>
+            </button>
+          )}
           <button
             onClick={() => {
               const persona = agentContextMenu.persona;

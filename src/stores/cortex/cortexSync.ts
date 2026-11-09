@@ -51,6 +51,7 @@ function buildColumnHookFiles(
         path: targetPath,
         content: prev?.content ?? '',
         isDirty: prev?.isDirty ?? false,
+        isDeleted: prev?.isDeleted ?? false,
       };
     });
 }
@@ -77,6 +78,7 @@ function buildDiskRules(
       path: `${dir}/rules/${ruleName}`,
       content: prev?.content ?? '',
       isDirty: prev?.isDirty ?? false,
+      isDeleted: prev?.isDeleted ?? false,
     };
   });
 }
@@ -93,9 +95,9 @@ function buildPersonaAndSettingFiles(
   const prevPersona = prevById.get(personaId);
   const prevSettings = prevById.get(settingsId);
   return [
-    { id: personaId, name: personaFileName, stageId, type: 'persona', path: `${dir}/${personaFileName}`, content: prevPersona?.content ?? '', isDirty: prevPersona?.isDirty ?? false },
+    { id: personaId, name: personaFileName, stageId, type: 'persona', path: `${dir}/${personaFileName}`, content: prevPersona?.content ?? '', isDirty: prevPersona?.isDirty ?? false, isDeleted: prevPersona?.isDeleted ?? false },
     ...middleFiles,
-    { id: settingsId, name: 'setting', stageId, type: 'settings', path: `${dir}/setting`, content: prevSettings?.content ?? '', isDirty: prevSettings?.isDirty ?? false },
+    { id: settingsId, name: 'setting', stageId, type: 'settings', path: `${dir}/setting`, content: prevSettings?.content ?? '', isDirty: prevSettings?.isDirty ?? false, isDeleted: prevSettings?.isDeleted ?? false },
   ];
 }
 
@@ -307,6 +309,7 @@ export async function loadAgentPersonasAction(set: CortexSet, get: CortexGet): P
       personaName: p.role,
       isExpanded: prevStage?.isExpanded ?? false,
       isBuiltin,
+      isDeleted: prevStage?.isDeleted ?? false,
       files: buildPersonaAndSettingFiles(stageId, dir, p.personaFile ?? 'persona.md', allRules, prevById),
     };
   });

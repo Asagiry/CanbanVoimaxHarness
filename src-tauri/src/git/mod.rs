@@ -1,3 +1,4 @@
+pub mod cvh_save;
 pub mod cvh_sync;
 pub use cvh_sync::{mark_worktree_cvh_untracked, sync_cvh_runtime_state, sync_cvh_to_all_worktrees};
 
@@ -15,7 +16,7 @@ pub struct WorktreeInfo {
     pub branch: Option<String>,
 }
 
-async fn run_git(repo_root: &Path, args: &[&str]) -> Result<String> {
+pub(crate) async fn run_git(repo_root: &Path, args: &[&str]) -> Result<String> {
     let mut cmd = Command::new("git");
     cmd.current_dir(repo_root).args(args);
     #[cfg(windows)]

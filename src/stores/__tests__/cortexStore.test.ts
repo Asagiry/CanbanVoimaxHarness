@@ -41,6 +41,10 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       isSaving: false,
       saveFeedback: null,
       fileMissing: {},
+      cvhGitStatus: null,
+      cvhGitSaving: false,
+      cvhGitError: null,
+      pendingDeletes: {},
     });
   });
 
@@ -422,7 +426,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(settingsIndex).toBe(files.length - 1);
     });
 
-    it('deleteRule removes rule from stage files and closes editor if active file was deleted', async () => {
+    it('deleteRule tombstones rule (stays with isDeleted) and closes editor if active file was deleted', async () => {
       const devStage = useCortexStore.getState().stages.find((s) => s.stageId === 'dev');
       const targetRule = devStage?.files.find((f) => f.name === 'tools.md');
       expect(targetRule).toBeDefined();
@@ -432,7 +436,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       await useCortexStore.getState().deleteRule('dev', 'tools.md');
 
       const updatedDevStage = useCortexStore.getState().stages.find((s) => s.stageId === 'dev');
-      expect(updatedDevStage?.files.some((f) => f.name === 'tools.md')).toBe(false);
+      expect(updatedDevStage?.files.find((f) => f.name === 'tools.md')?.isDeleted).toBe(true);
       expect(useCortexStore.getState().activeFile).toBeNull();
       expect(useCortexStore.getState().isEditorOpen).toBe(false);
     });
@@ -642,7 +646,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       });
     });
 
-    it('deleteGlobalRule deletes via IPC, removes from globalRules, and closes editor if active', async () => {
+    it('deleteGlobalRule tombstones file (no IPC), restore clears flag, save clears tombstones', async () => {
       mockInvoke.mockResolvedValue(true);
 
       const ruleFile = {
@@ -659,18 +663,66 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
         globalRules: [ruleFile],
         activeFile: ruleFile,
         isEditorOpen: true,
+        pendingDeletes: {},
+        cvhGitStatus: null,
       });
 
       await useCortexStore.getState().deleteGlobalRule('obsolete.md');
 
-      expect(mockInvoke).toHaveBeenCalledWith('delete_cortex_file', {
-        path: '.cvh/rules/obsolete.md',
-      });
+      expect(mockInvoke).not.toHaveBeenCalledWith('delete_cortex_file', expect.anything());
 
-      const state = useCortexStore.getState();
-      expect(state.globalRules).toHaveLength(0);
+      let state = useCortexStore.getState();
+      expect(state.globalRules).toHaveLength(1);
+      expect(state.globalRules[0].isDeleted).toBe(true);
+      expect(Object.keys(state.pendingDeletes)).toHaveLength(1);
       expect(state.activeFile).toBeNull();
       expect(state.isEditorOpen).toBe(false);
+
+      useCortexStore.getState().restorePendingDelete('file:global-rule-obsolete.md');
+      state = useCortexStore.getState();
+      expect(state.globalRules[0].isDeleted).toBe(false);
+      expect(Object.keys(state.pendingDeletes)).toHaveLength(0);
+
+      await useCortexStore.getState().deleteGlobalRule('obsolete.md');
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'cvh_git_save') return { hasChanges: false, changedPaths: [], branch: 'main', ahead: false };
+        return true;
+      });
+      await useCortexStore.getState().saveCvhToGit();
+      state = useCortexStore.getState();
+      expect(mockInvoke).toHaveBeenCalledWith('delete_cortex_file', { path: '.cvh/rules/obsolete.md' });
+      expect(state.globalRules).toHaveLength(0);
+      expect(Object.keys(state.pendingDeletes)).toHaveLength(0);
+    });
+
+    it('saveCvhToGit keeps tombstones and surfaces error when deferred delete IPC fails', async () => {
+      const ruleFile = {
+        id: 'global-rule-broken.md',
+        name: 'broken.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/broken.md',
+        content: '# Broken',
+        isDirty: false,
+        isDeleted: true,
+      };
+      useCortexStore.setState({
+        globalRules: [ruleFile],
+        pendingDeletes: {
+          'file:global-rule-broken.md': { path: '.cvh/rules/broken.md', kind: 'globalRule', stageId: 'global', fileId: 'global-rule-broken.md' },
+        },
+        cvhGitError: null,
+      });
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'delete_cortex_file') throw new Error('disk locked');
+        return true;
+      });
+      await expect(useCortexStore.getState().saveCvhToGit()).rejects.toThrow('disk locked');
+      const state = useCortexStore.getState();
+      expect(Object.keys(state.pendingDeletes)).toHaveLength(1);
+      expect(state.globalRules[0].isDeleted).toBe(true);
+      expect(state.cvhGitError).toContain('disk locked');
+      expect(mockInvoke).not.toHaveBeenCalledWith('cvh_git_save', expect.anything());
     });
 
     it('loadGlobalRules replaces previous project global rules and closeEditor resets activeFile on project switch', async () => {

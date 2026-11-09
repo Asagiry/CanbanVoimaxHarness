@@ -17,6 +17,8 @@ import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import NewCortexFileForm from './NewCortexFileForm';
+import DirtyDot from './DirtyDot';
+import { isAgentDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface AgentMindInspectorProps {
   stage: CortexAgentStage;
@@ -46,6 +48,10 @@ export function AgentMindInspector({
   const toggleStageExpand = useCortexStore((s) => s.toggleStageExpand);
   const createPersonaTemplate = useCortexStore((s) => s.createPersonaTemplate);
   const createSettingTemplate = useCortexStore((s) => s.createSettingTemplate);
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const pendingDeletes = useCortexStore((s) => s.pendingDeletes);
+  const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
+  const agentDirty = isAgentDirty(stage, cvhGitStatus, pendingDeletes);
 
   const [isRulesOpen, setIsRulesOpen] = useState(true);
   const [isCreatingRule, setIsCreatingRule] = useState(false);
@@ -118,9 +124,10 @@ export function AgentMindInspector({
               />
             )}
 
-            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none">
+            <span className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none ${stage.isDeleted ? 'line-through opacity-50' : ''}`} title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}>
               {stage.stageTitle}
             </span>
+            {agentDirty && <DirtyDot />}
 
             {isBuiltin && (
               <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center leading-none">
@@ -194,6 +201,7 @@ export function AgentMindInspector({
                   <span className="text-xs font-mono leading-none">{t('cortex.rules')}</span>
                   <span className="text-[10px] font-mono text-[#8f8f8f] leading-none">rules/</span>
                   <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none">({ruleFiles.length})</span>
+                  {ruleFiles.some((f) => f.isDirty || f.isDeleted) && <DirtyDot />}
                 </button>
                 <button
                   type="button"
@@ -233,6 +241,7 @@ export function AgentMindInspector({
                         }
                         title={isRuntime ? t('cortex.runtimeRuleTooltip') : ruleFile.path}
                         onSelect={() => void openFile(ruleFile.id)}
+                        onContextMenu={ruleFile.isDeleted ? (e) => { e.preventDefault(); e.stopPropagation(); restorePendingDelete(`file:${ruleFile.id}`); } : undefined}
                       />
                     );
                   })}
@@ -271,14 +280,16 @@ interface TreeFileRowProps {
   badge?: React.ReactNode;
   title?: string;
   onSelect: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileRowProps) {
+function TreeFileRow({ file, isActive, icon, badge, title, onSelect, onContextMenu }: TreeFileRowProps) {
   const { t } = useTranslation();
   return (
     <button
       type="button"
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
         isActive
           ? 'bg-white dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-xs'
@@ -288,7 +299,7 @@ function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileR
     >
       <div className="flex items-center space-x-1.5 min-w-0">
         {icon}
-        <span className="text-xs font-mono truncate leading-none">{file.name}</span>
+        <span className={`text-xs font-mono truncate leading-none ${file.isDeleted ? 'line-through text-[#a1a1aa]' : ''}`} title={file.isDeleted ? t('cortex.deletedUnsaved') : undefined}>{file.name}</span>
         {typeof badge === 'string' ? (
           <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
             {badge}
