@@ -2766,10 +2766,18 @@ pub fn find_git_bash() -> Option<PathBuf> {
     if standard.exists() {
         return Some(standard);
     }
+    let standard_usr = PathBuf::from(&pf).join("Git").join("usr").join("bin").join("bash.exe");
+    if standard_usr.exists() {
+        return Some(standard_usr);
+    }
     if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
-        let candidate = PathBuf::from(pf86).join("Git").join("bin").join("bash.exe");
+        let candidate = PathBuf::from(&pf86).join("Git").join("bin").join("bash.exe");
         if candidate.exists() {
             return Some(candidate);
+        }
+        let candidate_usr = PathBuf::from(&pf86).join("Git").join("usr").join("bin").join("bash.exe");
+        if candidate_usr.exists() {
+            return Some(candidate_usr);
         }
     }
     if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
@@ -2780,8 +2788,22 @@ pub fn find_git_bash() -> Option<PathBuf> {
     }
     if let Ok(path_var) = std::env::var("PATH") {
         for p in std::env::split_paths(&path_var) {
+            let git_exe = p.join("git.exe");
+            if git_exe.exists() {
+                if let Some(parent) = p.parent() {
+                    let git_bash = parent.join("bin").join("bash.exe");
+                    if git_bash.exists() {
+                        return Some(git_bash);
+                    }
+                    let git_usr_bash = parent.join("usr").join("bin").join("bash.exe");
+                    if git_usr_bash.exists() {
+                        return Some(git_usr_bash);
+                    }
+                }
+            }
             let candidate = p.join("bash.exe");
-            if candidate.exists() {
+            let norm = candidate.to_string_lossy().to_ascii_lowercase();
+            if !norm.contains("system32") && !norm.contains("windowsapps") && candidate.exists() {
                 return Some(candidate);
             }
         }

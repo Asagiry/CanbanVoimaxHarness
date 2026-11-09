@@ -147,6 +147,87 @@ function ToolParamRow({
   );
 }
 
+function ShellSelectorRow() {
+  const { toolSettings, setToolSetting, toolCustomSchemas, setToolCustomSchema } = useToolPolicyStore();
+  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as 'bash' | 'pwsh' | 'cmd';
+
+  const handleShellChange = (newShell: 'bash' | 'pwsh' | 'cmd') => {
+    setToolSetting('execute_command', 'shell', newShell);
+    const custom = toolCustomSchemas['execute_command'];
+    if (custom !== undefined) {
+      try {
+        const parsed = typeof custom === 'string' ? JSON.parse(custom) : { ...custom };
+        if (parsed?.function) {
+          parsed.function.aliases =
+            newShell === 'pwsh' ? ['pwsh', 'powershell'] : newShell === 'cmd' ? ['cmd'] : ['bash'];
+          if (newShell === 'pwsh') {
+            parsed.function.description =
+              'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
+            if (parsed.function.parameters?.properties?.command) {
+              parsed.function.parameters.properties.command.description =
+                "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').";
+            }
+          } else if (newShell === 'cmd') {
+            parsed.function.description =
+              'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
+            if (parsed.function.parameters?.properties?.command) {
+              parsed.function.parameters.properties.command.description =
+                "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').";
+            }
+          } else {
+            parsed.function.description =
+              'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
+            if (parsed.function.parameters?.properties?.command) {
+              parsed.function.parameters.properties.command.description =
+                "Command string to run in Git Bash (e.g. 'cargo check', 'git status').";
+            }
+          }
+          setToolCustomSchema('execute_command', parsed);
+        }
+      } catch {
+        // Ignore draft syntax errors
+      }
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs pt-1.5 border-t border-[#ebebeb] dark:border-[#212126]">
+      <div className="min-w-0 flex-1">
+        <span className="text-[11px] font-mono text-[#171717] dark:text-[#f4f4f5] block">
+          Оболочка выполнения (Shell)
+        </span>
+        <span className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono block">
+          {selectedShell === 'bash'
+            ? 'Git Bash (Linux синтаксис, bash -c)'
+            : selectedShell === 'pwsh'
+            ? 'PowerShell (powershell.exe -Command)'
+            : 'Command Prompt (cmd.exe /C)'}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1 bg-[#f4f4f5] dark:bg-[#18181b] p-0.5 rounded border border-[#e4e4e7] dark:border-[#27272a] text-[10px] font-mono shrink-0">
+        {(['bash', 'pwsh', 'cmd'] as const).map((shell) => {
+          const active = selectedShell === shell;
+          return (
+            <button
+              key={shell}
+              type="button"
+              onClick={() => handleShellChange(shell)}
+              className={`px-2.5 py-0.5 rounded transition cursor-pointer font-medium ${
+                active
+                  ? 'bg-white dark:bg-[#27272a] text-[#171717] dark:text-[#f4f4f5] shadow-xs border border-[#d4d4d8] dark:border-[#3f3f46]'
+                  : 'text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
+              }`}
+            >
+              {shell}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ToolParamsEditor({ toolId }: { toolId: string }) {
   const paramDefs = TOOL_PARAM_DEFS[toolId];
   const { t } = useTranslation();
@@ -167,6 +248,7 @@ export default function ToolParamsEditor({ toolId }: { toolId: string }) {
       {paramDefs.map((param) => (
         <ToolParamRow key={param.key} toolId={toolId} param={param} />
       ))}
+      {toolId === 'execute_command' && <ShellSelectorRow />}
     </div>
   );
 }
