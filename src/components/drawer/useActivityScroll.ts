@@ -7,37 +7,42 @@ export function isOldActivity(idx: number, total: number): boolean {
   return idx < total - OLD_ACTIVITY_COLLAPSE_THRESHOLD;
 }
 
-export function isAutoCollapsible(
-  activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
-  isFinalOverride?: boolean
+export function isToolActivity(
+  activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null
 ): boolean {
   if (typeof activity === 'string') {
-    return activity === 'tool' || activity === 'output';
+    return activity === 'tool';
   }
-  if (!activity) return false;
-  if (activity.type === 'tool') {
-    return activity.tool?.status !== 'running';
-  }
-  if (activity.type === 'output') {
-    return !(isFinalOverride ?? activity.isFinal);
-  }
-  return false;
+  return activity?.type === 'tool';
+}
+
+export function isAutoCollapsible(
+  activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
+  _isFinalOverride?: boolean
+): boolean {
+  return isToolActivity(activity);
 }
 
 export function resolveIsCollapsed(args: {
   id: string;
-  idx: number;
-  total: number;
+  idx?: number;
+  total?: number;
   activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null;
   isFinal?: boolean;
   collapsedOutputs: Set<string>;
   expandedOverrides: Set<string>;
 }): boolean {
-  const { id, idx, total, activity, isFinal, collapsedOutputs, expandedOverrides } = args;
+  const { id, activity, collapsedOutputs, expandedOverrides } = args;
   if (expandedOverrides.has(id)) return false;
   if (collapsedOutputs.has(id)) return true;
-  if (!isAutoCollapsible(activity, isFinal)) return false;
-  return isOldActivity(idx, total);
+
+  // By default: all tools are collapsed
+  if (isToolActivity(activity)) {
+    return true;
+  }
+
+  // Thinking, agent explanation, and answers remain expanded by default
+  return false;
 }
 
 export function applyToggle(

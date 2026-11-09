@@ -24,24 +24,16 @@ describe('isOldActivity', () => {
 });
 
 describe('isAutoCollapsible', () => {
-  it('is true for tool and non-final output', () => {
+  it('is true for tool activity', () => {
     expect(isAutoCollapsible({ type: 'tool' })).toBe(true);
-    expect(isAutoCollapsible({ type: 'output' })).toBe(true);
-    expect(isAutoCollapsible({ type: 'output', isFinal: false })).toBe(true);
     expect(isAutoCollapsible('tool')).toBe(true);
-    expect(isAutoCollapsible('output')).toBe(true);
   });
 
-  it('is false for thought and final output', () => {
+  it('is false for thought and output', () => {
     expect(isAutoCollapsible({ type: 'thought' })).toBe(false);
     expect(isAutoCollapsible({ type: 'output', isFinal: true })).toBe(false);
-    expect(isAutoCollapsible({ type: 'output' }, true)).toBe(false);
+    expect(isAutoCollapsible({ type: 'output', isFinal: false })).toBe(false);
     expect(isAutoCollapsible('thought')).toBe(false);
-  });
-
-  it('is false for running tool', () => {
-    expect(isAutoCollapsible({ type: 'tool', tool: { status: 'running' } as never })).toBe(false);
-    expect(isAutoCollapsible({ type: 'tool', tool: { status: 'success' } as never })).toBe(true);
   });
 
   it('is false for all other types', () => {
@@ -65,37 +57,18 @@ describe('isAutoCollapsible', () => {
 });
 
 describe('resolveIsCollapsed', () => {
-  it('auto-collapses old tool at idx=0 with total=50', () => {
+  it('collapses tools by default regardless of index or age', () => {
     expect(resolveIsCollapsed({ id: 't1', idx: 0, total: 50, activity: { type: 'tool' }, ...empty })).toBe(true);
+    expect(resolveIsCollapsed({ id: 't2', idx: 40, total: 50, activity: { type: 'tool' }, ...empty })).toBe(true);
+    expect(resolveIsCollapsed({ id: 't3', idx: 49, total: 50, activity: { type: 'tool' }, ...empty })).toBe(true);
+    expect(resolveIsCollapsed({ id: 't4', idx: 0, total: 1, activity: 'tool', ...empty })).toBe(true);
   });
 
-  it('does not auto-collapse old thought or final output', () => {
+  it('keeps thought, agent explanation, and answers expanded by default', () => {
     expect(resolveIsCollapsed({ id: 'th1', idx: 0, total: 50, activity: { type: 'thought' }, ...empty })).toBe(false);
     expect(resolveIsCollapsed({ id: 'o1', idx: 0, total: 50, activity: { type: 'output', isFinal: true }, ...empty })).toBe(false);
-    expect(resolveIsCollapsed({ id: 'o1', idx: 0, total: 50, activity: { type: 'output' }, isFinal: true, ...empty })).toBe(false);
-  });
-
-  it('auto-collapses old non-final output', () => {
-    expect(resolveIsCollapsed({ id: 'o1', idx: 0, total: 50, activity: { type: 'output' }, ...empty })).toBe(true);
-    expect(resolveIsCollapsed({ id: 'o1', idx: 0, total: 50, activity: { type: 'output', isFinal: false }, ...empty })).toBe(true);
-  });
-
-  it('does not auto-collapse recent tool/output', () => {
-    expect(resolveIsCollapsed({ id: 't1', idx: 49, total: 50, activity: { type: 'tool' }, ...empty })).toBe(false);
-    expect(resolveIsCollapsed({ id: 't1', idx: 40, total: 50, activity: { type: 'tool' }, ...empty })).toBe(false);
-    expect(resolveIsCollapsed({ id: 'o1', idx: 49, total: 50, activity: { type: 'output' }, ...empty })).toBe(false);
-  });
-
-  it('does not auto-collapse running tool', () => {
-    expect(
-      resolveIsCollapsed({
-        id: 't1',
-        idx: 0,
-        total: 50,
-        activity: { type: 'tool', tool: { status: 'running' } as never },
-        ...empty,
-      })
-    ).toBe(false);
+    expect(resolveIsCollapsed({ id: 'o2', idx: 0, total: 50, activity: { type: 'output', isFinal: false }, ...empty })).toBe(false);
+    expect(resolveIsCollapsed({ id: 'o3', idx: 49, total: 50, activity: { type: 'output' }, ...empty })).toBe(false);
   });
 
   it('does not auto-collapse other types at idx=0 with total=50', () => {
@@ -173,8 +146,9 @@ describe('applyToggle', () => {
     const keyB = activityCollapseKey({ id: 'shared', type: 'tool', tool: { id: 'call-b' } } as never, 1);
     expect(keyA).not.toBe(keyB);
     const afterA = applyToggle(false, keyA, new Set(), new Set());
-    expect(resolveIsCollapsed({ id: keyA, idx: 0, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(true);
-    expect(resolveIsCollapsed({ id: keyB, idx: 49, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(false);
+    const afterB = applyToggle(true, keyB, afterA.collapsedOutputs, afterA.expandedOverrides);
+    expect(resolveIsCollapsed({ id: keyA, idx: 0, total: 50, activity: { type: 'tool' }, ...afterB })).toBe(true);
+    expect(resolveIsCollapsed({ id: keyB, idx: 49, total: 50, activity: { type: 'tool' }, ...afterB })).toBe(false);
   });
 
   it('task switch reset (empty sets) restores defaults: old tool collapsed, old thought expanded', () => {

@@ -284,7 +284,7 @@ function AwaitedSubagentRow({
 }
 
 export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
-  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
   const [now, setNow] = useState(() => Date.now());
   const { t, language } = useTranslation();
 
@@ -614,7 +614,7 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
   }, [tool.stdout, activeTaskId, storeSubagents, orderMap, toolIdToSubagentId, t]);
 
   const durationText = formatDurationCompact(tool.durationMs);
-  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   return (
     <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] p-3 shadow-xs my-2 select-none">
@@ -817,7 +817,7 @@ export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpand
     return formatDurationCompact(tool.durationMs);
   })();
 
-  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   return (
     <div

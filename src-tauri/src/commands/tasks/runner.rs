@@ -1294,7 +1294,7 @@ pub async fn steer_agent(
             if disk_tasks.iter().any(|c| task_id_matches(&c.id, &sub_id)) {
                 crate::logger::cvh_log(Some(&root), "INFO", "STEER_AGENT", &format!("steer rerouted from waiting parent {} to subtask {}", task_id, sub_id));
                 let _ = app_handle.emit("agent:status", serde_json::json!({ "taskId": sub_id, "status": "running", "projectPath": root.to_string_lossy().to_string() }));
-                return run_agent_inner(sub_id, Some(message), images, Some(root.to_string_lossy().to_string()), app_handle, false).await;
+                return Box::pin(steer_agent(sub_id, message, images, None, app_handle, state)).await;
             }
         }
     }
