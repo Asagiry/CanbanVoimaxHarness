@@ -25,26 +25,24 @@ export default function AgentConsoleDrawer() {
   const appendOutput = useDrawerStore((s) => s.appendOutput);
   const setActiveAgentTask = useDrawerStore((s) => s.setActiveAgentTask);
 
-  const activeFeed = useDrawerStore(useShallow((s) => {
+  const rawActiveFeed = useDrawerStore(useShallow((s) => {
     if (activeSubagentId) {
-      let subFeed = s.activityFeed[activeSubagentId] || [];
-      if (subFeed.length === 0) {
-        const mappedId = s.toolIdToSubagentId[activeSubagentId];
-        if (mappedId && s.activityFeed[mappedId]?.length) {
-          subFeed = s.activityFeed[mappedId];
-        } else {
-          for (const [toolId, subId] of Object.entries(s.toolIdToSubagentId)) {
-            if (subId === activeSubagentId && s.activityFeed[toolId]?.length) {
-              subFeed = s.activityFeed[toolId];
-              break;
-            }
-          }
-        }
+      const subFeed = s.activityFeed[activeSubagentId] || [];
+      if (subFeed.length > 0) return subFeed;
+      const mappedId = s.toolIdToSubagentId[activeSubagentId];
+      if (mappedId && s.activityFeed[mappedId]?.length) return s.activityFeed[mappedId];
+      for (const [toolId, subId] of Object.entries(s.toolIdToSubagentId)) {
+        if (subId === activeSubagentId && s.activityFeed[toolId]?.length) return s.activityFeed[toolId];
       }
-      return subFeed.filter((item) => item.type !== 'prompt');
+      return subFeed;
     }
     return activeTaskId ? (s.activityFeed[activeTaskId] || []) : [];
   }));
+
+  const activeFeed = useMemo(
+    () => (activeSubagentId ? rawActiveFeed.filter((item) => item.type !== 'prompt') : rawActiveFeed),
+    [activeSubagentId, rawActiveFeed]
+  );
 
   const activeStream = useDrawerStore(useShallow((s) =>
     activeTaskId ? s.streamEntries[activeTaskId] : undefined

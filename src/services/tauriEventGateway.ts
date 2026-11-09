@@ -11,6 +11,7 @@ import {
   type TaskAdvancedPayload,
 } from './notificationService';
 import type { BackendTaskDTO, TodoItem } from '../types';
+import { flushStreamChunks } from '../stores/drawer/slices/streamSlice';
 
 export function isEventForCurrentProject(eventProjectPath?: string): boolean {
   if (!eventProjectPath || typeof eventProjectPath !== 'string') return true;
@@ -298,6 +299,7 @@ export class TextBufferManager {
       if (chunk.type === 'thought') state.appendThought(taskId, chunk.text, chunk.streamId);
       else state.appendOutput(taskId, chunk.text, 'output', undefined, chunk.streamId);
     }
+    flushStreamChunks(taskId);
   }
 
   public flushAll(): void {
@@ -330,6 +332,7 @@ export class TextBufferManager {
 
   public startStream(taskId: string, streamId: string): void {
     this.flushTask(taskId);
+    flushStreamChunks(taskId);
     useDrawerStore.getState().startStream(taskId, streamId);
   }
 
@@ -346,6 +349,7 @@ export class TextBufferManager {
     const buffer = this.buffers.get(taskId);
     if (buffer?.timer) clearTimeout(buffer.timer);
     this.buffers.delete(taskId);
+    flushStreamChunks(taskId);
   }
 
   public dispose(): void {

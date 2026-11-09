@@ -7,11 +7,97 @@ import {
 } from '../types';
 import { LiveStreamEntry } from '../../../types';
 
+type StreamChunkType = 'thought' | 'output';
+
+interface BufferedStreamChunk {
+  taskId: string;
+  streamId: string;
+  type: StreamChunkType;
+  content: string;
+}
+
+const streamChunkBuffer = new Map<string, BufferedStreamChunk>();
+let streamFlushHandle: number | ReturnType<typeof setTimeout> | null = null;
+let streamFlushIsRaf = false;
+let applyBufferedChunks: ((chunks: BufferedStreamChunk[]) => void) | null = null;
+
+function streamChunkKey(taskId: string, streamId: string, type: StreamChunkType): string {
+  return `${taskId}\u0000${streamId}\u0000${type}`;
+}
+
+function cancelScheduledFlush(): void {
+  if (streamFlushHandle === null) return;
+  const cancelRaf = (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame }).cancelAnimationFrame;
+  if (streamFlushIsRaf && typeof cancelRaf === 'function') {
+    cancelRaf.call(globalThis, streamFlushHandle as number);
+  } else {
+    clearTimeout(streamFlushHandle as ReturnType<typeof setTimeout>);
+  }
+  streamFlushHandle = null;
+}
+
+function scheduleStreamFlush(): void {
+  if (streamFlushHandle !== null) return;
+  const raf = (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame }).requestAnimationFrame;
+  if (typeof raf === 'function') {
+    streamFlushIsRaf = true;
+    streamFlushHandle = raf.call(globalThis, () => {
+      streamFlushHandle = null;
+      flushStreamChunks();
+    });
+  } else {
+    streamFlushIsRaf = false;
+    streamFlushHandle = setTimeout(() => {
+      streamFlushHandle = null;
+      flushStreamChunks();
+    }, 50);
+  }
+}
+
+export function enqueueStreamChunk(taskId: string, streamId: string, type: StreamChunkType, content: string): void {
+  if (!content) return;
+  const key = streamChunkKey(taskId, streamId, type);
+  const existing = streamChunkBuffer.get(key);
+  if (existing) existing.content += content;
+  else streamChunkBuffer.set(key, { taskId, streamId, type, content });
+  scheduleStreamFlush();
+}
+
+export function dropBufferedStreamChunks(taskId: string, streamId: string): void {
+  for (const [key, chunk] of streamChunkBuffer) {
+    if (chunk.taskId === taskId && chunk.streamId === streamId) streamChunkBuffer.delete(key);
+  }
+  if (streamChunkBuffer.size === 0) cancelScheduledFlush();
+}
+
+export function flushStreamChunks(taskId?: string): void {
+  const pending: BufferedStreamChunk[] = [];
+  for (const [key, chunk] of streamChunkBuffer) {
+    if (taskId === undefined || chunk.taskId === taskId) {
+      pending.push(chunk);
+      streamChunkBuffer.delete(key);
+    }
+  }
+  if (pending.length === 0) return;
+  if (streamChunkBuffer.size === 0) cancelScheduledFlush();
+  else if (streamFlushHandle === null) scheduleStreamFlush();
+  if (applyBufferedChunks) applyBufferedChunks(pending);
+  else {
+    for (const chunk of pending) streamChunkBuffer.set(streamChunkKey(chunk.taskId, chunk.streamId, chunk.type), chunk);
+    scheduleStreamFlush();
+  }
+}
+
+export function clearStreamChunkBuffer(): void {
+  streamChunkBuffer.clear();
+  cancelScheduledFlush();
+}
+
 function appendStreamChunk(
   state: DrawerState,
   taskId: string,
   streamId: string,
-  type: 'thought' | 'output',
+  type: StreamChunkType,
   content: string,
 ): Partial<DrawerState> {
   // Ignore chunks queued before an attempt was discarded or superseded.
@@ -58,7 +144,19 @@ export const createStreamSlice: StateCreator<
   [],
   [],
   StreamSlice
-> = (set, get) => ({
+> = (set, get) => {
+  applyBufferedChunks = (chunks) => {
+    set((state) => {
+      let next: DrawerState = state;
+      for (const chunk of chunks) {
+        const partial = appendStreamChunk(next, chunk.taskId, chunk.streamId, chunk.type, chunk.content);
+        if (partial !== next) next = { ...next, ...partial };
+      }
+      return next;
+    });
+  };
+
+  return {
   activeStreamIds: {},
   streamRollbackVersions: {},
   connectionWait: {},
@@ -86,6 +184,8 @@ export const createStreamSlice: StateCreator<
   },
 
   retryStream: (taskId, streamId, delaySecs) => {
+    flushStreamChunks(taskId);
+    dropBufferedStreamChunks(taskId, streamId);
     set((state) => {
       if (taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamId) return state;
       const ids = new Set([`${streamId}:thought`, `${streamId}:output`]);
@@ -117,7 +217,7 @@ export const createStreamSlice: StateCreator<
 
   appendThought: (taskId, content, streamId) => {
     if (streamId) {
-      set((state) => appendStreamChunk(state, taskId, streamId, 'thought', content));
+      enqueueStreamChunk(taskId, streamId, 'thought', content);
       return;
     }
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -235,7 +335,7 @@ export const createStreamSlice: StateCreator<
 
   appendOutput: (taskId, content, type = 'output', images, streamId) => {
     if (streamId && type === 'output') {
-      set((state) => appendStreamChunk(state, taskId, streamId, 'output', content));
+      enqueueStreamChunk(taskId, streamId, 'output', content);
       return;
     }
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -470,4 +570,5 @@ export const createStreamSlice: StateCreator<
       },
     }));
   },
-});
+  };
+};

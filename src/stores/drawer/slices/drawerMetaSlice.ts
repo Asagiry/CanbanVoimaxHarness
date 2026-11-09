@@ -3,6 +3,7 @@ import {
   DrawerMetaSlice,
   DrawerState,
 } from '../types';
+import { flushStreamChunks } from './streamSlice';
 
 export const createDrawerMetaSlice: StateCreator<
   DrawerState,
@@ -15,6 +16,7 @@ export const createDrawerMetaSlice: StateCreator<
   activeTab: 'thoughts',
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
+    flushStreamChunks();
     set({
       isOpen: true,
       activeTaskId: taskId,
@@ -38,6 +40,7 @@ export const createDrawerMetaSlice: StateCreator<
   },
 
   closeDrawer: () => {
+    flushStreamChunks();
     set({
       isOpen: false,
       activeTaskId: null,

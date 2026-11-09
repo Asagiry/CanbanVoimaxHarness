@@ -17,6 +17,7 @@ import {
   buildClearedTaskActivityState,
 } from '../activityDedup';
 import { setPendingQuestion, answerQuestion } from '../activityQuestionHelpers';
+import { flushStreamChunks } from './streamSlice';
 
 export * from '../activityDedup';
 export * from '../activityQuestionHelpers';
@@ -31,6 +32,7 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
 
   setActiveAgentTask: (taskId, isActive) => {
     if (!taskId) return;
+    if (!isActive) flushStreamChunks(taskId);
     set((state) => {
       if (Boolean(state.activeAgentTaskIds[taskId]) === isActive && (isActive || !state.connectionWait[taskId])) {
         return state;
