@@ -105,7 +105,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
-        <div className="flex items-center space-x-2 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
@@ -116,14 +116,14 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
             aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
           >
             <ChevronRight
-              className={`h-3 w-3 transition-transform duration-150 ${
+              className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
                 isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
               }`}
             />
           </button>
 
           {/* Icon */}
-          <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <Minimize2 className="h-3.5 w-3.5 block shrink-0 text-indigo-600 dark:text-indigo-400 shrink-0" />
 
           {/* Badge */}
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
@@ -145,7 +145,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
           {/* Duration */}
           {durationText && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
               <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {durationText}
               </span>
@@ -178,12 +178,12 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
             </div>
           ) : isSuccess ? (
             <div className="flex items-center space-x-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+              <Check className="h-3.5 w-3.5 block shrink-0 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
               <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400">{t('tools.status.done')}</span>
             </div>
           ) : (
             <div className="flex items-center space-x-1.5">
-              <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
+              <X className="h-3.5 w-3.5 block shrink-0 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
               <span className="text-[11px] font-mono font-medium text-rose-600 dark:text-rose-400">{t('tools.status.error')}</span>
             </div>
           )}

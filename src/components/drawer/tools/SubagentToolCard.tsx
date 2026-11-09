@@ -248,7 +248,7 @@ function AwaitedSubagentRow({
       }}
       className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
     >
-      <div className="flex items-center space-x-2 min-w-0 flex-1">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
         <SubagentTypeIcon isBg={sub.isBg} isBoardSubtask={sub.isBoardSubtask} personaIcon={personaIcon} />
 
         <span
@@ -430,7 +430,7 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between gap-2.5 cursor-pointer"
       >
-        <div className="flex items-center space-x-2 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
 
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
@@ -561,7 +561,7 @@ function DiscoveredSubagentRow({
       onClick={onOpen}
       className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
     >
-      <div className="flex items-center space-x-2 min-w-0 flex-1">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
         <SubagentTypeIcon isBg={sub.isBg} />
 
         <span
@@ -622,9 +622,9 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between gap-2.5 cursor-pointer"
       >
-        <div className="flex items-center space-x-2 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <ChevronRight
-            className={`h-3.5 w-3.5 text-[#8f8f8f] transition-transform duration-150 shrink-0 ${
+            className={`h-3.5 w-3.5 block text-[#8f8f8f] transition-transform duration-150 shrink-0 ${
               isExpanded ? 'rotate-90' : ''
             }`}
           />
@@ -825,7 +825,7 @@ export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpand
       className="group rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] hover:bg-[#f9f9f9] dark:hover:bg-[#1e1e23] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] p-3 shadow-xs transition-all duration-150 cursor-pointer select-none my-2"
     >
       <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center space-x-2 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
@@ -836,7 +836,7 @@ export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpand
             aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
           >
             <ChevronRight
-              className={`h-3.5 w-3.5 transition-transform duration-150 ${
+              className={`h-3.5 w-3.5 block shrink-0 transition-transform duration-150 ${
                 isExpanded ? 'rotate-90' : ''
               }`}
             />

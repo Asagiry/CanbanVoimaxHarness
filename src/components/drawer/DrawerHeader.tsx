@@ -160,11 +160,11 @@ export default function DrawerHeader({
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onClose || goBackDrawer}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto btn-tactile"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto btn-tactile leading-none"
             aria-label={activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}
           >
-            <ArrowLeft className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5]" />
-            <span>{activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
+            <ArrowLeft className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
+            <span className="leading-none">{activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
           </button>
 
           {/* Breadcrumbs / Task badge (only when NOT in subagent mode) */}
@@ -191,15 +191,15 @@ export default function DrawerHeader({
 
           {/* Directly adjacent to the title/breadcrumbs, render the compact worktree/branch badges */}
           {!activeSubagentId && !task?.skipWorktree && (task?.worktreePath || rootTask?.worktreePath) && (
-            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0">
-              <FolderGit2 className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a]" />
-              <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate">{task?.worktreePath || rootTask?.worktreePath}</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
+              <FolderGit2 className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
+              <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate leading-none">{task?.worktreePath || rootTask?.worktreePath}</span>
             </div>
           )}
           {!activeSubagentId && !task?.skipWorktree && (task?.branch || rootTask?.branch) && (
-            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0">
-              <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a]" />
-              <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate">{task?.branch || rootTask?.branch}</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
+              <GitBranch className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
+              <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate leading-none">{task?.branch || rootTask?.branch}</span>
             </div>
           )}
         </div>

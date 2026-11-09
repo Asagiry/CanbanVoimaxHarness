@@ -321,7 +321,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
       >
         {isReadOp ? (
           /* Read operation tactile card: [Analyzed C# Transit.cs #L4270-4300] */
-          <div className="flex items-center space-x-2 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
             <button
               type="button"
               className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
@@ -332,7 +332,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
               aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
               <ChevronRight
-                className={`h-3 w-3 transition-transform duration-150 ${
+                className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
                   isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
                 }`}
               />
@@ -347,7 +347,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
             {langBadge ? (
               <FileExtensionBadge ext={ext} />
             ) : (
-              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#71717a] shrink-0" />
+              <DocIcon className="h-3.5 w-3.5 block shrink-0 text-[#52525b] dark:text-[#71717a] shrink-0" />
             )}
 
             {/* Clean filename with muted path */}
@@ -371,7 +371,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
                 <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
@@ -380,7 +380,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
           </div>
         ) : (
           /* File write / edit operation card: [Edited MainWindow.xaml +4 -2] */
-          <div className="flex items-center space-x-2 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
             <button
               type="button"
               className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
@@ -391,7 +391,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
               aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
               <ChevronRight
-                className={`h-3 w-3 transition-transform duration-150 ${
+                className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
                   isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
                 }`}
               />
@@ -414,7 +414,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
             {langBadge ? (
               <FileExtensionBadge ext={ext} />
             ) : (
-              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#71717a] shrink-0" />
+              <DocIcon className="h-3.5 w-3.5 block shrink-0 text-[#52525b] dark:text-[#71717a] shrink-0" />
             )}
 
             {/* Clean filename with muted path */}
@@ -447,7 +447,7 @@ export default function FileOpsToolCard({ tool, isExpanded: controlledExpanded, 
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
                 <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>

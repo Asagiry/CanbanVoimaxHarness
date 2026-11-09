@@ -385,16 +385,16 @@ export default function GitDiffSidebar({
         <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
           {/* Left Section: Title, File count, Diff stats */}
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
-              <span className="font-semibold text-xs text-[#171717] dark:text-[#f4f4f5] tracking-tight font-sans">
+            <div className="flex items-center gap-1.5 shrink-0 leading-none">
+              <GitCompare className="h-3.5 w-3.5 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
+              <span className="font-semibold text-xs text-[#171717] dark:text-[#f4f4f5] tracking-tight font-sans leading-none">
                 Git Diff
               </span>
             </div>
 
             {/* Changed files count badge */}
             <span
-              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0 whitespace-nowrap"
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0 whitespace-nowrap leading-none flex items-center"
               title={t('gitDiff.changedFiles', { count: filesCount })}
             >
               {formatFilesCount(filesCount, language)}
@@ -402,14 +402,14 @@ export default function GitDiffSidebar({
 
             {/* Additions / deletions badges */}
             {(totalAdditions > 0 || totalDeletions > 0) && (
-              <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0 leading-none translate-y-px">
+              <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0 leading-none">
                 {totalAdditions > 0 && (
-                  <span className="text-[#15803d] dark:text-[#4ade80]" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
+                  <span className="text-[#15803d] dark:text-[#4ade80] leading-none" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
                     +{totalAdditions}
                   </span>
                 )}
                 {totalDeletions > 0 && (
-                  <span className="text-[#b91c1c] dark:text-[#f87171]" title={t('gitDiff.linesDeleted', { count: totalDeletions })}>
+                  <span className="text-[#b91c1c] dark:text-[#f87171] leading-none" title={t('gitDiff.linesDeleted', { count: totalDeletions })}>
                     -{totalDeletions}
                   </span>
                 )}

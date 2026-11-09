@@ -68,7 +68,7 @@ export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFai
         data-testid="batch-queued-badge"
         className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] dark:text-[#52525b] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-[#e4e4e7] dark:border-[#2c2c33] flex items-center space-x-1 shrink-0 select-none"
       >
-        <Clock className="h-2.5 w-2.5" />
+        <Clock className="h-2.5 w-2.5 block shrink-0" />
         <span>{t('drawer.batchQueued')}</span>
       </span>
     );
@@ -93,13 +93,13 @@ export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFai
   if (!failed && tool.status === 'success') {
     return (
       <span className="flex items-center shrink-0">
-        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+        <Check className="h-3.5 w-3.5 block shrink-0 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
       </span>
     );
   }
   return (
     <span className="flex items-center shrink-0">
-      <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
+      <X className="h-3.5 w-3.5 block shrink-0 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
     </span>
   );
 }

@@ -61,7 +61,7 @@ export default function GenericToolCard({ tool, isExpanded: controlledExpanded, 
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
-        <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
@@ -72,14 +72,14 @@ export default function GenericToolCard({ tool, isExpanded: controlledExpanded, 
             aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
           >
             <ChevronRight
-              className={`h-3 w-3 transition-transform duration-150 ${
+              className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
                 isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
               }`}
             />
           </button>
 
           <span className="flex items-center shrink-0 select-none text-[#8f8f8f] dark:text-[#71717a]">
-            <Wrench className="h-3.5 w-3.5" />
+            <Wrench className="h-3.5 w-3.5 block shrink-0" />
           </span>
 
           <span className="font-mono font-medium text-[#171717] dark:text-[#f4f4f5] shrink-0">
@@ -94,7 +94,7 @@ export default function GenericToolCard({ tool, isExpanded: controlledExpanded, 
 
           {extraInfo && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
               <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {extraInfo}
               </span>
@@ -103,7 +103,7 @@ export default function GenericToolCard({ tool, isExpanded: controlledExpanded, 
 
           {durationText && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
               <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {durationText}
               </span>
