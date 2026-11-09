@@ -1,8 +1,10 @@
-import { useState, memo } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { resolveCardModel } from './cardModel';
 import { useTranslation } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitBranch } from 'lucide-react';
@@ -37,6 +39,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const taskColumn = columns.find((c) => c.id === task.stageId);
   const assignedPersona = useCortexStore((s) =>
     taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona) : undefined
+  );
+  const globalModel = useSettingsStore((s) => s.settings.model);
+  const providers = useSettingsStore(useShallow((s) => s.providers));
+  const cardModel = useMemo(
+    () => resolveCardModel(task, taskColumn, assignedPersona, globalModel, providers),
+    [task.model, task.providerId, taskColumn?.modelOverride, assignedPersona?.model, globalModel, providers]
   );
   const assignedAgentColor = resolveStageColor(taskColumn, assignedPersona);
   const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
@@ -171,12 +179,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
 
               {/* Footer: model, branch, created & elapsed time */}
               <div className="pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
-                {task.model && task.model.trim().length > 0 && (
+                {cardModel && (
                   <div
                     className="truncate font-mono text-[10px] text-[#666666] dark:text-[#71717a] mb-1"
-                    aria-label={t('card.model', { model: task.model })}
+                    aria-label={t('card.model', { model: cardModel })}
                   >
-                    {task.model}
+                    {cardModel}
                   </div>
                 )}
                 {cardBranch && (

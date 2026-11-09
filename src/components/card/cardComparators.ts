@@ -60,6 +60,7 @@ export function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps):
     a.verdict === b.verdict &&
     a.verdictNote === b.verdictNote &&
     a.model === b.model &&
+    a.providerId === b.providerId &&
     a.parentId === b.parentId &&
     a.subtaskIndex === b.subtaskIndex &&
     a.waitingForSubtaskId === b.waitingForSubtaskId &&
