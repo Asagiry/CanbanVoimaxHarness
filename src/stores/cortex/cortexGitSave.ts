@@ -22,14 +22,34 @@ export function isAgentDirty(
   return Boolean(gitStatus?.changedPaths.some((p) => normPath(p).startsWith(prefix)));
 }
 
+export function isFileDirty(
+  file: Pick<CortexAgentFile, 'path' | 'isDirty' | 'isDeleted'>,
+  gitStatus: CvhGitStatus | null,
+): boolean {
+  if (file.isDirty || file.isDeleted) return true;
+  if (!file.path || file.path.startsWith('builtin:')) return false;
+  const target = normPath(file.path);
+  return Boolean(gitStatus?.changedPaths.some((p) => normPath(p) === target));
+}
+
 export function isColumnDirty(
   stage: CortexAgentStage,
   column: PipelineColumn | undefined,
   gitStatus: CvhGitStatus | null,
+  pendingColumnChanges: Record<string, true> = {},
 ): boolean {
+  if (pendingColumnChanges[stage.stageId]) return true;
   if (stage.files.some((f) => f.isDirty || f.isDeleted)) return true;
   const paths = gitStatus?.changedPaths.map(normPath) ?? [];
-  if (paths.some((p) => p === '.cvh/boards.json')) return true;
+  if (paths.length === 0) return false;
+  const hookPaths = new Set(
+    stage.files
+      .filter((f) => f.type === 'hook' && f.path && !f.path.startsWith('builtin:'))
+      .map((f) => normPath(f.path)),
+  );
+  if (paths.some((p) => hookPaths.has(p))) return true;
+  const hookPrefix = `.cvh/hooks/${stage.stageId}-`;
+  if (paths.some((p) => p.startsWith(hookPrefix))) return true;
   const persona = column?.persona?.trim() || stage.personaName;
   if (persona && persona !== 'система' && persona !== 'без агента') {
     const prefix = `.cvh/agents/${persona}/`;
@@ -46,9 +66,10 @@ export function isGlobalRulesDirty(
   return Boolean(gitStatus?.changedPaths.some((p) => normPath(p).startsWith('.cvh/rules/')));
 }
 
-export function hasAnyCvhChanges(state: Pick<CortexState, 'cvhGitStatus' | 'pendingDeletes' | 'stages' | 'agentStages' | 'globalRules' | 'activeFile'>): boolean {
+export function hasAnyCvhChanges(state: Pick<CortexState, 'cvhGitStatus' | 'pendingDeletes' | 'stages' | 'agentStages' | 'globalRules' | 'activeFile' | 'pendingColumnChanges'>): boolean {
   if (state.cvhGitStatus?.hasChanges) return true;
   if (Object.keys(state.pendingDeletes).length > 0) return true;
+  if (Object.keys(state.pendingColumnChanges ?? {}).length > 0) return true;
   if (state.activeFile?.isDirty) return true;
   const all = [...state.stages, ...state.agentStages];
   if (all.some((s) => s.isDeleted || s.files.some((f) => f.isDirty || f.isDeleted))) return true;
@@ -95,6 +116,7 @@ export async function saveCvhToGitAction(set: CortexSet, get: CortexGet, message
       cvhGitStatus: status,
       cvhGitSaving: false,
       pendingDeletes: {},
+      pendingColumnChanges: {},
       stages: state.stages.map((s) => ({ ...s, isDeleted: false, files: s.files.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })) })),
       agentStages: state.agentStages.filter((s) => !s.isDeleted).map((s) => ({ ...s, files: s.files.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })) })),
       globalRules: state.globalRules.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })),
@@ -105,6 +127,10 @@ export async function saveCvhToGitAction(set: CortexSet, get: CortexGet, message
     set({ cvhGitSaving: false, cvhGitError: detail });
     throw err instanceof Error ? err : new Error(detail);
   }
+}
+
+export function markPendingColumnChangeAction(set: CortexSet, stageId: string): void {
+  set((state) => ({ pendingColumnChanges: { ...state.pendingColumnChanges, [stageId]: true } }));
 }
 
 export function markPendingDeleteAction(set: CortexSet, key: string, entry: PendingDelete): void {

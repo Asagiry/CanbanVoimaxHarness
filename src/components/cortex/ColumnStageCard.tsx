@@ -24,7 +24,7 @@ import {
 import { hookMomentOf, savePipelineConfig } from './types';
 import NewCortexFileForm from './NewCortexFileForm';
 import DirtyDot from './DirtyDot';
-import { isColumnDirty } from '../../stores/cortex/cortexGitSave';
+import { isColumnDirty, isFileDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface ColumnStageCardProps {
   stage: CortexAgentStage;
@@ -57,8 +57,11 @@ export function ColumnStageCard({
   const createSettingTemplate = useCortexStore((s) => s.createSettingTemplate);
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
   const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const pendingColumnChanges = useCortexStore((s) => s.pendingColumnChanges);
+  const refreshCvhGitStatus = useCortexStore((s) => s.refreshCvhGitStatus);
+  const markPendingColumnChange = useCortexStore((s) => s.markPendingColumnChange);
   const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
-  const columnDirty = isColumnDirty(stage, column, cvhGitStatus);
+  const columnDirty = isColumnDirty(stage, column, cvhGitStatus, pendingColumnChanges);
 
   const columns = useBoardStore((s) => s.columns);
   const setColumns = useBoardStore((s) => s.setColumns);
@@ -123,6 +126,9 @@ export function ColumnStageCard({
       setColumns(prevColumns);
       syncStagesFromColumns(prevColumns);
       setAgentSaveError(t('columnMenu.saveErrorRollback'));
+    } else {
+      markPendingColumnChange(column.id);
+      void refreshCvhGitStatus();
     }
   };
 
@@ -343,6 +349,8 @@ interface TreeFileRowProps {
 
 function TreeFileRow({ file, isActive, icon, badge, onSelect, onContextMenu }: TreeFileRowProps) {
   const { t } = useTranslation();
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const dirty = isFileDirty(file, cvhGitStatus);
   return (
     <button
       type="button"
@@ -365,7 +373,7 @@ function TreeFileRow({ file, isActive, icon, badge, onSelect, onContextMenu }: T
         )}
       </div>
 
-      {file.isDirty && (
+      {dirty && (
         <span
           className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
           title={t('cortex.unsavedChanges')}

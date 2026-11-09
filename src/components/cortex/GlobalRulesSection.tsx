@@ -5,7 +5,7 @@ import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 import DirtyDot from './DirtyDot';
-import { isGlobalRulesDirty } from '../../stores/cortex/cortexGitSave';
+import { isFileDirty, isGlobalRulesDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface GlobalRulesSectionProps {
   rules: CortexAgentFile[];
@@ -34,8 +34,9 @@ export function GlobalRulesSection({
   const createGlobalRule = useCortexStore((s) => s.createGlobalRule);
   const deleteGlobalRule = useCortexStore((s) => s.deleteGlobalRule);
   const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const allGlobalRules = useCortexStore((s) => s.globalRules);
   const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
-  const sectionDirty = isGlobalRulesDirty(cvhGitStatus, rules);
+  const sectionDirty = isGlobalRulesDirty(cvhGitStatus, allGlobalRules);
 
   const [isCreating, setIsCreating] = useState(false);
   const [ruleName, setRuleName] = useState('');
@@ -204,7 +205,7 @@ export function GlobalRulesSection({
                       {t('cortex.runtimeRuleBadge')}
                     </span>
                   )}
-                  {rule.isDirty && (
+                  {isFileDirty(rule, cvhGitStatus) && (
                     <span
                       className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
                       title={t('cortex.unsavedChanges')}
