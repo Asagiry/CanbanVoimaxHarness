@@ -17,4 +17,4 @@ Exact file routes live only in the topic maps above — this router does not rep
 
 Data flow: UI → focused Zustand slices → Tauri IPC; typed backend events → `src/services/tauriEventGateway.ts` → stores → UI. Backend confirmation owns task lifecycle and IDs. Streaming and draft state live in drawer slices; reasoning effort (`ReasoningEffort` in `src/types/index.ts`) lives in board/cortex stores, not drawer slices.
 
-For Rust behavior behind an IPC call, use `load_rule("backend_map")`. Keep exact file routes current in the relevant topic map when modules move. Verification policy belongs to the active role's `sensors` rule.
+For Rust behavior behind an IPC call, use `load_rule("backend_map")`. Keep exact file routes current in the relevant topic map when modules move. Verification policy belongs to the active role's `sensors` rule
