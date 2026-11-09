@@ -4,6 +4,7 @@ import {
   isAutoCollapsible,
   resolveIsCollapsed,
   applyToggle,
+  activityCollapseKey,
   OLD_ACTIVITY_COLLAPSE_THRESHOLD,
 } from '../useActivityScroll';
 
@@ -159,6 +160,21 @@ describe('applyToggle', () => {
   it('toggling an auto-collapsed tool expands it and stays expanded', () => {
     const next = applyToggle(true, 't1', new Set(), new Set());
     expect(resolveIsCollapsed({ id: 't1', idx: 0, total: 50, activity: { type: 'tool' }, ...next })).toBe(false);
+  });
+
+  it('rapid double-toggle returns to original state (no stale closure)', () => {
+    const first = applyToggle(false, 't1', new Set(), new Set());
+    const second = applyToggle(true, 't1', first.collapsedOutputs, first.expandedOverrides);
+    expect(resolveIsCollapsed({ id: 't1', idx: 0, total: 50, activity: { type: 'tool' }, ...second })).toBe(false);
+  });
+
+  it('two tools sharing activity id but different tool ids toggle independently via composite key', () => {
+    const keyA = activityCollapseKey({ id: 'shared', type: 'tool', tool: { id: 'call-a' } } as never, 0);
+    const keyB = activityCollapseKey({ id: 'shared', type: 'tool', tool: { id: 'call-b' } } as never, 1);
+    expect(keyA).not.toBe(keyB);
+    const afterA = applyToggle(false, keyA, new Set(), new Set());
+    expect(resolveIsCollapsed({ id: keyA, idx: 0, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(true);
+    expect(resolveIsCollapsed({ id: keyB, idx: 49, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(false);
   });
 
   it('task switch reset (empty sets) restores defaults: old tool collapsed, old thought expanded', () => {

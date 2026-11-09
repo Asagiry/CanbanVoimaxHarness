@@ -7,7 +7,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
 import { ArrowDown, WifiOff } from 'lucide-react';
-import { useActivityScroll } from './useActivityScroll';
+import { useActivityScroll, activityCollapseKey } from './useActivityScroll';
 import {
   SubagentActivityCard,
   LightboxContext,
@@ -158,7 +158,7 @@ export default function DrawerActivityStream({
             )}
 
             {(displayActivities ?? []).map((activity, idx) => {
-              const key = activity?.id ?? `activity-${idx}`;
+              const key = activityCollapseKey(activity, idx);
               const nextActivity = displayActivities[idx + 1];
               const currentBatch = activity?.tool?.batch;
               const hasNextInBatch = Boolean(

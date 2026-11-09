@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import ToolExecutionCard from '../ToolExecutionCard';
@@ -74,10 +74,14 @@ function ActivityItemInner({
     );
   } else if (activity?.type === 'tool' && activity?.tool) {
     if (!(activity.tool.toolName === 'compact_context' && activity.tool.status === 'success')) {
-      const toolWithDuration = {
-        ...activity.tool,
-        durationMs: activity.tool.durationMs || durationMs || 0,
-      };
+      const tool = activity.tool;
+      const toolWithDuration = useMemo(
+        () => ({
+          ...tool,
+          durationMs: tool.durationMs || durationMs || 0,
+        }),
+        [tool, durationMs]
+      );
       card = (
         <div className="relative animate-silk-entrance motion-reduce:animate-none activity-card-cv">
           <ToolExecutionCard tool={toolWithDuration} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />
@@ -183,6 +187,12 @@ function areEqual(prev: ActivityItemProps, next: ActivityItemProps): boolean {
   if (prev.flag !== next.flag) return false;
   if (prev.activity?.type !== next.activity?.type) return false;
   if (prev.activity?.tool?.toolName !== next.activity?.tool?.toolName) return false;
+  if (prev.activity?.tool?.id !== next.activity?.tool?.id) return false;
+  if ((prev.activity?.tool?.stdout?.length ?? 0) !== (next.activity?.tool?.stdout?.length ?? 0)) return false;
+  if ((prev.activity?.tool?.stderr?.length ?? 0) !== (next.activity?.tool?.stderr?.length ?? 0)) return false;
+  if (prev.activity?.tool?.params !== next.activity?.tool?.params) return false;
+  if (prev.activity?.tool?.batch?.index !== next.activity?.tool?.batch?.index) return false;
+  if (prev.activity?.tool?.batch?.total !== next.activity?.tool?.batch?.total) return false;
   if (prev.activity?.isFinal !== next.activity?.isFinal) return false;
   if (prev.activity?.durationMs !== next.activity?.durationMs) return false;
   return true;

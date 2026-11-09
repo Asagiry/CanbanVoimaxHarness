@@ -56,9 +56,19 @@ export function applyToggle(
   return { collapsedOutputs: new Set(collapsedOutputs).add(id), expandedOverrides: nextExpanded };
 }
 
+export function activityCollapseKey(activity: DrawerActivityItem | undefined, idx: number): string {
+  const base = activity?.id ?? `activity-${idx}`;
+  const toolId = activity?.tool?.id;
+  return toolId && toolId !== base ? `${base}::${toolId}` : base;
+}
+
 export function useActivityScroll(displayActivities: DrawerActivityItem[], taskId?: string) {
   const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
   const [expandedOverrides, setExpandedOverrides] = useState<Set<string>>(() => new Set());
+  const collapsedRef = useRef(collapsedOutputs);
+  const expandedRef = useRef(expandedOverrides);
+  collapsedRef.current = collapsedOutputs;
+  expandedRef.current = expandedOverrides;
   const [showNewButton, setShowNewButton] = useState(false);
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
@@ -92,8 +102,14 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
     activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
     isFinal?: boolean
   ) => {
-    const currentlyCollapsed = isCollapsed(id, idx, total, activity, isFinal);
-    const next = applyToggle(currentlyCollapsed, id, collapsedOutputs, expandedOverrides);
+    const currentlyCollapsed = resolveIsCollapsed({
+      id, idx, total, activity, isFinal,
+      collapsedOutputs: collapsedRef.current,
+      expandedOverrides: expandedRef.current,
+    });
+    const next = applyToggle(currentlyCollapsed, id, collapsedRef.current, expandedRef.current);
+    collapsedRef.current = next.collapsedOutputs;
+    expandedRef.current = next.expandedOverrides;
     setCollapsedOutputs(next.collapsedOutputs);
     setExpandedOverrides(next.expandedOverrides);
   };

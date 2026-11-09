@@ -130,6 +130,26 @@ pub fn extract_openai_cache_creation(usage: &serde_json::Value) -> u64 {
         .unwrap_or(0)
 }
 
+fn resolve_tool_call_index(
+    map: &HashMap<usize, (String, String, String)>,
+    explicit: Option<usize>,
+    id: Option<&str>,
+    next_fallback: &mut usize,
+) -> usize {
+    if let Some(idx) = explicit {
+        return idx;
+    }
+    if let Some(id) = id.filter(|s| !s.is_empty()) {
+        if let Some((&idx, _)) = map.iter().find(|(_, (existing, _, _))| existing == id) {
+            return idx;
+        }
+    }
+    let idx = *next_fallback;
+    *next_fallback = next_fallback.saturating_add(1);
+    eprintln!("CVH [llm_client] tool call missing index; assigned fallback idx={idx}");
+    idx
+}
+
 impl LlmClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
@@ -268,6 +288,7 @@ impl LlmClient {
     ) -> Result<Option<String>> {
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
+        let mut next_tool_call_fallback: usize = 0;
         let mut first_chunk_sent = false;
         let mut streamed_reasoning_delta = false;
         let mut pending_usage: Option<StreamChunk> = None;
@@ -326,6 +347,7 @@ impl LlmClient {
                             &payload,
                             tx,
                             &mut tool_calls_in_progress,
+                            &mut next_tool_call_fallback,
                             &mut pending_usage,
                             &mut terminal_marker,
                             &mut stream_error,
@@ -395,7 +417,38 @@ impl LlmClient {
                                 // Tool calls delta
                                 if let Some(tool_calls) = choice.delta.tool_calls {
                                     for tc in tool_calls {
-                                        let idx = tc.index.unwrap_or(0);
+                                        let idx = resolve_tool_call_index(
+                                            &tool_calls_in_progress,
+                                            tc.index,
+                                            tc.id.as_deref(),
+                                            &mut next_tool_call_fallback,
+                                        );
+                                        if let Some(existing) = tool_calls_in_progress.get(&idx) {
+                                            if let Some(new_id) = tc.id.as_deref().filter(|s| !s.is_empty()) {
+                                                if !existing.0.is_empty() && existing.0 != new_id {
+                                                    let mut fresh = idx;
+                                                    while tool_calls_in_progress.contains_key(&fresh) {
+                                                        fresh = fresh.saturating_add(1);
+                                                    }
+                                                    eprintln!(
+                                                        "CVH [llm_client] tool call id changed at idx={idx} ({} -> {}); split into idx={fresh}",
+                                                        existing.0, new_id
+                                                    );
+                                                    tool_calls_in_progress.insert(fresh, (String::new(), String::new(), String::new()));
+                                                    let entry = tool_calls_in_progress.get_mut(&fresh).unwrap();
+                                                    entry.0.push_str(new_id);
+                                                    if let Some(func) = tc.function {
+                                                        if let Some(name) = func.name {
+                                                            entry.1.push_str(&name);
+                                                        }
+                                                        if let Some(args) = func.arguments {
+                                                            entry.2.push_str(&args);
+                                                        }
+                                                    }
+                                                    continue;
+                                                }
+                                            }
+                                        }
                                         let entry = tool_calls_in_progress
                                             .entry(idx)
                                             .or_insert_with(|| (String::new(), String::new(), String::new()));
@@ -491,6 +544,7 @@ impl LlmClient {
         payload: &serde_json::Value,
         tx: &Sender<StreamChunk>,
         tool_calls_in_progress: &mut HashMap<usize, (String, String, String)>,
+        next_tool_call_fallback: &mut usize,
         pending_usage: &mut Option<StreamChunk>,
         terminal_marker: &mut bool,
         stream_error: &mut Option<String>,
@@ -510,13 +564,18 @@ impl LlmClient {
             }
             "response.output_item.added" => {
                 if payload.pointer("/item/type").and_then(|v| v.as_str()) == Some("function_call") {
-                    let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
                     let call_id = payload
                         .pointer("/item/call_id")
                         .or_else(|| payload.pointer("/item/id"))
                         .and_then(|v| v.as_str())
                         .unwrap_or_default()
                         .to_string();
+                    let idx = resolve_tool_call_index(
+                        tool_calls_in_progress,
+                        payload.get("output_index").and_then(|v| v.as_u64()).map(|v| v as usize),
+                        Some(call_id.as_str()),
+                        next_tool_call_fallback,
+                    );
                     let name = payload
                         .pointer("/item/name")
                         .and_then(|v| v.as_str())
@@ -534,7 +593,12 @@ impl LlmClient {
                 }
             }
             "response.function_call_arguments.delta" => {
-                let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let idx = resolve_tool_call_index(
+                    tool_calls_in_progress,
+                    payload.get("output_index").and_then(|v| v.as_u64()).map(|v| v as usize),
+                    None,
+                    next_tool_call_fallback,
+                );
                 if let Some(delta) = payload.get("delta").and_then(|v| v.as_str()) {
                     tool_calls_in_progress
                         .entry(idx)
@@ -546,7 +610,16 @@ impl LlmClient {
             "response.output_item.done" => {
                 let item_type = payload.pointer("/item/type").and_then(|v| v.as_str());
                 if item_type == Some("function_call") {
-                    let idx = payload.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    let done_call_id = payload
+                        .pointer("/item/call_id")
+                        .or_else(|| payload.pointer("/item/id"))
+                        .and_then(|v| v.as_str());
+                    let idx = resolve_tool_call_index(
+                        tool_calls_in_progress,
+                        payload.get("output_index").and_then(|v| v.as_u64()).map(|v| v as usize),
+                        done_call_id,
+                        next_tool_call_fallback,
+                    );
                     let entry = tool_calls_in_progress
                         .entry(idx)
                         .or_insert_with(|| (String::new(), String::new(), String::new()));
@@ -710,6 +783,34 @@ mod tests {
                 assert!(events.iter().any(|event| matches!(event, StreamChunk::Usage { input_tokens: 10, output_tokens: 4, .. })));
             }
         }
+    }
+
+    #[tokio::test]
+    async fn batch_tool_calls_without_index_produce_distinct_calls() {
+        let frame = |id: &str, name: &str, args: &str| {
+            format!("data: {}\n\n", serde_json::json!({"choices": [{"delta": {"tool_calls": [{
+                "id": id, "function": {"name": name, "arguments": args}
+            }]}}]}))
+        };
+        let response = format!(
+            "{}{}{}data: {}\n\n",
+            frame("call-a", "read_file", "{\"path\":\"a\"}"),
+            frame("call-b", "read_file", "{\"path\":\"b\"}"),
+            frame("call-c", "read_file", "{\"path\":\"c\"}"),
+            serde_json::json!({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}),
+        );
+        let (result, events) = stream_test_response(response).await;
+        assert!(result.is_ok());
+        let calls: Vec<_> = events.iter().filter_map(|event| match event {
+            StreamChunk::ToolCall { id, name, arguments } => Some((id.clone(), name.clone(), arguments.clone())),
+            _ => None,
+        }).collect();
+        assert_eq!(calls.len(), 3);
+        let ids: std::collections::HashSet<_> = calls.iter().map(|(id, _, _)| id.as_str()).collect();
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("call-a") && ids.contains("call-b") && ids.contains("call-c"));
+        assert_eq!(calls.iter().map(|(_, _, args)| args.as_str()).collect::<Vec<_>>(),
+            vec!["{\"path\":\"a\"}", "{\"path\":\"b\"}", "{\"path\":\"c\"}"]);
     }
 
     #[tokio::test]
