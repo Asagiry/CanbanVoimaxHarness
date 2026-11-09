@@ -299,7 +299,7 @@ export function computeActivityFlags(
 ): ActivityFlag[] {
   const list = activities ?? [];
   const n = list.length;
-  const flags: ActivityFlag[] = new Array(n);
+  const flags: ActivityFlag[] = Array.from({ length: n });
 
   const isTodoWrite = (act: DrawerActivityItem | undefined): boolean => {
     if (!act || act.type !== 'tool') return false;
@@ -317,8 +317,8 @@ export function computeActivityFlags(
       act.type === 'output' ||
       (act.type as string) === 'summary');
 
-  const nextTurnEnd = new Array<boolean>(n + 1).fill(false);
-  const nextIntervening = new Array<boolean>(n + 1).fill(false);
+  const nextTurnEnd = Array.from({ length: n + 1 }, () => false);
+  const nextIntervening = Array.from({ length: n + 1 }, () => false);
   for (let i = n - 1; i >= 0; i--) {
     nextTurnEnd[i] = nextTurnEnd[i + 1] || isTurnEnd(list[i]);
     nextIntervening[i] = nextIntervening[i + 1] || isIntervening(list[i]);
@@ -327,7 +327,7 @@ export function computeActivityFlags(
   const todoIndices: number[] = [];
   for (let i = 0; i < n; i++) if (isTodoWrite(list[i])) todoIndices.push(i);
 
-  const nearbyTodo = new Array<boolean>(n).fill(false);
+  const nearbyTodo = Array.from({ length: n }, () => false);
   for (const ti of todoIndices) {
     for (let i = Math.max(0, ti - 3); i <= Math.min(n - 1, ti + 3); i++) {
       if (i !== ti) nearbyTodo[i] = true;
