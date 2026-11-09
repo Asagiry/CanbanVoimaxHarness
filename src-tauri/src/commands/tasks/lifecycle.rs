@@ -794,10 +794,26 @@ pub async fn internal_create_subtask_with_hook_states(
     let boards_cfg = load_boards_config(root).await.ok();
     let effective_board = if let Some(ref bc) = boards_cfg {
         let parent_board_id = tasks[parent_idx].board_id.as_deref();
+        let board_has_target = |b: &crate::config::BoardDef| -> bool {
+            target_stage_id.is_none_or(|tid| b.stages.iter().any(|c| stage_id_matches(&c.id, tid)))
+        };
         bc.boards
             .iter()
-            .find(|b| Some(b.id.as_str()) == parent_board_id)
+            .find(|b| Some(b.id.as_str()) == parent_board_id && board_has_target(b))
             .cloned()
+            .or_else(|| {
+                bc.boards
+                    .iter()
+                    .find(|b| b.id == bc.active_board_id && board_has_target(b))
+                    .cloned()
+            })
+            .or_else(|| bc.boards.iter().find(|b| board_has_target(b)).cloned())
+            .or_else(|| {
+                bc.boards
+                    .iter()
+                    .find(|b| Some(b.id.as_str()) == parent_board_id)
+                    .cloned()
+            })
             .or_else(|| bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned())
             .or_else(|| bc.boards.first().cloned())
     } else {
@@ -814,11 +830,20 @@ pub async fn internal_create_subtask_with_hook_states(
                 let pipeline = load_pipeline_config(root)
                     .await
                     .unwrap_or_else(|_| crate::config::default_pipeline_config());
-                pipeline
+                let col = pipeline
                     .stages
                     .into_iter()
                     .find(|c| stage_id_matches(&c.id, target_id))
-                    .ok_or_else(|| format!("Target column {} not found in pipeline", target_id))?
+                    .ok_or_else(|| format!("Target column {} not found in pipeline", target_id))?;
+                if stage_id_matches(&col.id, &tasks[parent_idx].stage_id)
+                    && !stage_id_matches(&col.id, target_id)
+                {
+                    return Err(format!(
+                        "Target column {} resolved to parent stage {} — refusing to create subtask in source column",
+                        target_id, col.id
+                    ));
+                }
+                col
             }
         }
     } else {
@@ -902,6 +927,15 @@ pub async fn internal_create_subtask_with_hook_states(
     } else {
         "idle"
     };
+
+    if stage_id_matches(&target_col.id, &tasks[parent_idx].stage_id)
+        && target_stage_id.is_some_and(|tid| !stage_id_matches(tid, &tasks[parent_idx].stage_id))
+    {
+        return Err(format!(
+            "Target column {} resolved to parent stage {} — refusing to create subtask in source column",
+            target_col.id, tasks[parent_idx].stage_id
+        ));
+    }
 
     let next_subtask_pos = tasks
         .iter()
@@ -1014,15 +1048,28 @@ pub async fn internal_create_subtask_with_hook_states(
                     }
                 }
             }
+            let mut subtask_for_hook = new_subtask.clone();
             trigger_column_on_enter_script(
                 &target_col,
-                &mut new_subtask.clone(),
+                &mut subtask_for_hook,
                 &target_col.id,
                 None,
                 root,
                 app_handle,
             )
             .await;
+            if subtask_for_hook.hook_states != new_subtask.hook_states {
+                let _ = crate::db::db_upsert_task(root, &subtask_for_hook);
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    if state_ref.get_root().as_path() == root {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_for_hook.id)) {
+                                t.hook_states = subtask_for_hook.hook_states.clone();
+                            }
+                        }
+                    }
+                }
+            }
             let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &subtask_id, "projectPath": &project_path_str }));
         }
     }
