@@ -174,7 +174,7 @@ describe('applyToggle', () => {
     expect(keyA).not.toBe(keyB);
     const afterA = applyToggle(false, keyA, new Set(), new Set());
     expect(resolveIsCollapsed({ id: keyA, idx: 0, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(true);
-    expect(resolveIsCollapsed({ id: keyB, idx: 1, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(false);
+    expect(resolveIsCollapsed({ id: keyB, idx: 49, total: 50, activity: { type: 'tool' }, ...afterA })).toBe(false);
   });
 
   it('task switch reset (empty sets) restores defaults: old tool collapsed, old thought expanded', () => {
