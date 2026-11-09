@@ -136,6 +136,11 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Cue: When a stage transition writes a handover/steer dialog item and also emits agent:autorun with the same prompt that run_agent_loop persists again via persist_steer_message.
 - Lesson: Keep exactly one writer per handover (skip direct append_task_dialog_activity when target has autorun), use deterministic handover:{task_id}:{hash} message_id for ON CONFLICT DO NOTHING idempotency, and dedup only handover-marked steer/summary by TRIM(content) - never blanket-dedup user/steer repeats.
 - Evidence: CVH-051 (commit e8b124eb) - Duplicate HANDOVER SUMMARY Agent messages at 21:28:52 from dual UUID writes in transitions.rs + agent.rs; fixed with single-writer gate, deterministic id, and handover-only dedup in dialog_repo/activitySlice/streamHelpers.
+
+### [CLE: Scoped Git Staging & Deferred-Delete Failure Preservation]
+- Cue: When a save/commit flow stages a subtree (e.g. `.cvh/`) with an allowlist filter, or executes deferred tombstone deletes before clearing them.
+- Lesson: Stage only allowlist-filtered paths explicitly (`git add -- <each filtered path>`) and unstage pre-staged non-allowlist paths (`git restore --staged`) before commit - never `git add <subtree>/` then filter only the commit decision; collect deferred-delete failures, surface via error state, and abort before clearing tombstones.
+- Evidence: CVH-102 (commit abc0d65c) - Gate 3: `git add -- .cvh/` staged harness.db/llm.json before is_cvh_config_path filter; Gate 5: empty catch in saveCvhToGitAction cleared pendingDeletes on IPC failure; fixed with explicit staging + restore --staged and failure-preserving abort.
 ```
 
 ---
