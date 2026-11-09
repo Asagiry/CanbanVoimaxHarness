@@ -1,8 +1,15 @@
 import { useRef, useState, useEffect } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 
+export const OLD_ACTIVITY_COLLAPSE_THRESHOLD = 10;
+
+export function isOldActivity(idx: number, total: number): boolean {
+  return idx < total - OLD_ACTIVITY_COLLAPSE_THRESHOLD;
+}
+
 export function useActivityScroll(displayActivities: DrawerActivityItem[], taskId?: string) {
   const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
+  const [expandedOverrides, setExpandedOverrides] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
@@ -18,6 +25,31 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
       }
       return next;
     });
+  };
+
+  const isCollapsed = (id: string, idx: number, total: number): boolean => {
+    if (expandedOverrides.has(id)) return false;
+    if (collapsedOutputs.has(id)) return true;
+    return isOldActivity(idx, total);
+  };
+
+  const toggleCollapsed = (id: string, idx: number, total: number) => {
+    const currentlyCollapsed = isCollapsed(id, idx, total);
+    if (currentlyCollapsed) {
+      setExpandedOverrides((prev) => new Set(prev).add(id));
+      setCollapsedOutputs((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } else {
+      setExpandedOverrides((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setCollapsedOutputs((prev) => new Set(prev).add(id));
+    }
   };
 
   const scrollToBottom = () => {
@@ -42,6 +74,7 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
   // Reset scroll and collapsed state on task switch
   useEffect(() => {
     setCollapsedOutputs(new Set());
+    setExpandedOverrides(new Set());
     setShowNewButton(false);
     isFirstBatchRef.current = true;
     nearBottomRef.current = true;
@@ -84,8 +117,11 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
   return {
     scrollRef,
     collapsedOutputs,
+    expandedOverrides,
     showNewButton,
     toggleOutput,
+    isCollapsed,
+    toggleCollapsed,
     scrollToBottom,
     handleFeedScroll,
   };

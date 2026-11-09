@@ -28,6 +28,8 @@ export interface ThoughtStreamCardProps {
   taskId: string;
   isLive?: boolean;
   durationMs?: number;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
 }
 
 /**
@@ -42,9 +44,19 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
   taskId,
   isLive,
   durationMs,
+  isExpanded: controlledExpanded,
+  onToggleExpanded,
 }: ThoughtStreamCardProps) {
   const effectiveThought = thought || activity;
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(true);
+  const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const setIsExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
+    if (onToggleExpanded) {
+      onToggleExpanded();
+    } else {
+      setInternalExpanded(typeof v === 'function' ? (v as (p: boolean) => boolean)(internalExpanded) : v);
+    }
+  };
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -4,9 +4,45 @@ import {
   parseMarkdownTokens,
   parseInlineTokens,
   type InlineNode,
+  type MarkdownToken,
 } from '../../../lib/markdown';
 
 export const LightboxContext = React.createContext<((src: string, alt?: string) => void) | null>(null);
+
+const MARKDOWN_CACHE_MAX = 100;
+const markdownTokenCache = new Map<string, MarkdownToken[]>();
+
+export function hashContent(content: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < content.length; i++) {
+    const c = content.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b);
+  }
+  return `${content.length}:${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}`;
+}
+
+export function getCachedMarkdownTokens(content: string): MarkdownToken[] {
+  const key = hashContent(content);
+  const cached = markdownTokenCache.get(key);
+  if (cached) {
+    markdownTokenCache.delete(key);
+    markdownTokenCache.set(key, cached);
+    return cached;
+  }
+  const tokens = parseMarkdownTokens(content);
+  markdownTokenCache.set(key, tokens);
+  if (markdownTokenCache.size > MARKDOWN_CACHE_MAX) {
+    const oldest = markdownTokenCache.keys().next().value;
+    if (oldest !== undefined) markdownTokenCache.delete(oldest);
+  }
+  return tokens;
+}
+
+export function clearMarkdownTokenCache(): void {
+  markdownTokenCache.clear();
+}
 
 export function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode[] {
   return nodes.map((node, i) => {
@@ -149,17 +185,24 @@ function CodeBlock({
 export interface MarkdownContentProps {
   content?: string;
   onImageClick?: (src: string, alt?: string) => void;
+  deferred?: boolean;
 }
 
 // Lightweight Markdown Renderer for streaming assistant output
 export function MarkdownContent({
   content,
   onImageClick,
+  deferred,
 }: MarkdownContentProps) {
   const contextOnImageClick = useContext(LightboxContext);
   const handleImageClick = onImageClick || contextOnImageClick;
 
-  const tokens = useMemo(() => parseMarkdownTokens(content ?? ''), [content]);
+  const tokens = useMemo(
+    () => (deferred ? [] : getCachedMarkdownTokens(content ?? '')),
+    [content, deferred]
+  );
+
+  if (deferred) return null;
 
   return (
     <div className="space-y-1 select-text font-sans break-words [overflow-wrap:anywhere] min-w-0">

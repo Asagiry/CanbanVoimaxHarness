@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronRight, ListTodo } from 'lucide-react';
 import { useTranslation } from '../../../stores/languageStore';
 import {
@@ -9,12 +8,13 @@ import {
   CopyLogsButton,
   BatchBadge,
   formatDurationCompact,
+  useToolExpanded,
 } from './shared';
 import TodoChecklist, { TodoChecklistItem } from './TodoChecklist';
 
-export default function TodoToolCard({ tool }: ToolCardProps) {
+export default function TodoToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   const toolName = tool.toolName ?? 'todo_write';
   const params = (tool.params && typeof tool.params === 'object'

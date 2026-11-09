@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { KanbanTask } from '../../../types';
 import { useTranslation } from '../../../stores/languageStore';
 import { Target, Paperclip, ZoomIn } from 'lucide-react';
@@ -10,7 +11,7 @@ export interface TaskObjectiveCardProps {
   onImageClick?: (src: string, alt?: string) => void;
 }
 
-export function TaskObjectiveCard({
+function TaskObjectiveCardInner({
   task,
   effectiveAttachments,
   onImageClick,
@@ -67,3 +68,5 @@ export function TaskObjectiveCard({
     </div>
   );
 }
+
+export const TaskObjectiveCard = memo(TaskObjectiveCardInner);

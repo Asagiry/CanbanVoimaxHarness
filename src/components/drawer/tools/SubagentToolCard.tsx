@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { SubagentInfo, ToolExecution } from '../../../types';
+import type { SubagentInfo } from '../../../types';
 import { useDrawerStore } from '../../../stores/drawerStore';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
@@ -26,7 +26,7 @@ import {
   Users,
   FolderDown,
 } from 'lucide-react';
-import { ToolCardProps, BatchBadge } from './shared';
+import { ToolCardProps, BatchBadge, useToolExpanded } from './shared';
 
 export { getSubagentRoleLabel };
 
@@ -283,8 +283,8 @@ function AwaitedSubagentRow({
   );
 }
 
-export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
   const [now, setNow] = useState(() => Date.now());
   const { t, language } = useTranslation();
 
@@ -591,7 +591,7 @@ function DiscoveredSubagentRow({
   );
 }
 
-export function SubagentListExecutionCard({ tool }: { tool: ToolExecution }) {
+export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
   const { t, language } = useTranslation();
   const openSubagent = useDrawerStore((s) => s.openSubagent);
   const activeTaskId = useDrawerStore((s) => s.activeTaskId);
@@ -614,11 +614,20 @@ export function SubagentListExecutionCard({ tool }: { tool: ToolExecution }) {
   }, [tool.stdout, activeTaskId, storeSubagents, orderMap, toolIdToSubagentId, t]);
 
   const durationText = formatDurationCompact(tool.durationMs);
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
 
   return (
     <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] p-3 shadow-xs my-2 select-none">
-      <div className="flex items-center justify-between gap-2.5">
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between gap-2.5 cursor-pointer"
+      >
         <div className="flex items-center space-x-2 min-w-0 flex-1">
+          <ChevronRight
+            className={`h-3.5 w-3.5 text-[#8f8f8f] transition-transform duration-150 shrink-0 ${
+              isExpanded ? 'rotate-90' : ''
+            }`}
+          />
           <div className="relative shrink-0 flex items-center justify-center">
             <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
           </div>
@@ -670,7 +679,7 @@ export function SubagentListExecutionCard({ tool }: { tool: ToolExecution }) {
         </div>
       </div>
 
-      {discoveredList.length > 0 ? (
+      {isExpanded && (discoveredList.length > 0 ? (
         <div className="mt-2.5 pt-2 border-t border-[#f4f4f5] dark:border-[#212126] space-y-1.5">
           {discoveredList.map((sub, idx) => (
             <DiscoveredSubagentRow
@@ -687,12 +696,12 @@ export function SubagentListExecutionCard({ tool }: { tool: ToolExecution }) {
         <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126] text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
           {t('tools.subagent_list.notFound')}
         </div>
-      ) : null}
+      ) : null)}
     </div>
   );
 }
 
-export function SingleSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
+export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
   const { t, language } = useTranslation();
   const openSubagent = useDrawerStore((s) => s.openSubagent);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
@@ -808,6 +817,8 @@ export function SingleSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
     return formatDurationCompact(tool.durationMs);
   })();
 
+  const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, true);
+
   return (
     <div
       onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
@@ -815,6 +826,21 @@ export function SingleSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
     >
       <div className="flex items-center justify-between gap-2.5">
         <div className="flex items-center space-x-2 min-w-0 flex-1">
+          <button
+            type="button"
+            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+          >
+            <ChevronRight
+              className={`h-3.5 w-3.5 transition-transform duration-150 ${
+                isExpanded ? 'rotate-90' : ''
+              }`}
+            />
+          </button>
           <SubagentTypeIcon isBg={isBg} />
 
           <span
@@ -842,7 +868,7 @@ export function SingleSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
         </div>
       </div>
 
-      {prompt && (
+      {isExpanded && prompt && (
         <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126] text-[11px] font-mono text-[#52525b] dark:text-[#71717a] line-clamp-2 leading-relaxed">
           {prompt}
         </div>
@@ -851,16 +877,16 @@ export function SingleSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
   );
 }
 
-export default function SubagentToolCard({ tool }: ToolCardProps) {
+export default function SubagentToolCard({ tool, isExpanded, onToggleExpanded }: ToolCardProps) {
   const toolName = tool.toolName ?? 'subagent';
 
   if (toolName === 'collect_subagent') {
-    return <CollectSubagentExecutionCard tool={tool} />;
+    return <CollectSubagentExecutionCard tool={tool} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
   }
 
   if (toolName === 'subagent_list' || toolName === 'list_subagents') {
-    return <SubagentListExecutionCard tool={tool} />;
+    return <SubagentListExecutionCard tool={tool} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
   }
 
-  return <SingleSubagentExecutionCard tool={tool} />;
+  return <SingleSubagentExecutionCard tool={tool} isExpanded={isExpanded} onToggleExpanded={onToggleExpanded} />;
 }
