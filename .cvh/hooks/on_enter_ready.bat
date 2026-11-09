@@ -31,11 +31,12 @@ if not errorlevel 1 (
 )
 
 echo [CVH Ready Hook] Checking out main...
-REM Preserve live .cvh/ across checkout/pull/merge
-if exist ".cvh" (xcopy /E /I /Y ".cvh" "%TEMP%\cvh_backup_%CVH_TASK_ID%" >nul)
-REM Discard uncommitted .cvh/ residue so checkout/merge cannot abort on local changes
+REM Preserve live .cvh/ config files across checkout/pull/merge (exclude databases and runtime logs/spill)
+if exist ".cvh" (
+    robocopy ".cvh" "%TEMP%\cvh_backup_%CVH_TASK_ID%" /E /XF *.db* *.sqlite* *.log* /XD dialogs context spill logs worktrees >nul 2>&1
+)
+REM Discard uncommitted tracked .cvh/ changes so checkout/merge cannot abort on local changes (never git clean DBs!)
 git restore -- .cvh >nul 2>&1
-git clean -fd -- .cvh >nul 2>&1
 
 git checkout main
 if errorlevel 1 (
@@ -55,14 +56,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Unstage any .cvh/ introduced by merge, then restore live backup over .cvh/
+REM Unstage any .cvh/ introduced by merge, then restore live backup over .cvh/ (excluding databases)
 git restore --staged .cvh >nul 2>&1
-if exist "%TEMP%\cvh_backup_%CVH_TASK_ID%" (xcopy /E /I /Y "%TEMP%\cvh_backup_%CVH_TASK_ID%" ".cvh" >nul & rmdir /S /Q "%TEMP%\cvh_backup_%CVH_TASK_ID%")
+if exist "%TEMP%\cvh_backup_%CVH_TASK_ID%" (
+    robocopy "%TEMP%\cvh_backup_%CVH_TASK_ID%" ".cvh" /E /XF *.db* *.sqlite* *.log* /XD dialogs context spill logs worktrees >nul 2>&1
+    rmdir /S /Q "%TEMP%\cvh_backup_%CVH_TASK_ID%" >nul 2>&1
+)
 
 echo [CVH Ready Hook] Pushing to origin/main...
 git push origin main
 if errorlevel 1 (
-    echo [CVH Ready Hook] WARNING: Failed to push main to origin/main (offline or rejected). Local merge preserved. >&2
+    echo [CVH Ready Hook] WARNING: Failed to push main to origin/main -- offline or rejected. Local merge preserved. >&2
 )
 
 echo [CVH Ready Hook] SUCCESS: Merged into main and pushed to origin/main!

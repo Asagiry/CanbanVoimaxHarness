@@ -25,7 +25,7 @@ else
         # Preserve live .cvh/ (canonical source, uncommitted) across checkout/pull/merge
         BACKUP="$(mktemp -d 2>/dev/null || echo "/tmp/cvh_backup_$TASK_ID")"
         mkdir -p "$BACKUP"
-        if [ -d ".cvh" ]; then cp -a .cvh "$BACKUP/" || true; fi
+        if [ -d ".cvh" ]; then rsync -a --exclude="*.db*" --exclude="*.sqlite*" --exclude="dialogs" --exclude="logs" .cvh "$BACKUP/" 2>/dev/null || cp -a .cvh "$BACKUP/" || true; fi
         # Discard uncommitted .cvh/ residue so checkout/merge cannot abort on local changes
         git restore -- .cvh >/dev/null 2>&1 || true
         git clean -fd -- .cvh >/dev/null 2>&1 || true
@@ -39,7 +39,7 @@ else
         echo "[CVH Ready Hook] Merging branch '$BRANCH' into main..."
         git merge --no-ff "$BRANCH" -m "feat($TASK_ID): $TITLE [ready]"
         git restore --staged .cvh >/dev/null 2>&1 || true
-        if [ -d "$BACKUP/.cvh" ]; then cp -a "$BACKUP/.cvh/." .cvh/ || true; fi
+        if [ -d "$BACKUP/.cvh" ]; then rsync -a --exclude="*.db*" --exclude="*.sqlite*" --exclude="dialogs" --exclude="logs" "$BACKUP/.cvh/." .cvh/ 2>/dev/null || cp -a "$BACKUP/.cvh/." .cvh/ || true; fi
         rm -rf "$BACKUP"
 
         echo "[CVH Ready Hook] Pushing to origin/main..."
