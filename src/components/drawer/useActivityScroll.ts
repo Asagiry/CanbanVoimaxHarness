@@ -8,24 +8,35 @@ export function isOldActivity(idx: number, total: number): boolean {
 }
 
 export function isAutoCollapsible(
-  activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+  activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
+  isFinalOverride?: boolean
 ): boolean {
-  const type = typeof activity === 'string' ? activity : activity?.type;
-  return type === 'thought' || type === 'output';
+  if (typeof activity === 'string') {
+    return activity === 'tool' || activity === 'output';
+  }
+  if (!activity) return false;
+  if (activity.type === 'tool') {
+    return activity.tool?.status !== 'running';
+  }
+  if (activity.type === 'output') {
+    return !(isFinalOverride ?? activity.isFinal);
+  }
+  return false;
 }
 
 export function resolveIsCollapsed(args: {
   id: string;
   idx: number;
   total: number;
-  activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null;
+  activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null;
+  isFinal?: boolean;
   collapsedOutputs: Set<string>;
   expandedOverrides: Set<string>;
 }): boolean {
-  const { id, idx, total, activity, collapsedOutputs, expandedOverrides } = args;
+  const { id, idx, total, activity, isFinal, collapsedOutputs, expandedOverrides } = args;
   if (expandedOverrides.has(id)) return false;
   if (collapsedOutputs.has(id)) return true;
-  if (!isAutoCollapsible(activity)) return false;
+  if (!isAutoCollapsible(activity, isFinal)) return false;
   return isOldActivity(idx, total);
 }
 
@@ -69,17 +80,19 @@ export function useActivityScroll(displayActivities: DrawerActivityItem[], taskI
     id: string,
     idx: number,
     total: number,
-    activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+    activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
+    isFinal?: boolean
   ): boolean =>
-    resolveIsCollapsed({ id, idx, total, activity, collapsedOutputs, expandedOverrides });
+    resolveIsCollapsed({ id, idx, total, activity, isFinal, collapsedOutputs, expandedOverrides });
 
   const toggleCollapsed = (
     id: string,
     idx: number,
     total: number,
-    activity?: Pick<DrawerActivityItem, 'type'> | DrawerActivityItem['type'] | null
+    activity?: Pick<DrawerActivityItem, 'type' | 'isFinal' | 'tool'> | DrawerActivityItem['type'] | null,
+    isFinal?: boolean
   ) => {
-    const currentlyCollapsed = isCollapsed(id, idx, total, activity);
+    const currentlyCollapsed = isCollapsed(id, idx, total, activity, isFinal);
     const next = applyToggle(currentlyCollapsed, id, collapsedOutputs, expandedOverrides);
     setCollapsedOutputs(next.collapsedOutputs);
     setExpandedOverrides(next.expandedOverrides);
