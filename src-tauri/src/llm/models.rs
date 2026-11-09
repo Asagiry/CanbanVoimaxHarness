@@ -275,6 +275,8 @@ impl ChatMessage {
 pub struct ToolFunction {
     pub name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     pub parameters: serde_json::Value,
 }
 
@@ -295,6 +297,24 @@ impl ToolDefinition {
             function: ToolFunction {
                 name: name.to_string(),
                 description: description.to_string(),
+                aliases: Vec::new(),
+                parameters,
+            },
+        }
+    }
+
+    pub fn function_with_aliases(
+        name: &str,
+        description: &str,
+        aliases: Vec<String>,
+        parameters: serde_json::Value,
+    ) -> Self {
+        Self {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: name.to_string(),
+                description: description.to_string(),
+                aliases,
                 parameters,
             },
         }

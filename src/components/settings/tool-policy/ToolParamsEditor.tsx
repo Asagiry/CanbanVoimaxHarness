@@ -53,7 +53,8 @@ function ToolParamRow({
 }) {
   const { toolSettings, setToolSetting } = useToolPolicyStore();
   const { t } = useTranslation();
-  const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
+  const rawValue = toolSettings[toolId]?.[param.key];
+  const currentValue = typeof rawValue === 'number' ? rawValue : param.defaultValue;
   const [draft, setDraft] = useState(String(currentValue));
 
   const paramLabelKey = `toolParam.${param.key}.label` as TranslationKey;

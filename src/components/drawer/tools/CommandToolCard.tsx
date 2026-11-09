@@ -1,4 +1,5 @@
 import { ChevronRight, Terminal } from 'lucide-react';
+import { useToolPolicyStore } from '../../../stores/toolPolicyStore';
 import {
   ToolCardProps,
   isToolFailed,
@@ -18,6 +19,7 @@ function formatCommandPreview(cmd: string): string {
 
 export default function CommandToolCard({ tool, isExpanded: controlledExpanded, onToggleExpanded }: ToolCardProps) {
   const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
+  const configuredShell = (useToolPolicyStore((s) => s.toolSettings['execute_command']?.shell as string)) || 'bash';
 
   const toolName = tool.toolName ?? 'cmd';
   const params: Record<string, unknown> =
@@ -84,7 +86,7 @@ export default function CommandToolCard({ tool, isExpanded: controlledExpanded, 
           </span>
 
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
-            {toolName === 'execute_command' ? 'bash' : toolName}
+            {toolName === 'execute_command' ? configuredShell : toolName}
           </span>
 
           <span className="font-mono text-[#171717] dark:text-[#f4f4f5] font-medium truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]">

@@ -35,7 +35,7 @@ pub struct ToolPermissions {
 
 pub fn normalize_tool_name(name: &str) -> &str {
     match name {
-        "bash" => "execute_command",
+        "bash" | "pwsh" | "powershell" | "cmd" => "execute_command",
         "str_replace" => "edit_file",
         "ask_user" => "question",
         "create_tasks" => "create_task",

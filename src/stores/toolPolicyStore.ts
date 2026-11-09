@@ -10,6 +10,7 @@ export interface ToolMeta {
   tokenWeight: number;
   parentTool?: string;
   isSubagentMaster?: boolean;
+  aliases?: string[];
   parameters?: Record<string, unknown>;
 }
 
@@ -25,6 +26,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Decompose requirements and create a new task card on the Kanban board.',
     category: 'orchestration',
     tokenWeight: 260,
+    aliases: ['create_tasks'],
     parameters: {
       type: 'object',
       properties: {
@@ -60,8 +62,9 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     id: 'question',
     name: 'question',
     label: 'Вопрос пользователю',
-    description: "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). Alias: 'ask_user'.",
+    description: "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop).",
     category: 'interactive',
+    aliases: ['ask_user'],
     tokenWeight: 240,
     parameters: {
       type: 'object',
@@ -91,6 +94,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.',
     category: 'workflow',
     tokenWeight: 220,
+    aliases: ['move_task', 'move_task_stage', 'advance_stage', 'next_stage'],
     parameters: {
       type: 'object',
       properties: {
@@ -118,13 +122,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     id: 'execute_command',
     name: 'execute_command',
     label: 'Команды терминала',
-    description: "Execute a shell command inside the isolated worktree with piped stdout/stderr. Aliased as 'bash'.",
+    description: "Execute a shell command inside the isolated worktree with piped stdout/stderr.",
     category: 'system',
     tokenWeight: 320,
+    aliases: ['bash'],
     parameters: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: "Command string to run (e.g. 'cargo check', or 'cmd')." },
+        command: { type: 'string', description: "Command string to run (e.g. 'cargo check', 'git status')." },
         timeout_seconds: { type: 'integer', description: 'Execution timeout in seconds (default: 60).' },
       },
       required: ['command'],
@@ -151,9 +156,10 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     id: 'edit_file',
     name: 'edit_file',
     label: 'Целевое редактирование',
-    description: "Targeted text replacement in an existing file inside the isolated worktree. Aliased as 'str_replace'.",
+    description: "Targeted text replacement in an existing file inside the isolated worktree.",
     category: 'fs',
     tokenWeight: 310,
+    aliases: ['str_replace'],
     parameters: {
       type: 'object',
       properties: {
@@ -341,6 +347,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 200,
     parentTool: 'subagent',
+    aliases: ['list_subagents'],
     parameters: {
       type: 'object',
       properties: {
@@ -504,14 +511,14 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
   ],
 };
 
-export type ToolSettings = Record<string, Record<string, number>>;
+export type ToolSettings = Record<string, Record<string, number | string>>;
 
 export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
   read_file: { max_lines: 200 },
   subagent: { max_concurrent: 3 },
   subagent_bg: { max_concurrent: 3 },
   todo_write: { min_items: 3, max_items: 20 },
-  execute_command: { timeout_sec: 180 },
+  execute_command: { timeout_sec: 180, shell: 'bash' },
 };
 
 export interface ToolPolicyState {
@@ -525,8 +532,8 @@ export interface ToolPolicyState {
   openModal: () => void;
   closeModal: () => void;
   setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;
-  setToolSetting: (toolId: string, key: string, value: number) => void;
-  getToolSetting: (toolId: string, key: string, defaultValue: number) => number;
+  setToolSetting: (toolId: string, key: string, value: number | string) => void;
+  getToolSetting: (toolId: string, key: string, defaultValue: number | string) => number | string;
   setToolDescription: (toolId: string, description: string) => void;
   resetToolDescription: (toolId: string) => void;
   setToolCustomSchema: (toolId: string, schema: unknown) => void;

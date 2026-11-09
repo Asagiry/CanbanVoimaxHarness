@@ -743,4 +743,64 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
         let enriched = build_enriched_windows_paths(&initial_path);
         assert!(!enriched.is_empty());
         assert!(enriched.iter().any(|p| p.to_string_lossy().contains("Windows")));
+        assert!(enriched.iter().any(|p| p.to_string_lossy().to_lowercase().contains("git")));
+    }
+
+    #[test]
+    fn test_normalize_tool_name_shell_aliases() {
+        use crate::config::models::normalize_tool_name;
+        assert_eq!(normalize_tool_name("bash"), "execute_command");
+        assert_eq!(normalize_tool_name("pwsh"), "execute_command");
+        assert_eq!(normalize_tool_name("powershell"), "execute_command");
+        assert_eq!(normalize_tool_name("cmd"), "execute_command");
+        assert_eq!(normalize_tool_name("execute_command"), "execute_command");
+        assert_eq!(normalize_tool_name("str_replace"), "edit_file");
+        assert_eq!(normalize_tool_name("ask_user"), "question");
+        assert_eq!(normalize_tool_name("create_tasks"), "create_task");
+        assert_eq!(normalize_tool_name("list_subagents"), "subagent_list");
+        assert_eq!(normalize_tool_name("move_task"), "advance_task");
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn test_execute_command_with_git_bash_semicolon() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_bash_semi_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut policy = ToolPolicyConfig::default();
+        policy.tool_settings.insert("execute_command".to_string(), serde_json::json!({
+            "timeout_sec": 30,
+            "shell": "bash"
+        }));
+
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-BASH-TEST"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let res = execute_tool(&tool_ctx, "execute_command", &serde_json::json!({
+            "command": "echo first_part; echo second_part"
+        }))
+        .await
+        .expect("bash execute_command");
+
+        assert!(res.contains("[Exit Code: 0]"), "res: {}", res);
+        assert!(res.contains("first_part"), "res: {}", res);
+        assert!(res.contains("second_part"), "res: {}", res);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }

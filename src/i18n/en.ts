@@ -403,7 +403,7 @@ export const en = {
   'tools.complete_task.label': 'Complete Task',
   'tools.complete_task.description': 'Finalize orchestrator task and transition to Ready. Protected by Anti-Bypass invariant.',
   'tools.question.label': 'Ask User',
-  'tools.question.description': 'Ask clarifying question to the user and await response in the interface. Alias: ask_user.',
+  'tools.question.description': 'Ask clarifying question to the user and await response in the interface.',
   'tools.advance_task.label': 'Advance Stage',
   'tools.advance_task.description': 'Advance task to the next pipeline stage. Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.',
   'tools.reject_task.label': 'Reject Stage',

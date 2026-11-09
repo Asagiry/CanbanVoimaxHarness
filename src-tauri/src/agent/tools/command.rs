@@ -128,12 +128,20 @@ pub async fn execute_command(
         .and_then(|v| v.as_u64())
         .unwrap_or(default_timeout);
 
+    let configured_shell = ctx
+        .tool_policy
+        .tool_settings
+        .get("execute_command")
+        .and_then(|v| v.get("shell"))
+        .and_then(|v| v.as_str());
+
     let res = run_scoped_command(
         worktree_dir,
         cleaned_command,
         Duration::from_secs(timeout_secs),
         Arc::clone(abort_handle),
         Some(repo_root),
+        configured_shell,
     ).await?;
 
     let output = format!(
@@ -167,6 +175,7 @@ pub async fn execute_custom_tool(
             Duration::from_secs(60),
             Arc::clone(abort_handle),
             Some(repo_root),
+            None,
         ).await?;
         Ok(format!(
             "[Custom Tool: {} Exit: {}]\nSTDOUT: {}\nSTDERR: {}",

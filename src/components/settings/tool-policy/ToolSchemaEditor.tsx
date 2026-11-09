@@ -2,19 +2,78 @@ import { useEffect, useMemo, useState } from 'react';
 import { useToolPolicyStore, type ToolMeta } from '../../../stores/toolPolicyStore';
 
 export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
-  const { toolCustomSchemas, setToolCustomSchema, resetToolCustomSchema } = useToolPolicyStore();
+  const {
+    toolCustomSchemas,
+    setToolCustomSchema,
+    resetToolCustomSchema,
+    toolSettings,
+    setToolSetting,
+  } = useToolPolicyStore();
 
-  const defaultSchema = useMemo(
-    () => ({
+  const isExecuteCommand = tool.id === 'execute_command';
+  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as 'bash' | 'pwsh' | 'cmd';
+
+  const defaultSchema = useMemo(() => {
+    let aliases = tool.aliases;
+    let description = tool.description;
+    let parameters = tool.parameters || { type: 'object', properties: {} };
+
+    if (isExecuteCommand) {
+      if (selectedShell === 'pwsh') {
+        aliases = ['pwsh', 'powershell'];
+        description = 'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
+        const props = (parameters.properties || {}) as Record<string, unknown>;
+        parameters = {
+          ...parameters,
+          properties: {
+            ...props,
+            command: {
+              ...((props.command as Record<string, unknown>) || { type: 'string' }),
+              description: "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').",
+            },
+          },
+        };
+      } else if (selectedShell === 'cmd') {
+        aliases = ['cmd'];
+        description = 'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
+        const props = (parameters.properties || {}) as Record<string, unknown>;
+        parameters = {
+          ...parameters,
+          properties: {
+            ...props,
+            command: {
+              ...((props.command as Record<string, unknown>) || { type: 'string' }),
+              description: "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').",
+            },
+          },
+        };
+      } else {
+        aliases = ['bash'];
+        description = 'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
+        const props = (parameters.properties || {}) as Record<string, unknown>;
+        parameters = {
+          ...parameters,
+          properties: {
+            ...props,
+            command: {
+              ...((props.command as Record<string, unknown>) || { type: 'string' }),
+              description: "Command string to run in Git Bash (e.g. 'cargo check', 'git status').",
+            },
+          },
+        };
+      }
+    }
+
+    return {
       type: 'function',
       function: {
         name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters || { type: 'object', properties: {} },
+        description,
+        ...(aliases && aliases.length > 0 ? { aliases } : {}),
+        parameters,
       },
-    }),
-    [tool.name, tool.description, tool.parameters],
-  );
+    };
+  }, [tool.name, tool.description, tool.parameters, tool.aliases, isExecuteCommand, selectedShell]);
 
   const defaultJsonString = useMemo(() => {
     return JSON.stringify(defaultSchema, null, 2);
@@ -26,15 +85,17 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
   const activeJsonString = useMemo(() => {
     if (customSchema !== undefined) {
       try {
-        return typeof customSchema === 'string'
-          ? JSON.stringify(JSON.parse(customSchema), null, 2)
-          : JSON.stringify(customSchema, null, 2);
+        const obj = typeof customSchema === 'string' ? JSON.parse(customSchema) : { ...customSchema };
+        if (obj?.function && !obj.function.aliases && defaultSchema.function.aliases?.length) {
+          obj.function.aliases = defaultSchema.function.aliases;
+        }
+        return JSON.stringify(obj, null, 2);
       } catch {
         return typeof customSchema === 'string' ? customSchema : JSON.stringify(customSchema, null, 2);
       }
     }
     return defaultJsonString;
-  }, [customSchema, defaultJsonString]);
+  }, [customSchema, defaultJsonString, defaultSchema.function.aliases]);
 
   const [jsonText, setJsonText] = useState(activeJsonString);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -44,6 +105,47 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
     setJsonText(activeJsonString);
     setParseError(null);
   }, [activeJsonString]);
+
+  const handleShellChange = (newShell: 'bash' | 'pwsh' | 'cmd') => {
+    setToolSetting('execute_command', 'shell', newShell);
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (parsed?.function) {
+        const shellAliases =
+          newShell === 'pwsh' ? ['pwsh', 'powershell'] : newShell === 'cmd' ? ['cmd'] : ['bash'];
+        parsed.function.aliases = shellAliases;
+        if (newShell === 'pwsh') {
+          parsed.function.description =
+            'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
+          if (parsed.function.parameters?.properties?.command) {
+            parsed.function.parameters.properties.command.description =
+              "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').";
+          }
+        } else if (newShell === 'cmd') {
+          parsed.function.description =
+            'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
+          if (parsed.function.parameters?.properties?.command) {
+            parsed.function.parameters.properties.command.description =
+              "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').";
+          }
+        } else {
+          parsed.function.description =
+            'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
+          if (parsed.function.parameters?.properties?.command) {
+            parsed.function.parameters.properties.command.description =
+              "Command string to run in Git Bash (e.g. 'cargo check', 'git status').";
+          }
+        }
+        const formatted = JSON.stringify(parsed, null, 2);
+        setJsonText(formatted);
+        if (isCustomized) {
+          setToolCustomSchema('execute_command', parsed);
+        }
+      }
+    } catch {
+      // Draft had syntax error; activeJsonString will update on next valid state
+    }
+  };
 
   const handleFormat = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -87,7 +189,7 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
       className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9fb] dark:bg-[#0b0b0e] space-y-2 select-none"
     >
       <div className="flex items-center justify-between gap-2 border-b border-[#ebebeb] dark:border-[#212126] pb-1.5 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#71717a] font-semibold">
             Схема инструмента (JSON)
           </span>
@@ -102,6 +204,34 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
             </span>
           )}
         </div>
+
+        {isExecuteCommand && (
+          <div className="flex items-center gap-1 bg-[#f4f4f5] dark:bg-[#18181b] p-0.5 rounded border border-[#e4e4e7] dark:border-[#27272a] text-[10px] font-mono">
+            <span className="text-[#71717a] text-[9px] px-1 font-semibold uppercase select-none">
+              Оболочка:
+            </span>
+            {(['bash', 'pwsh', 'cmd'] as const).map((shell) => {
+              const active = selectedShell === shell;
+              return (
+                <button
+                  key={shell}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShellChange(shell);
+                  }}
+                  className={`px-2 py-0.5 rounded transition cursor-pointer font-medium ${
+                    active
+                      ? 'bg-white dark:bg-[#27272a] text-[#171717] dark:text-[#f4f4f5] shadow-xs border border-[#d4d4d8] dark:border-[#3f3f46]'
+                      : 'text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
+                  }`}
+                >
+                  {shell}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <button

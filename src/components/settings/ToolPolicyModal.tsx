@@ -80,7 +80,7 @@ export default function ToolPolicyModal() {
 
   return (
     <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] shadow-md overflow-hidden flex flex-col max-h-[85%] transition-colors">
+      <div className="w-full max-w-5xl rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] shadow-md overflow-hidden flex flex-col max-h-[85%] transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] px-4 py-3 bg-white dark:bg-[#111114]">
           <div>
@@ -214,7 +214,7 @@ export default function ToolPolicyModal() {
                             {isExpanded && (
                               <tr className="bg-[#f9f9fb] dark:bg-[#0b0b0e] border-b border-[#ebebeb] dark:border-[#212126]">
                                 <td colSpan={2 + agents.length} className="p-3">
-                                  <div className="space-y-2 max-w-3xl">
+                                  <div className="space-y-2 w-full">
                                     <ToolParamsEditor toolId={tool.id} />
                                     <ToolSchemaEditor tool={tool} />
                                   </div>

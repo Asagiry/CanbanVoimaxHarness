@@ -754,6 +754,26 @@ pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec
                     *tool = custom_def;
                 }
             }
+            if tool.function.name == "execute_command" && tool.function.aliases.is_empty() {
+                if let Some(shell) = tool_policy
+                    .tool_settings
+                    .get("execute_command")
+                    .and_then(|v| v.get("shell"))
+                    .and_then(|v| v.as_str())
+                {
+                    match shell.to_lowercase().as_str() {
+                        "pwsh" | "powershell" => {
+                            tool.function.aliases = vec!["pwsh".to_string(), "powershell".to_string()];
+                        }
+                        "cmd" => {
+                            tool.function.aliases = vec!["cmd".to_string()];
+                        }
+                        _ => {
+                            tool.function.aliases = vec!["bash".to_string()];
+                        }
+                    }
+                }
+            }
         }
     }
     tools
@@ -2710,7 +2730,21 @@ pub fn build_enriched_windows_paths(current_path: &std::ffi::OsStr) -> Vec<PathB
     }
     let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
     if !program_files.trim().is_empty() {
-        candidates.push(PathBuf::from(program_files).join("nodejs"));
+        candidates.push(PathBuf::from(&program_files).join("nodejs"));
+        candidates.push(PathBuf::from(&program_files).join("Git").join("bin"));
+        candidates.push(PathBuf::from(&program_files).join("Git").join("usr").join("bin"));
+    }
+    if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
+        if !pf86.trim().is_empty() {
+            candidates.push(PathBuf::from(&pf86).join("Git").join("bin"));
+            candidates.push(PathBuf::from(&pf86).join("Git").join("usr").join("bin"));
+        }
+    }
+    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+        if !localappdata.trim().is_empty() {
+            candidates.push(PathBuf::from(&localappdata).join("Programs").join("Git").join("bin"));
+            candidates.push(PathBuf::from(&localappdata).join("Programs").join("Git").join("usr").join("bin"));
+        }
     }
 
     for candidate in candidates {
@@ -2723,6 +2757,36 @@ pub fn build_enriched_windows_paths(current_path: &std::ffi::OsStr) -> Vec<PathB
         }
     }
     paths
+}
+
+#[cfg(target_os = "windows")]
+pub fn find_git_bash() -> Option<PathBuf> {
+    let pf = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+    let standard = PathBuf::from(&pf).join("Git").join("bin").join("bash.exe");
+    if standard.exists() {
+        return Some(standard);
+    }
+    if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
+        let candidate = PathBuf::from(pf86).join("Git").join("bin").join("bash.exe");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+        let candidate = PathBuf::from(localappdata).join("Programs").join("Git").join("bin").join("bash.exe");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    if let Ok(path_var) = std::env::var("PATH") {
+        for p in std::env::split_paths(&path_var) {
+            let candidate = p.join("bash.exe");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(target_os = "windows")]
@@ -2740,21 +2804,49 @@ pub async fn run_scoped_command(
     timeout: Duration,
     abort_flag: Arc<AtomicBool>,
     repo_root: Option<&Path>,
+    shell: Option<&str>,
 ) -> Result<crate::hooks::HookExecutionResult> {
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = Command::new("cmd.exe");
-        c.raw_arg("/D");
-        c.raw_arg("/S");
-        c.raw_arg("/C");
-        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
+        let req_shell = shell.unwrap_or("bash").to_lowercase();
+        let mut c = match req_shell.as_str() {
+            "pwsh" | "powershell" => {
+                let mut c = Command::new("powershell.exe");
+                c.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", cmd_str]);
+                c
+            }
+            "cmd" => {
+                let mut c = Command::new("cmd.exe");
+                c.raw_arg("/D");
+                c.raw_arg("/S");
+                c.raw_arg("/C");
+                c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
+                c
+            }
+            _ => {
+                if let Some(bash_path) = find_git_bash() {
+                    let mut c = Command::new(bash_path);
+                    c.args(["-c", cmd_str]);
+                    c
+                } else {
+                    let mut c = Command::new("cmd.exe");
+                    c.raw_arg("/D");
+                    c.raw_arg("/S");
+                    c.raw_arg("/C");
+                    c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
+                    c
+                }
+            }
+        };
         enrich_windows_path(&mut c);
         c
     };
 
     #[cfg(not(target_os = "windows"))]
     let mut cmd = {
-        let mut c = Command::new("sh");
+        let req_shell = shell.unwrap_or("sh").to_lowercase();
+        let sh_bin = if req_shell == "bash" { "bash" } else { "sh" };
+        let mut c = Command::new(sh_bin);
         c.args(["-c", cmd_str]);
         c
     };

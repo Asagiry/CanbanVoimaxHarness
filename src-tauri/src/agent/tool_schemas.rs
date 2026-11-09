@@ -28,9 +28,10 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["file_path", "content"]
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "edit_file",
-            "Targeted text replacement in an existing file inside the isolated worktree. Aliased as 'str_replace'. (Batch-friendly: safe to emit concurrently alongside edits to other distinct files).",
+            "Targeted text replacement in an existing file inside the isolated worktree. (Batch-friendly: safe to emit concurrently alongside edits to other distinct files).",
+            vec!["str_replace".to_string()],
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -66,13 +67,14 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["pattern"]
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "execute_command",
-            "Execute a shell command inside the isolated worktree with piped stdout/stderr. Aliased as 'bash'.",
+            "Execute a shell command inside the isolated worktree with piped stdout/stderr.",
+            vec!["bash".to_string()],
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "description": "Command string to run (e.g. 'cargo check', or 'cmd')." },
+                    "command": { "type": "string", "description": "Command string to run (e.g. 'cargo check', 'git status')." },
                     "timeout_seconds": { "type": "integer", "description": "Execution timeout in seconds (default: 60)." }
                 },
                 "required": ["command"]
@@ -154,9 +156,10 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 }
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "subagent_list",
             "List all background and synchronous subagents for the current task with their status (running, completed, aborted), role, title, steps, and subagent_id for collection.",
+            vec!["list_subagents".to_string()],
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -190,9 +193,15 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["todos"]
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "advance_task",
             "Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.",
+            vec![
+                "move_task".to_string(),
+                "move_task_stage".to_string(),
+                "advance_stage".to_string(),
+                "next_stage".to_string(),
+            ],
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -212,9 +221,10 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["reason"]
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "question",
-            "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). Alias: 'ask_user'. 'question' is accepted as an alias for 'text'. If the user has already answered this question in this task, do not call question again with the same text — use the recorded answer.",
+            "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). 'question' is accepted as an alias for 'text'. If the user has already answered this question in this task, do not call question again with the same text — use the recorded answer.",
+            vec!["ask_user".to_string()],
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -237,9 +247,10 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["text"]
             }),
         ),
-        ToolDefinition::function(
+        ToolDefinition::function_with_aliases(
             "create_task",
             "Decompose requirements and create a new task card on the Kanban board.",
+            vec!["create_tasks".to_string()],
             serde_json::json!({
                 "type": "object",
                 "properties": {

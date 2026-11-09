@@ -202,7 +202,8 @@
       "max_concurrent": 3
     },
     "execute_command": {
-      "timeout_sec": 180
+      "timeout_sec": 180,
+      "shell": "bash"
     },
     "read_file": {
       "max_lines": 200
@@ -226,7 +227,13 @@
             }
           },
           "type": "object"
-        }
+        },
+        "aliases": [
+          "move_task",
+          "move_task_stage",
+          "advance_stage",
+          "next_stage"
+        ]
       },
       "type": "function"
     }
