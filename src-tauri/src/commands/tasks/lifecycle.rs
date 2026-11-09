@@ -20,6 +20,7 @@ use super::storage::{
     load_task_sequence, max_task_num_on_disk, resolve_or_allocate_task_id, save_tasks_to_disk,
     save_task_sequence,
 };
+use super::timing::freeze_stage_duration;
 use super::transitions::{ensure_task_worktree, trigger_column_on_enter_script};
 
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
@@ -907,6 +908,7 @@ pub async fn internal_create_subtask_with_hook_states(
         tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
     }
     tasks[parent_idx].status = Some("done".to_string());
+    freeze_stage_duration(&mut tasks[parent_idx], now);
     tasks[parent_idx].updated_at = now;
 
     let subtask_title = title

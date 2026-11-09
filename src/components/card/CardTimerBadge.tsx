@@ -116,7 +116,7 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   }
 
   if (status === 'done' || isDone || Boolean(task.waitingForSubtaskId)) {
-    const isCompleted = status === 'done' || isDone;
+    const isCompleted = status === 'done' || isDone || Boolean(task.waitingForSubtaskId);
     const sumDurations = task.stageDurations
       ? Object.values(task.stageDurations).reduce((acc, v) => acc + (typeof v === 'number' && Number.isFinite(v) ? v : 0), 0)
       : 0;

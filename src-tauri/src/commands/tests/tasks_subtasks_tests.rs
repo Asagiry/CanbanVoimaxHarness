@@ -163,6 +163,9 @@ use std::path::PathBuf;
         let p1 = loaded.iter().find(|t| t.id == "CVH-200").unwrap();
         assert_eq!(p1.status.as_deref(), Some("done"));
         assert_eq!(p1.waiting_for_subtask_id.as_deref(), Some("CVH-200.1"));
+        assert!(p1.completed_at.is_some(), "parent completed_at must be stamped on non-terminal advance");
+        assert!(p1.total_elapsed.unwrap_or(0) >= 0, "parent total_elapsed must be frozen");
+        assert!(p1.stage_durations.is_some(), "parent stage_durations must be frozen");
 
         // 2. Advance subtask CVH-200.1 to ready (terminal column):
         // In 5-column pipeline [backlog, dev, review, retro, ready]:

@@ -325,6 +325,32 @@ describe('taskNormalizer dynamic persona resolution', () => {
     expect(task?.waitingForSubtaskId).toBe('CVH-032.1');
   });
 
+  it('preserves completedAt and stageEnteredAt for planner parent done+waiting', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-102',
+      title: 'Planner parent',
+      stageId: 'plan',
+      boardId: 'canban-pipeline',
+      status: 'done',
+      waiting_for_subtask_id: 'CVH-102.1',
+      createdAt: 10000,
+      completedAt: 839000,
+      stageEnteredAt: 10000,
+    } as BackendTaskDTO;
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [multiStageBoard],
+      activeBoardId: 'canban-pipeline',
+      columns: multiStageColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.status).toBe('done');
+    expect(task?.waitingForSubtaskId).toBe('CVH-102.1');
+    expect(task?.completedAt).toBe(839000);
+    expect(task?.stageEnteredAt).toBe(10000);
+  });
+
   it('derives parentId from id split when DTO omits parent_id', () => {
     const rawDto: BackendTaskDTO = {
       id: 'CVH-066.1',

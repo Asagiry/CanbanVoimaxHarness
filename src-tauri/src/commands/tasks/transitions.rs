@@ -12,6 +12,7 @@ use crate::commands::state::AppState;
 use crate::config::{load_boards_config, load_pipeline_config, resolve_actual_repo_root};
 use super::healing::{stage_id_matches, task_id_matches};
 use super::lifecycle::internal_create_subtask_with_hook_states;
+use super::timing::freeze_stage_duration;
 use super::runner::internal_abort_agent;
 use super::storage::{get_next_subtask_index, load_tasks_from_disk};
 
@@ -123,11 +124,18 @@ pub fn propagate_parent_subtask_advance(
             || stage_id_matches(&next_col.id, "done");
 
         if is_terminal {
+            let old_stage_id = tasks[parent_idx].stage_id.clone();
+            let old_entered = tasks[parent_idx].stage_entered_at;
             tasks[parent_idx].waiting_for_subtask_id = None;
             tasks[parent_idx].stage_id = next_col.id.clone();
             tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
             tasks[parent_idx].status = Some("done".to_string());
-            tasks[parent_idx].completed_at = Some(Utc::now().timestamp_millis());
+            super::timing::freeze_stage_duration_for(
+                &mut tasks[parent_idx],
+                &old_stage_id,
+                old_entered,
+                Utc::now().timestamp_millis(),
+            );
             tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
             mutated_task_ids.push(parent_id.clone());
 
@@ -165,6 +173,7 @@ pub fn propagate_parent_subtask_advance(
 
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
             tasks[parent_idx].status = Some("done".to_string());
+            freeze_stage_duration(&mut tasks[parent_idx], now);
             tasks[parent_idx].updated_at = now;
             mutated_task_ids.push(parent_id.clone());
 
@@ -616,6 +625,8 @@ pub async fn internal_move_task_stage(
         if is_terminal_col {
             current_task.completed_at = Some(Utc::now().timestamp_millis());
             current_task.waiting_for_subtask_id = None;
+        } else if current_task.status.as_deref() == Some("done") {
+            freeze_stage_duration(current_task, Utc::now().timestamp_millis());
         } else {
             current_task.completed_at = None;
         }
@@ -1275,9 +1286,7 @@ pub async fn internal_advance_task_to_stage(
                 if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &parent_id)) {
                     parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
                     parent.status = Some("done".to_string());
-                    if parent.completed_at.is_none() {
-                        parent.completed_at = Some(Utc::now().timestamp_millis());
-                    }
+                    freeze_stage_duration(parent, Utc::now().timestamp_millis());
                     parent.updated_at = Utc::now().timestamp_millis();
                     let _ = upsert_single_task(root, parent);
                     sync_single_task_in_app_state(root, parent, app_handle);
@@ -1474,9 +1483,7 @@ pub async fn internal_advance_task_to_stage(
             if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
                 parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
                 parent.status = Some("done".to_string());
-                if parent.completed_at.is_none() {
-                    parent.completed_at = Some(Utc::now().timestamp_millis());
-                }
+                freeze_stage_duration(parent, Utc::now().timestamp_millis());
                 parent.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, parent, app_handle);
                 let _ = upsert_single_task(root, parent);
