@@ -175,6 +175,24 @@ export function catalogModelLabel(providers: Provider[], modelId: string): strin
   return modelId;
 }
 
+export function catalogModelProviderName(
+  providers: Provider[],
+  modelId: string,
+  preferredProviderId?: string | null,
+): string | undefined {
+  const preferred = preferredProviderId?.trim();
+  if (preferred) {
+    const match = providers.find(
+      (p) => p.id === preferred && p.models.some((m) => m.id === modelId),
+    );
+    if (match) return match.name;
+  }
+  for (const provider of providers) {
+    if (provider.models.some((m) => m.id === modelId)) return provider.name;
+  }
+  return undefined;
+}
+
 export function upsertProviderLocal(providers: Provider[], provider: Provider): Provider[] {
   validateProvider(provider);
   const normalized = normalizeProviders([provider])[0];

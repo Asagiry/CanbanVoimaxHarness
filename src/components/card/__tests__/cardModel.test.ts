@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { resolveCardModel } from '../cardModel';
+import { resolveCardModel, formatCardModel } from '../cardModel';
 import type { KanbanTask, PipelineStage } from '../../../types';
 import type { AgentPersonaInfo } from '../../../stores/cortex/types';
+import type { Provider } from '../../../stores/settings/providers';
 
 const task = (overrides?: Partial<KanbanTask>): KanbanTask =>
   ({
@@ -37,6 +38,16 @@ const persona = (overrides?: Partial<AgentPersonaInfo>): AgentPersonaInfo => ({
   ...overrides,
 });
 
+const provider = (id: string, name: string, models: Provider['models']): Provider => ({
+  id: id as never,
+  name,
+  isCustom: false,
+  apiKey: '',
+  baseUrl: '',
+  protocol: 'openai' as const,
+  models,
+});
+
 describe('resolveCardModel', () => {
   it('explicit pair wins over persona, column and settings', () => {
     expect(
@@ -46,7 +57,27 @@ describe('resolveCardModel', () => {
         persona({ model: 'persona-model' }),
         'settings-model'
       )
-    ).toBe('steer-model');
+    ).toEqual({ label: 'steer-model' });
+  });
+
+  it('explicit pair shows provider name from providers', () => {
+    const providers = [provider('p1', 'P1', [{ id: 'steer-model' }])];
+    const result = resolveCardModel(
+      task({ providerId: 'p1', model: 'steer-model' }),
+      column(),
+      persona({ model: 'persona-model' }),
+      'settings-model',
+      providers
+    );
+    expect(result).toEqual({ label: 'steer-model', providerName: 'P1' });
+    expect(result && formatCardModel(result)).toBe('P1 / steer-model');
+  });
+
+  it('explicit pair provider is authoritative even if model not in its catalog', () => {
+    const providers = [provider('p1', 'P1', [{ id: 'other' }])];
+    expect(
+      resolveCardModel(task({ providerId: 'p1', model: 'steer-model' }), column(), persona(), undefined, providers)
+    ).toEqual({ label: 'steer-model', providerName: 'P1' });
   });
 
   it('ignores task.model without providerId (stale)', () => {
@@ -57,23 +88,23 @@ describe('resolveCardModel', () => {
         persona({ model: 'persona-model' }),
         'settings-model'
       )
-    ).toBe('persona-model');
+    ).toEqual({ label: 'persona-model' });
   });
 
   it('persona model wins over column override and settings', () => {
     expect(
       resolveCardModel(task(), column({ modelOverride: 'col-model' }), persona({ model: ' persona-model ' }), 'settings-model')
-    ).toBe('persona-model');
+    ).toEqual({ label: 'persona-model' });
   });
 
   it('column override wins over settings when persona empty', () => {
     expect(
       resolveCardModel(task(), column({ modelOverride: ' col-model ' }), persona({ model: '  ' }), 'settings-model')
-    ).toBe('col-model');
+    ).toEqual({ label: 'col-model' });
   });
 
   it('settings model is fallback', () => {
-    expect(resolveCardModel(task(), column(), persona(), ' settings-model ')).toBe('settings-model');
+    expect(resolveCardModel(task(), column(), persona(), ' settings-model ')).toEqual({ label: 'settings-model' });
   });
 
   it('returns undefined when all sources empty', () => {
@@ -82,19 +113,44 @@ describe('resolveCardModel', () => {
     expect(resolveCardModel(task(), undefined, undefined, undefined)).toBeUndefined();
   });
 
-  it('uses catalog label when providers provided', () => {
+  it('uses catalog label and provider when providers provided', () => {
+    const providers = [provider('p1', 'P1', [{ id: 'raw-id', displayName: 'Pretty Label' }])];
+    expect(resolveCardModel(task(), column(), persona({ model: 'raw-id' }), undefined, providers)).toEqual({
+      label: 'Pretty Label',
+      providerName: 'P1',
+    });
+  });
+
+  it('unknown model with providers falls back to settings.provider', () => {
+    const providers = [provider('p1', 'P1', [{ id: 'raw-id' }])];
+    expect(
+      resolveCardModel(task(), column(), persona({ model: 'unknown' }), undefined, providers, 'Fallback Provider')
+    ).toEqual({ label: 'unknown', providerName: 'Fallback Provider' });
+  });
+
+  it('unknown model with no providers shows bare label', () => {
+    expect(resolveCardModel(task(), column(), persona({ model: 'unknown' }), undefined, [])).toEqual({ label: 'unknown' });
+    expect(resolveCardModel(task(), column(), persona({ model: 'unknown' }), undefined, undefined)).toEqual({ label: 'unknown' });
+  });
+
+  it('persona providerId is preferred when it matches catalog', () => {
     const providers = [
-      {
-        id: 'p1' as never,
-        name: 'P1',
-        isCustom: false,
-        apiKey: '',
-        baseUrl: '',
-        protocol: 'openai' as const,
-        models: [{ id: 'raw-id', displayName: 'Pretty Label' }],
-      },
+      provider('p1', 'P1', [{ id: 'shared' }]),
+      provider('p2', 'P2', [{ id: 'shared' }]),
     ];
-    expect(resolveCardModel(task(), column(), persona({ model: 'raw-id' }), undefined, providers)).toBe('Pretty Label');
-    expect(resolveCardModel(task(), column(), persona({ model: 'unknown' }), undefined, providers)).toBe('unknown');
+    expect(
+      resolveCardModel(task(), column(), persona({ model: 'shared', providerId: 'p2' }), undefined, providers)
+    ).toEqual({ label: 'shared', providerName: 'P2' });
+  });
+
+  it('same model id in two providers resolves to first catalog match', () => {
+    const providers = [
+      provider('p1', 'P1', [{ id: 'shared' }]),
+      provider('p2', 'P2', [{ id: 'shared' }]),
+    ];
+    expect(resolveCardModel(task(), column(), persona({ model: 'shared' }), undefined, providers)).toEqual({
+      label: 'shared',
+      providerName: 'P1',
+    });
   });
 });
