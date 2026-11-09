@@ -144,6 +144,7 @@ export const createCortexSlice: StateCreator<
     } else {
       get().syncStagesFromColumns(prevCols);
     }
+    void get().refreshCvhGitStatus();
   },
 
   setAgentPersonaIcon: async (role: string, icon: string) => {
@@ -179,6 +180,7 @@ export const createCortexSlice: StateCreator<
     } else {
       get().syncStagesFromColumns(prevCols);
     }
+    void get().refreshCvhGitStatus();
   },
 
   renameAgentPersona: async (oldRole: string, newRole: string) => {
@@ -195,6 +197,7 @@ export const createCortexSlice: StateCreator<
     } catch (err) {
       console.info('Failed to reload boards after agent rename:', err);
     }
+    void get().refreshCvhGitStatus();
   },
 
   deleteAgentPersona: async (role: string) => {

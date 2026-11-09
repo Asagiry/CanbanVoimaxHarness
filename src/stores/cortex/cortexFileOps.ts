@@ -151,6 +151,10 @@ export async function saveRulesAction(set: CortexSet, get: CortexGet): Promise<v
   const scriptPath = extractScriptPath(activeFile.path);
   const isDirectCommand = activeFile.type === 'hook' && !isBuiltin && !scriptPath;
 
+  // File Save is disk-only: it must NEVER git-commit/push. Only saveCvhToGitAction
+  // (cvh_git_save) may commit/push. Builtin/direct-command hooks have no disk
+  // target, so they are in-memory only — feedback below makes that explicit
+  // instead of silently no-op'ing.
   if (!isBuiltin && !isDirectCommand) {
     const targetPath = scriptPath ?? activeFile.path;
     try {
@@ -174,10 +178,10 @@ export async function saveRulesAction(set: CortexSet, get: CortexGet): Promise<v
   );
 
   const feedbackMsg = isBuiltin
-    ? `Встроенный хук ${activeFile.name} обновлен`
+    ? `Встроенный хук ${activeFile.name} обновлен (только в памяти, на диск не сохранен)`
     : isDirectCommand
-      ? `Команда ${activeFile.name} обновлена`
-      : `Файл ${activeFile.name} сохранен`;
+      ? `Команда ${activeFile.name} обновлена (только в памяти, на диск не сохранена)`
+      : `Файл ${activeFile.name} сохранен на диск (не в git)`;
 
   set({
     stages: updatedStages,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import CvhSaveButton from '../CvhSaveButton';
 import { useCortexStore } from '../../../stores/cortexStore';
-import { hasAnyCvhChanges, isAgentDirty, isColumnDirty, isFileDirty, isGlobalRulesDirty } from '../../../stores/cortex/cortexGitSave';
+import { hasAnyCvhChanges, isAgentDirty, isColumnDirty, isFileDirty, isGlobalRulesDirty, isPersonaFileDirty } from '../../../stores/cortex/cortexGitSave';
 
 vi.mock('../../../stores/languageStore', () => ({
   useTranslation: () => ({
@@ -81,6 +81,24 @@ describe('CvhSaveButton', () => {
     expect(isFileDirty({ path: '.cvh/rules/b.md', isDirty: false, isDeleted: false }, status)).toBe(false);
     expect(isFileDirty({ path: '.cvh/rules/b.md', isDirty: true, isDeleted: false }, status)).toBe(true);
     expect(isFileDirty({ path: 'builtin:on_enter', isDirty: false, isDeleted: false }, status)).toBe(false);
+  });
+
+  it('isFileDirty handles agent.md/persona.md alias and setting (no extension)', () => {
+    const agentMd = { hasChanges: true, changedPaths: ['.cvh/agents/dev/agent.md'], branch: 'main' };
+    const personaMd = { hasChanges: true, changedPaths: ['.cvh/agents/dev/persona.md'], branch: 'main' };
+    const setting = { hasChanges: true, changedPaths: ['.cvh/agents/dev/setting'], branch: 'main' };
+    expect(isFileDirty({ path: '.cvh/agents/dev/persona.md', isDirty: false, isDeleted: false }, agentMd)).toBe(true);
+    expect(isFileDirty({ path: '.cvh/agents/dev/agent.md', isDirty: false, isDeleted: false }, personaMd)).toBe(true);
+    expect(isFileDirty({ path: '.cvh/agents/dev/setting', isDirty: false, isDeleted: false }, setting)).toBe(true);
+    expect(isPersonaFileDirty({ path: '.cvh/agents/dev/persona.md', isDirty: false, isDeleted: false }, agentMd)).toBe(true);
+    expect(isFileDirty({ path: '.cvh/agents/other/persona.md', isDirty: false, isDeleted: false }, agentMd)).toBe(false);
+  });
+
+  it('isColumnDirty matches agent rules and global rules prefixes', () => {
+    const stage = { stageId: 'dev', stageTitle: 'Dev', color: '', icon: '', personaName: 'dev', files: [], isExpanded: false };
+    expect(isColumnDirty(stage, undefined, { hasChanges: true, changedPaths: ['.cvh/agents/dev/rules/a.md'], branch: 'main' })).toBe(true);
+    expect(isColumnDirty(stage, undefined, { hasChanges: true, changedPaths: ['.cvh/rules/x.md'], branch: 'main' })).toBe(true);
+    expect(isColumnDirty(stage, undefined, { hasChanges: true, changedPaths: ['.cvh/agents/dev/setting'], branch: 'main' })).toBe(true);
   });
 
   it('isGlobalRulesDirty uses unfiltered list when filtered list misses dirty rule', () => {

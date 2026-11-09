@@ -22,14 +22,38 @@ export function isAgentDirty(
   return Boolean(gitStatus?.changedPaths.some((p) => normPath(p).startsWith(prefix)));
 }
 
+function personaAliasPaths(p: string): string[] {
+  const n = normPath(p);
+  const out = [n];
+  if (n.endsWith('/agent.md')) out.push(n.replace(/\/agent\.md$/, '/persona.md'));
+  if (n.endsWith('/persona.md')) out.push(n.replace(/\/persona\.md$/, '/agent.md'));
+  if (n.endsWith('/setting')) out.push(`${n}.md`);
+  if (n.endsWith('/setting.md')) out.push(n.replace(/\.md$/, ''));
+  return out;
+}
+
+export function isPersonaFileDirty(
+  file: Pick<CortexAgentFile, 'path' | 'isDirty' | 'isDeleted'>,
+  gitStatus: CvhGitStatus | null,
+): boolean {
+  return isFileDirty(file, gitStatus);
+}
+
 export function isFileDirty(
   file: Pick<CortexAgentFile, 'path' | 'isDirty' | 'isDeleted'>,
   gitStatus: CvhGitStatus | null,
 ): boolean {
   if (file.isDirty || file.isDeleted) return true;
   if (!file.path || file.path.startsWith('builtin:')) return false;
-  const target = normPath(file.path);
-  return Boolean(gitStatus?.changedPaths.some((p) => normPath(p) === target));
+  const targets = new Set(personaAliasPaths(file.path));
+  const stripMd = (s: string) => s.replace(/\.md$/, '');
+  const strippedTargets = new Set([...targets].map(stripMd));
+  return Boolean(
+    gitStatus?.changedPaths.some((p) => {
+      const n = normPath(p);
+      return targets.has(n) || strippedTargets.has(stripMd(n));
+    }),
+  );
 }
 
 export function isColumnDirty(
@@ -55,6 +79,8 @@ export function isColumnDirty(
     const prefix = `.cvh/agents/${persona}/`;
     if (paths.some((p) => p.startsWith(prefix))) return true;
   }
+  if (paths.some((p) => p.startsWith('.cvh/rules/'))) return true;
+  if (paths.some((p) => p.startsWith('.cvh/agents/') && p.includes('/rules/'))) return true;
   return false;
 }
 
