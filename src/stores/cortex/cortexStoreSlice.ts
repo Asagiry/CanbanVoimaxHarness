@@ -235,7 +235,7 @@ export const createCortexSlice: StateCreator<
   // --- RULES & FILES CRUD ---
   createCortexFile: (stageId, rawName, kind, opts) =>
     createCortexFileAction(set, get, stageId, rawName, kind, opts),
-  createGlobalRule: (rawName) => createGlobalRuleAction(set, get, rawName),
+  createGlobalRule: (rawName, folder) => createGlobalRuleAction(set, get, rawName, folder),
 
   updateActiveFileContent: (content) => {
     set((state) => {

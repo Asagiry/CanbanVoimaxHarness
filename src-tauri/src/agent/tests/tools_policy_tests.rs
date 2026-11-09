@@ -397,6 +397,15 @@ Rule: Strictly isolated worktrees.",
         .await
         .expect("write arch rule");
 
+        let backend_rules = shared_rules.join("backend");
+        tokio::fs::create_dir_all(&backend_rules).await.expect("backend rules dir");
+        tokio::fs::write(
+            backend_rules.join("rust.md"),
+            "# Rust Folder Rule\nRule: Folder load works.",
+        )
+        .await
+        .expect("write folder rust rule");
+
         // 1. Check get_available_rules collects both
         let available = get_available_rules(&base, Some("developer"));
         assert!(available.contains(&"rust".to_string()));
@@ -441,6 +450,12 @@ Rule: Strictly isolated worktrees.",
             .expect("load arch rule");
         assert!(arch_content.contains("Strictly isolated worktrees"));
         assert!(!arch_content.contains("PRIVATE_RULE_METADATA"));
+
+        // 4b. Load rule from subfolder by stem
+        let folder_content = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "rust" }))
+            .await
+            .expect("load folder rust rule");
+        assert!(folder_content.contains("Folder load works") || folder_content.contains("Never use naked unwrap"));
 
         // 5. Non-existent rule returns error
         let err = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "non_existent" }))

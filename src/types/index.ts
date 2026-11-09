@@ -262,6 +262,7 @@ export interface CortexAgentFile {
   content: string;
   isDirty?: boolean;
   isDeleted?: boolean;
+  folder?: string;
 }
 
 export interface CortexAgentStage {

@@ -532,20 +532,31 @@ Write code.
         tokio::fs::write(rules_dir.join("a_rule.md"), "# Rule A").await.expect("write a_rule.md");
         tokio::fs::write(rules_dir.join("runtime.md"), "# Runtime").await.expect("write runtime.md");
         tokio::fs::write(rules_dir.join("ignored.txt"), "not markdown").await.expect("write ignored.txt");
+        let backend_dir = rules_dir.join("backend");
+        tokio::fs::create_dir_all(&backend_dir).await.expect("backend dir");
+        tokio::fs::write(backend_dir.join("rust.md"), "# Rust").await.expect("write rust.md");
 
         let files = list_global_rules_in(&base).await.expect("list_global_rules_in");
-        assert_eq!(files.len(), 3);
+        assert_eq!(files.len(), 4);
         assert_eq!(files[0].name, "runtime.md");
         assert_eq!(files[0].path, ".cvh/rules/runtime.md");
         assert_eq!(files[0].file_type, "rule");
+        assert_eq!(files[0].folder, None);
 
         assert_eq!(files[1].name, "a_rule.md");
         assert_eq!(files[1].path, ".cvh/rules/a_rule.md");
         assert_eq!(files[1].file_type, "rule");
+        assert_eq!(files[1].folder, None);
 
         assert_eq!(files[2].name, "b_rule.md");
         assert_eq!(files[2].path, ".cvh/rules/b_rule.md");
         assert_eq!(files[2].file_type, "rule");
+        assert_eq!(files[2].folder, None);
+
+        assert_eq!(files[3].name, "rust.md");
+        assert_eq!(files[3].path, ".cvh/rules/backend/rust.md");
+        assert_eq!(files[3].file_type, "rule");
+        assert_eq!(files[3].folder, Some("backend".to_string()));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -585,6 +596,14 @@ Write code.
         assert!(agent_rule.exists());
         delete_cortex_file_at(&base, ".cvh/agents/developer/rules/agent_rule.md").await.expect("delete agent rule");
         assert!(!agent_rule.exists());
+
+        // 6. Valid nested global rule deletion succeeds
+        let nested_dir = rules_dir.join("backend");
+        tokio::fs::create_dir_all(&nested_dir).await.expect("nested dir");
+        let nested = nested_dir.join("x.md");
+        tokio::fs::write(&nested, "# X").await.expect("write nested");
+        delete_cortex_file_at(&base, ".cvh/rules/backend/x.md").await.expect("delete nested");
+        assert!(!nested.exists());
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

@@ -16,15 +16,16 @@ import {
 export async function loadGlobalRulesAction(set: CortexSet, get: CortexGet): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const files = await invoke<Array<{ name: string; path: string; fileType: string }>>(
+    const files = await invoke<Array<{ name: string; path: string; fileType: string; folder?: string }>>(
       'list_global_rules',
     );
     const prevGlobalRules = get().globalRules;
-    const prevMap = new Map(prevGlobalRules.map((f) => [f.name, f]));
+    const prevMap = new Map(prevGlobalRules.map((f) => [f.path, f]));
     const mapped: CortexAgentFile[] = (files ?? []).map((file) => {
-      const prev = prevMap.get(file.name);
+      const prev = prevMap.get(file.path);
+      const folder = file.folder || undefined;
       return {
-        id: `global-rule-${file.name}`,
+        id: folder ? `global-rule-${folder}/${file.name}` : `global-rule-${file.name}`,
         name: file.name,
         stageId: 'global',
         type: 'rule',
@@ -32,6 +33,7 @@ export async function loadGlobalRulesAction(set: CortexSet, get: CortexGet): Pro
         content: prev?.content ?? '',
         isDirty: prev?.isDirty ?? false,
         isDeleted: prev?.isDeleted ?? false,
+        folder,
       };
     });
     const tombstoned = prevGlobalRules.filter((f) => f.isDeleted && !mapped.some((m) => m.id === f.id));
