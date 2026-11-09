@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Globe, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Globe, Plus, Trash2, RotateCcw } from 'lucide-react';
 import type { CortexAgentFile } from '../../types';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
+import DirtyDot from './DirtyDot';
+import { isGlobalRulesDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface GlobalRulesSectionProps {
   rules: CortexAgentFile[];
@@ -31,6 +33,9 @@ export function GlobalRulesSection({
   const openFile = useCortexStore((s) => s.openFile);
   const createGlobalRule = useCortexStore((s) => s.createGlobalRule);
   const deleteGlobalRule = useCortexStore((s) => s.deleteGlobalRule);
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
+  const sectionDirty = isGlobalRulesDirty(cvhGitStatus, rules);
 
   const [isCreating, setIsCreating] = useState(false);
   const [ruleName, setRuleName] = useState('');
@@ -104,6 +109,7 @@ export function GlobalRulesSection({
           <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
             ({totalCount})
           </span>
+          {sectionDirty && <DirtyDot />}
         </button>
 
         <button
@@ -189,7 +195,7 @@ export function GlobalRulesSection({
                   ) : (
                     <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
-                  <span className="text-xs font-mono truncate leading-none">{rule.name}</span>
+                  <span className={`text-xs font-mono truncate leading-none ${rule.isDeleted ? 'line-through text-[#a1a1aa]' : ''}`} title={rule.isDeleted ? t('cortex.deletedUnsaved') : undefined}>{rule.name}</span>
                   {isRuntime && (
                     <span
                       title={t('cortex.runtimeRuleTooltip')}
@@ -206,14 +212,26 @@ export function GlobalRulesSection({
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={(e) => void handleDeleteRule(e, rule.name)}
-                  aria-label={t('common.delete')}
-                  className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                {rule.isDeleted ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); restorePendingDelete(`file:${rule.id}`); }}
+                    aria-label={t('cortex.restoreDeleted')}
+                    title={t('cortex.restoreDeleted')}
+                    className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-emerald-600 dark:hover:text-emerald-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => void handleDeleteRule(e, rule.name)}
+                    aria-label={t('common.delete')}
+                    className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             );
           })}

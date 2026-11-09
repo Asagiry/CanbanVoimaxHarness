@@ -31,8 +31,11 @@ export async function loadGlobalRulesAction(set: CortexSet, get: CortexGet): Pro
         path: file.path,
         content: prev?.content ?? '',
         isDirty: prev?.isDirty ?? false,
+        isDeleted: prev?.isDeleted ?? false,
       };
     });
+    const tombstoned = prevGlobalRules.filter((f) => f.isDeleted && !mapped.some((m) => m.id === f.id));
+    mapped.push(...tombstoned);
     set({ globalRules: mapped.sort(compareGlobalRules) });
   } catch (err) {
     console.info('loadGlobalRules not available or in web mode:', err);
@@ -188,6 +191,8 @@ export async function saveRulesAction(set: CortexSet, get: CortexGet): Promise<v
   setTimeout(() => {
     set({ saveFeedback: null });
   }, 2800);
+
+  void get().refreshCvhGitStatus();
 }
 
 export async function deleteGlobalRuleAction(
@@ -199,17 +204,11 @@ export async function deleteGlobalRuleAction(
   const target = globalRules.find((f) => f.name === fileName || f.id === fileName);
   if (!target) return;
 
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('delete_cortex_file', { path: target.path });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(`Не удалось удалить файл: ${detail}`);
-  }
-
   const isActiveDeleted = activeFile?.id === target.id;
+  const key = `file:${target.id}`;
   set((state) => ({
-    globalRules: state.globalRules.filter((f) => f.id !== target.id),
+    globalRules: state.globalRules.map((f) => (f.id === target.id ? { ...f, isDeleted: true } : f)),
+    pendingDeletes: { ...state.pendingDeletes, [key]: { path: target.path, kind: 'globalRule' as const, stageId: 'global', fileId: target.id } },
     activeFile: isActiveDeleted ? null : state.activeFile,
     isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
   }));

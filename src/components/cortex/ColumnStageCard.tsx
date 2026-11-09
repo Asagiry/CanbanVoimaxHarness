@@ -23,6 +23,8 @@ import {
 } from '../../lib/agentPalette';
 import { hookMomentOf, savePipelineConfig } from './types';
 import NewCortexFileForm from './NewCortexFileForm';
+import DirtyDot from './DirtyDot';
+import { isColumnDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface ColumnStageCardProps {
   stage: CortexAgentStage;
@@ -54,6 +56,9 @@ export function ColumnStageCard({
   const toggleStageExpand = useCortexStore((s) => s.toggleStageExpand);
   const createSettingTemplate = useCortexStore((s) => s.createSettingTemplate);
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
+  const columnDirty = isColumnDirty(stage, column, cvhGitStatus);
 
   const columns = useBoardStore((s) => s.columns);
   const setColumns = useBoardStore((s) => s.setColumns);
@@ -168,9 +173,10 @@ export function ColumnStageCard({
               />
             )}
 
-            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none">
+            <span className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none ${stage.isDeleted ? 'line-through opacity-50' : ''}`} title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}>
               {stage.stageTitle}
             </span>
+            {columnDirty && <DirtyDot />}
           </div>
 
           {stage.personaName !== '' && (
@@ -285,6 +291,7 @@ export function ColumnStageCard({
                         badge={isBuiltinHook ? t('personaSelect.builtin') : moment}
                         icon={<HookIcon file={hookFile} className="h-3.5 w-3.5" />}
                         onSelect={() => void openFile(hookFile.id)}
+                        onContextMenu={hookFile.isDeleted ? (e) => { e.preventDefault(); e.stopPropagation(); restorePendingDelete(`file:${hookFile.id}`); } : undefined}
                       />
                     );
                   })}
@@ -331,14 +338,16 @@ interface TreeFileRowProps {
   icon: React.ReactNode;
   badge?: string | null;
   onSelect: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function TreeFileRow({ file, isActive, icon, badge, onSelect }: TreeFileRowProps) {
+function TreeFileRow({ file, isActive, icon, badge, onSelect, onContextMenu }: TreeFileRowProps) {
   const { t } = useTranslation();
   return (
     <button
       type="button"
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
         isActive
           ? 'bg-white dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-xs'
@@ -348,7 +357,7 @@ function TreeFileRow({ file, isActive, icon, badge, onSelect }: TreeFileRowProps
     >
       <div className="flex items-center space-x-1.5 min-w-0">
         {icon}
-        <span className="text-xs font-mono truncate">{file.name}</span>
+        <span className={`text-xs font-mono truncate ${file.isDeleted ? 'line-through text-[#a1a1aa]' : ''}`} title={file.isDeleted ? t('cortex.deletedUnsaved') : undefined}>{file.name}</span>
         {badge && (
           <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
             {badge}

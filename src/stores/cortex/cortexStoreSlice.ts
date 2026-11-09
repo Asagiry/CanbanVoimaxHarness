@@ -21,10 +21,17 @@ import {
   createPersonaTemplateAction,
   createSettingTemplateAction,
 } from './cortexTemplates';
+import {
+  markPendingDeleteAction,
+  refreshCvhGitStatusAction,
+  restorePendingDeleteAction,
+  saveCvhToGitAction,
+} from './cortexGitSave';
 
 export * from './cortexSync';
 export * from './cortexFileOps';
 export * from './cortexTemplates';
+export * from './cortexGitSave';
 
 export const createCortexSlice: StateCreator<
   CortexState,
@@ -43,6 +50,10 @@ export const createCortexSlice: StateCreator<
   isSaving: false,
   saveFeedback: null,
   fileMissing: {},
+  cvhGitStatus: null,
+  cvhGitSaving: false,
+  cvhGitError: null,
+  pendingDeletes: {},
 
   // --- STAGE EXPANSION & NAVIGATION ---
   toggleStageExpand: (stageId) => {
@@ -185,23 +196,22 @@ export const createCortexSlice: StateCreator<
   },
 
   deleteAgentPersona: async (role: string) => {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_agent_persona', { role });
-    } catch (err) {
-      console.info('delete_agent_persona IPC not available or failed:', err);
-      throw err;
-    }
-    await get().loadAgentPersonas();
-    try {
-      await useBoardStore.getState().loadBoards();
-    } catch (err) {
-      console.info('Failed to reload boards after agent delete:', err);
-    }
+    const key = `agent:${role}`;
+    set((state) => ({
+      pendingDeletes: { ...state.pendingDeletes, [key]: { path: `.cvh/agents/${role}`, kind: 'agent' as const, role } },
+      agentStages: state.agentStages.map((st) => (st.personaName === role ? { ...st, isDeleted: true } : st)),
+      stages: state.stages.map((st) => (st.personaName === role ? { ...st, isDeleted: true } : st)),
+    }));
+    void get().refreshCvhGitStatus();
   },
 
   // --- GLOBAL RULES ---
   loadGlobalRules: () => loadGlobalRulesAction(set, get),
+  refreshCvhGitStatus: () => refreshCvhGitStatusAction(set),
+  saveCvhToGit: (message) => saveCvhToGitAction(set, get, message),
+  markPendingDelete: (key, entry) => markPendingDeleteAction(set, key, entry),
+  restorePendingDelete: (key) => restorePendingDeleteAction(set, key),
+  clearCvhGitError: () => set({ cvhGitError: null }),
 
   // --- FILE OPEN & TEMPLATE CREATION ---
   openFile: (fileId) => openFileAction(set, get, fileId),
@@ -242,15 +252,29 @@ export const createCortexSlice: StateCreator<
     }
 
     set((state) => {
-      const filterFiles = (files: CortexAgentFile[]) =>
-        files.filter((f) => !(f.type === 'rule' && (f.name === ruleName || f.id === ruleName)));
+      const markFiles = (files: CortexAgentFile[]) =>
+        files.map((f) =>
+          f.type === 'rule' && (f.name === ruleName || f.id === ruleName) ? { ...f, isDeleted: true } : f,
+        );
 
       const nextStages = state.stages.map((st) =>
-        st.stageId === stageId ? { ...st, files: filterFiles(st.files) } : st
+        st.stageId === stageId ? { ...st, files: markFiles(st.files) } : st
       );
       const nextAgentStages = state.agentStages.map((st) =>
-        st.stageId === stageId ? { ...st, files: filterFiles(st.files) } : st
+        st.stageId === stageId ? { ...st, files: markFiles(st.files) } : st
       );
+
+      const target =
+        state.stages.find((st) => st.stageId === stageId)?.files.find(
+          (f) => f.type === 'rule' && (f.name === ruleName || f.id === ruleName),
+        ) ??
+        state.agentStages.find((st) => st.stageId === stageId)?.files.find(
+          (f) => f.type === 'rule' && (f.name === ruleName || f.id === ruleName),
+        );
+      const key = target ? `file:${target.id}` : `file:${stageId}:${ruleName}`;
+      const pendingDeletes = target
+        ? { ...state.pendingDeletes, [key]: { path: target.path, kind: 'rule' as const, stageId, fileId: target.id } }
+        : state.pendingDeletes;
 
       const isActiveDeleted =
         state.activeFile?.stageId === stageId &&
@@ -260,6 +284,7 @@ export const createCortexSlice: StateCreator<
       return {
         stages: nextStages,
         agentStages: nextAgentStages,
+        pendingDeletes,
         activeFile: isActiveDeleted ? null : state.activeFile,
         isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
       };

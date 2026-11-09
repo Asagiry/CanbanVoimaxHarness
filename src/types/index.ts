@@ -261,6 +261,7 @@ export interface CortexAgentFile {
   path: string;
   content: string;
   isDirty?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface CortexAgentStage {
@@ -272,6 +273,7 @@ export interface CortexAgentStage {
   files: CortexAgentFile[];
   isExpanded: boolean;
   isBuiltin?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface ToolExecution {

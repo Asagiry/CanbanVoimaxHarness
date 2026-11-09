@@ -1,0 +1,128 @@
+import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../../types';
+import { CvhGitStatus, CortexState, PendingDelete } from './types';
+
+type CortexSet = (
+  partial: Partial<CortexState> | ((state: CortexState) => Partial<CortexState>),
+) => void;
+type CortexGet = () => CortexState;
+
+export function normPath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+export function isAgentDirty(
+  stage: CortexAgentStage,
+  gitStatus: CvhGitStatus | null,
+  pendingDeletes: Record<string, PendingDelete>,
+): boolean {
+  if (stage.isDeleted) return true;
+  if (stage.files.some((f) => f.isDirty || f.isDeleted)) return true;
+  if (Object.values(pendingDeletes).some((d) => d.kind === 'agent' && d.role === stage.personaName)) return true;
+  const prefix = `.cvh/agents/${stage.personaName}/`;
+  return Boolean(gitStatus?.changedPaths.some((p) => normPath(p).startsWith(prefix)));
+}
+
+export function isColumnDirty(
+  stage: CortexAgentStage,
+  column: PipelineColumn | undefined,
+  gitStatus: CvhGitStatus | null,
+): boolean {
+  if (stage.files.some((f) => f.isDirty || f.isDeleted)) return true;
+  const paths = gitStatus?.changedPaths.map(normPath) ?? [];
+  if (paths.some((p) => p === '.cvh/boards.json')) return true;
+  const persona = column?.persona?.trim() || stage.personaName;
+  if (persona && persona !== 'система' && persona !== 'без агента') {
+    const prefix = `.cvh/agents/${persona}/`;
+    if (paths.some((p) => p.startsWith(prefix))) return true;
+  }
+  return false;
+}
+
+export function isGlobalRulesDirty(
+  gitStatus: CvhGitStatus | null,
+  globalRules: CortexAgentFile[] = [],
+): boolean {
+  if (globalRules.some((f) => f.isDirty || f.isDeleted)) return true;
+  return Boolean(gitStatus?.changedPaths.some((p) => normPath(p).startsWith('.cvh/rules/')));
+}
+
+export function hasAnyCvhChanges(state: Pick<CortexState, 'cvhGitStatus' | 'pendingDeletes' | 'stages' | 'agentStages' | 'globalRules' | 'activeFile'>): boolean {
+  if (state.cvhGitStatus?.hasChanges) return true;
+  if (Object.keys(state.pendingDeletes).length > 0) return true;
+  if (state.activeFile?.isDirty) return true;
+  const all = [...state.stages, ...state.agentStages];
+  if (all.some((s) => s.isDeleted || s.files.some((f) => f.isDirty || f.isDeleted))) return true;
+  return state.globalRules.some((f) => f.isDirty || f.isDeleted);
+}
+
+export async function refreshCvhGitStatusAction(set: CortexSet): Promise<void> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const status = await invoke<CvhGitStatus>('cvh_git_status');
+    set({ cvhGitStatus: status, cvhGitError: null });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    set({ cvhGitError: detail });
+  }
+}
+
+export async function saveCvhToGitAction(set: CortexSet, get: CortexGet, message?: string): Promise<void> {
+  const pending = get().pendingDeletes;
+  set({ cvhGitSaving: true, cvhGitError: null });
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    for (const entry of Object.values(pending)) {
+      try {
+        if (entry.kind === 'agent' && entry.role) {
+          await invoke('delete_agent_persona', { role: entry.role });
+        } else if (entry.path) {
+          await invoke('delete_cortex_file', { path: entry.path });
+        }
+      } catch {
+        // Best-effort deferred delete; git save below is the source of truth.
+      }
+    }
+    const status = await invoke<CvhGitStatus>('cvh_git_save', { message: message ?? null });
+    set((state) => ({
+      cvhGitStatus: status,
+      cvhGitSaving: false,
+      pendingDeletes: {},
+      stages: state.stages.map((s) => ({ ...s, isDeleted: false, files: s.files.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })) })),
+      agentStages: state.agentStages.filter((s) => !s.isDeleted).map((s) => ({ ...s, files: s.files.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })) })),
+      globalRules: state.globalRules.filter((f) => !f.isDeleted).map((f) => ({ ...f, isDirty: false })),
+      activeFile: state.activeFile ? { ...state.activeFile, isDirty: false } : null,
+    }));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    set({ cvhGitSaving: false, cvhGitError: detail });
+    throw err instanceof Error ? err : new Error(detail);
+  }
+}
+
+export function markPendingDeleteAction(set: CortexSet, key: string, entry: PendingDelete): void {
+  set((state) => ({ pendingDeletes: { ...state.pendingDeletes, [key]: entry } }));
+}
+
+export function restorePendingDeleteAction(set: CortexSet, key: string): void {
+  set((state) => {
+    const entry = state.pendingDeletes[key];
+    if (!entry) return state;
+    const next = { ...state.pendingDeletes };
+    delete next[key];
+    const clearFile = (f: CortexAgentFile) => (f.id === entry.fileId || f.path === entry.path ? { ...f, isDeleted: false } : f);
+    return {
+      pendingDeletes: next,
+      globalRules: state.globalRules.map(clearFile),
+      stages: state.stages.map((s) => ({
+        ...s,
+        isDeleted: entry.kind === 'agent' && s.personaName === entry.role ? false : s.isDeleted,
+        files: s.files.map(clearFile),
+      })),
+      agentStages: state.agentStages.map((s) => ({
+        ...s,
+        isDeleted: entry.kind === 'agent' && s.personaName === entry.role ? false : s.isDeleted,
+        files: s.files.map(clearFile),
+      })),
+    };
+  });
+}
