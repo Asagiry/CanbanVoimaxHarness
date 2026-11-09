@@ -314,11 +314,10 @@ export async function savePipelineConfig(next: PipelineStage[]): Promise<boolean
     } catch {
       cfg = null;
     }
-    const pipeline: PipelineConfig = {
+    const pipeline = {
       id: cfg?.id ?? 'default-engineering',
       title: cfg?.title ?? 'Инженерный пайплайн',
       stages: next,
-      columns: next,
     };
     await invoke('save_pipeline', { pipeline });
     return true;

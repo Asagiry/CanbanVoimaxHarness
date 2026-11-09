@@ -194,9 +194,14 @@ export const createBoardMetaSlice: StateCreator<
     });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('save_board', { board: normalizedBoard });
+      const ipcBoard = {
+        id: normalizedBoard.id,
+        name: normalizedBoard.name,
+        stages: normalizedBoard.stages,
+      };
+      await invoke('save_board', { board: ipcBoard });
     } catch (err) {
-      console.info('save_board IPC failed or in web mode:', err);
+      console.error('save_board IPC failed:', err);
       throw err instanceof Error ? err : new Error(String(err));
     }
   },
@@ -274,11 +279,10 @@ export const createBoardMetaSlice: StateCreator<
       } catch {
         cfg = null;
       }
-      const pipeline: PipelineConfig = {
+      const pipeline = {
         id: cfg?.id ?? 'default-engineering',
         title: cfg?.title ?? 'Инженерный пайплайн',
         stages: nextStages,
-        columns: nextStages,
       };
       await invoke('save_pipeline', { pipeline });
     } catch (err) {

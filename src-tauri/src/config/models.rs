@@ -191,11 +191,31 @@ pub struct PipelineStage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(from = "BoardDefHelper")]
 pub struct BoardDef {
     pub id: String,
     pub name: String,
-    #[serde(alias = "columns")]
     pub stages: Vec<PipelineStage>,
+}
+
+#[derive(Deserialize)]
+struct BoardDefHelper {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub stages: Option<Vec<PipelineStage>>,
+    #[serde(default)]
+    pub columns: Option<Vec<PipelineStage>>,
+}
+
+impl From<BoardDefHelper> for BoardDef {
+    fn from(h: BoardDefHelper) -> Self {
+        Self {
+            id: h.id,
+            name: h.name,
+            stages: h.stages.or(h.columns).unwrap_or_default(),
+        }
+    }
 }
 
 impl BoardDef {
@@ -221,17 +241,46 @@ pub fn default_board_id() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "PipelineConfigHelper")]
 pub struct PipelineConfig {
     pub id: String,
     pub title: String,
     #[serde(rename = "toolPermissions", default)]
     pub tool_permissions: Option<ToolPermissions>,
-    #[serde(alias = "columns")]
     pub stages: Vec<PipelineStage>,
     #[serde(default)]
     pub boards: Option<Vec<BoardDef>>,
     #[serde(rename = "activeBoardId", default)]
     pub active_board_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PipelineConfigHelper {
+    pub id: String,
+    pub title: String,
+    #[serde(rename = "toolPermissions", default)]
+    pub tool_permissions: Option<ToolPermissions>,
+    #[serde(default)]
+    pub stages: Option<Vec<PipelineStage>>,
+    #[serde(default)]
+    pub columns: Option<Vec<PipelineStage>>,
+    #[serde(default)]
+    pub boards: Option<Vec<BoardDef>>,
+    #[serde(rename = "activeBoardId", default)]
+    pub active_board_id: Option<String>,
+}
+
+impl From<PipelineConfigHelper> for PipelineConfig {
+    fn from(h: PipelineConfigHelper) -> Self {
+        Self {
+            id: h.id,
+            title: h.title,
+            tool_permissions: h.tool_permissions,
+            stages: h.stages.or(h.columns).unwrap_or_default(),
+            boards: h.boards,
+            active_board_id: h.active_board_id,
+        }
+    }
 }
 
 impl PipelineConfig {
@@ -1472,6 +1521,40 @@ pub const CANONICAL_TOOLS: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_board_def_serde_stages_and_columns() {
+        // Deserializing with both stages and columns should not fail with duplicate field
+        let json_both = r#"{"id":"dev","name":"Dev","stages":[{"id":"s1","title":"S1"}],"columns":[{"id":"s2","title":"S2"}]}"#;
+        let board_both: BoardDef = serde_json::from_str(json_both).expect("deserialize both");
+        assert_eq!(board_both.stages.len(), 1);
+        assert_eq!(board_both.stages[0].id, "s1");
+
+        // Deserializing with only columns (legacy)
+        let json_cols = r#"{"id":"dev","name":"Dev","columns":[{"id":"s2","title":"S2"}]}"#;
+        let board_cols: BoardDef = serde_json::from_str(json_cols).expect("deserialize columns");
+        assert_eq!(board_cols.stages.len(), 1);
+        assert_eq!(board_cols.stages[0].id, "s2");
+
+        // Deserializing with only stages
+        let json_stages = r#"{"id":"dev","name":"Dev","stages":[{"id":"s3","title":"S3"}]}"#;
+        let board_stages: BoardDef = serde_json::from_str(json_stages).expect("deserialize stages");
+        assert_eq!(board_stages.stages.len(), 1);
+        assert_eq!(board_stages.stages[0].id, "s3");
+    }
+
+    #[test]
+    fn test_pipeline_config_serde_stages_and_columns() {
+        let json_both = r#"{"id":"p1","title":"P1","stages":[{"id":"s1","title":"S1"}],"columns":[{"id":"s2","title":"S2"}]}"#;
+        let pipe_both: PipelineConfig = serde_json::from_str(json_both).expect("deserialize pipe both");
+        assert_eq!(pipe_both.stages.len(), 1);
+        assert_eq!(pipe_both.stages[0].id, "s1");
+
+        let json_cols = r#"{"id":"p1","title":"P1","columns":[{"id":"s2","title":"S2"}]}"#;
+        let pipe_cols: PipelineConfig = serde_json::from_str(json_cols).expect("deserialize pipe columns");
+        assert_eq!(pipe_cols.stages.len(), 1);
+        assert_eq!(pipe_cols.stages[0].id, "s2");
+    }
 
     #[test]
     fn test_pipeline_stage_wip_limit_serde() {

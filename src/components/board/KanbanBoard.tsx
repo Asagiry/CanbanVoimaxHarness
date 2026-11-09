@@ -33,7 +33,7 @@ export default function KanbanBoard() {
       await saveCurrentBoard(next);
       return true;
     } catch (err) {
-      console.info('saveCurrentBoard failed, rolling back:', err);
+      console.error('saveCurrentBoard failed, rolling back:', err);
       return false;
     }
   }, [saveCurrentBoard]);
@@ -75,7 +75,12 @@ export default function KanbanBoard() {
     const intake = reordered.find((c) => c.isIntake || c.id === 'backlog') ?? prev[0];
     const terminal = reordered.slice().reverse().find((c) => c.terminal || c.id === 'ready') ?? prev[prev.length - 1];
     const middle = reordered.filter((c) => c.id !== intake.id && c.id !== terminal.id);
-    const next = [intake, ...middle, terminal];
+    const rawNext = [intake, ...middle, terminal];
+    const next = rawNext.map((col, idx) => ({
+      ...col,
+      isIntake: idx === 0 ? true : undefined,
+      terminal: idx === rawNext.length - 1 ? true : undefined,
+    }));
 
     if (prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id)) return;
 
