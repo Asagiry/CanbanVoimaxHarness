@@ -695,6 +695,36 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(Object.keys(state.pendingDeletes)).toHaveLength(0);
     });
 
+    it('saveCvhToGit keeps tombstones and surfaces error when deferred delete IPC fails', async () => {
+      const ruleFile = {
+        id: 'global-rule-broken.md',
+        name: 'broken.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/broken.md',
+        content: '# Broken',
+        isDirty: false,
+        isDeleted: true,
+      };
+      useCortexStore.setState({
+        globalRules: [ruleFile],
+        pendingDeletes: {
+          'file:global-rule-broken.md': { path: '.cvh/rules/broken.md', kind: 'globalRule', stageId: 'global', fileId: 'global-rule-broken.md' },
+        },
+        cvhGitError: null,
+      });
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'delete_cortex_file') throw new Error('disk locked');
+        return true;
+      });
+      await expect(useCortexStore.getState().saveCvhToGit()).rejects.toThrow('disk locked');
+      const state = useCortexStore.getState();
+      expect(Object.keys(state.pendingDeletes)).toHaveLength(1);
+      expect(state.globalRules[0].isDeleted).toBe(true);
+      expect(state.cvhGitError).toContain('disk locked');
+      expect(mockInvoke).not.toHaveBeenCalledWith('cvh_git_save', expect.anything());
+    });
+
     it('loadGlobalRules replaces previous project global rules and closeEditor resets activeFile on project switch', async () => {
       // 1. Seed store with an active rule from a previous project
       useCortexStore.setState({

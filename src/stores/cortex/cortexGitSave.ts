@@ -71,16 +71,24 @@ export async function saveCvhToGitAction(set: CortexSet, get: CortexGet, message
   set({ cvhGitSaving: true, cvhGitError: null });
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    for (const entry of Object.values(pending)) {
+    const failedKeys: string[] = [];
+    const deleteErrors: string[] = [];
+    for (const [key, entry] of Object.entries(pending)) {
       try {
         if (entry.kind === 'agent' && entry.role) {
           await invoke('delete_agent_persona', { role: entry.role });
         } else if (entry.path) {
           await invoke('delete_cortex_file', { path: entry.path });
         }
-      } catch {
-        // Best-effort deferred delete; git save below is the source of truth.
+      } catch (err) {
+        failedKeys.push(key);
+        deleteErrors.push(err instanceof Error ? err.message : String(err));
       }
+    }
+    if (failedKeys.length > 0) {
+      const detail = `Не удалось удалить ${failedKeys.length} файл(ов): ${deleteErrors.join('; ')}`;
+      set({ cvhGitSaving: false, cvhGitError: detail });
+      throw new Error(detail);
     }
     const status = await invoke<CvhGitStatus>('cvh_git_save', { message: message ?? null });
     set((state) => ({

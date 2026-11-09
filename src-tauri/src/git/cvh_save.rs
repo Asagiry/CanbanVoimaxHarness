@@ -58,18 +58,48 @@ pub async fn cvh_git_save_at(root: &Path, message: &str) -> Result<CvhGitStatus,
     if !before.has_changes {
         return Ok(before);
     }
-    run_git(root, &["add", "--", ".cvh/"])
+    // Stage ONLY the is_cvh_config_path-filtered changed paths explicitly.
+    // Never `git add .cvh/`: that would stage runtime artifacts (harness.db,
+    // llm.json, logs, spill, dialogs, tasks, secrets) and `git commit` would
+    // then commit everything staged, bypassing the exclusion contract.
+    let mut add_args: Vec<String> = vec!["add".to_string(), "--".to_string()];
+    add_args.extend(before.changed_paths.iter().cloned());
+    let add_refs: Vec<&str> = add_args.iter().map(String::as_str).collect();
+    run_git(root, &add_refs)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Defense in depth: unstage any non-config path that was already staged
+    // before this call (e.g. a tracked runtime file staged by the user), so
+    // the commit below can only ever contain config paths.
     let staged = run_git(root, &["diff", "--cached", "--name-only", "--", ".cvh/"])
         .await
         .map_err(|e| e.to_string())?;
     let staged_paths: Vec<String> = staged
         .lines()
         .map(|l| l.trim().to_string())
-        .filter(|p| !p.is_empty() && is_cvh_config_path(p))
+        .filter(|p| !p.is_empty())
         .collect();
-    if staged_paths.is_empty() {
+    let non_config: Vec<String> = staged_paths
+        .iter()
+        .filter(|p| !is_cvh_config_path(p))
+        .cloned()
+        .collect();
+    if !non_config.is_empty() {
+        let mut restore_args: Vec<String> =
+            vec!["restore".to_string(), "--staged".to_string(), "--".to_string()];
+        restore_args.extend(non_config.iter().cloned());
+        let restore_refs: Vec<&str> = restore_args.iter().map(String::as_str).collect();
+        run_git(root, &restore_refs)
+            .await
+            .map_err(|e| format!("Failed to unstage non-config paths: {}", e))?;
+    }
+    let config_staged: Vec<String> = staged_paths
+        .iter()
+        .filter(|p| is_cvh_config_path(p))
+        .cloned()
+        .collect();
+    if config_staged.is_empty() {
         return cvh_git_status_at(root).await;
     }
     run_git(root, &["commit", "-m", message])
@@ -150,6 +180,9 @@ mod tests {
         git(&dir, &["push", "origin", "main"]);
         write(&dir, ".cvh/rules/x.md", "v2");
         write(&dir, ".cvh/harness.db", "db2");
+        // Pre-stage the runtime db (simulates a tracked/force-added artifact):
+        // save must unstage it and never commit it.
+        git(&dir, &["add", "--", ".cvh/harness.db"]);
         let st = cvh_git_save_at(&dir, "chore(cvh): save").await.expect("save");
         assert!(!st.has_changes);
         let log = std::process::Command::new("git")
@@ -159,6 +192,14 @@ mod tests {
             .expect("log");
         let log_s = String::from_utf8_lossy(&log.stdout);
         assert!(log_s.contains("chore(cvh): save"), "log: {}", log_s);
+        let show = std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(["show", "--name-only", "--format=", "HEAD"])
+            .output()
+            .expect("show");
+        let show_s = String::from_utf8_lossy(&show.stdout);
+        assert!(show_s.contains(".cvh/rules/x.md"), "commit must contain rule: {}", show_s);
+        assert!(!show_s.contains("harness.db"), "commit must NOT contain harness.db: {}", show_s);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&bare);
     }
