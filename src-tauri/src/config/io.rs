@@ -386,6 +386,105 @@ pub async fn register_or_update_project(
     Ok(registry)
 }
 
+pub async fn remove_project_from_registry(
+    registry_path: Option<PathBuf>,
+    project_path: &Path,
+) -> Result<ProjectRegistry> {
+    let mut registry = load_project_registry(registry_path.clone()).await.unwrap_or_default();
+    let norm = project_path.to_string_lossy().to_lowercase();
+    let before = registry.projects.len();
+    let removed_active = registry
+        .active_project_id
+        .as_deref()
+        .map(|active_id| {
+            registry.projects.iter().any(|e| {
+                e.id == active_id
+                    && (e.path.to_lowercase() == norm || e.root_path.as_deref().map(|r| r.to_lowercase()) == Some(norm.clone()))
+            })
+        })
+        .unwrap_or(false);
+    registry.projects.retain(|e| {
+        e.path.to_lowercase() != norm
+            && e.root_path.as_deref().map(|r| r.to_lowercase()) != Some(norm.clone())
+    });
+    if registry.projects.len() != before {
+        if removed_active {
+            registry.active_project_id = registry.projects.first().map(|e| e.id.clone());
+        }
+        let _ = save_project_registry(registry_path, &registry).await;
+    }
+    Ok(registry)
+}
+
 // ============================================================================
 // Tool Policy Matrix Configuration
 // ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::models::{ProjectEntry, ProjectRegistry};
+
+    fn entry(id: &str, path: &str) -> ProjectEntry {
+        ProjectEntry {
+            id: id.to_string(),
+            name: id.to_string(),
+            path: path.to_string(),
+            root_path: Some(path.to_string()),
+            last_opened: Utc::now(),
+            active_branch: Some("main".to_string()),
+            worktrees_count: Some(0),
+            has_project: Some(true),
+        }
+    }
+
+    async fn temp_registry(registry: &ProjectRegistry) -> (PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("cvh-test-{}-{}", std::process::id(), Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("registry.json");
+        save_project_registry(Some(path.clone()), registry).await.unwrap();
+        (path, dir)
+    }
+
+    #[tokio::test]
+    async fn remove_project_from_registry_removes_by_path_and_clears_active() {
+        let registry = ProjectRegistry {
+            projects: vec![entry("a", "C:/Proj/A"), entry("b", "C:/Proj/B")],
+            active_project_id: Some("a".to_string()),
+        };
+        let (path, dir) = temp_registry(&registry).await;
+        let result = remove_project_from_registry(Some(path.clone()), Path::new("c:/proj/a")).await.unwrap();
+        assert_eq!(result.projects.len(), 1);
+        assert_eq!(result.projects[0].id, "b");
+        assert_eq!(result.active_project_id.as_deref(), Some("b"));
+        let reloaded = load_project_registry(Some(path)).await.unwrap();
+        assert_eq!(reloaded.projects.len(), 1);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn remove_project_from_registry_noop_for_unknown_path() {
+        let registry = ProjectRegistry {
+            projects: vec![entry("a", "C:/Proj/A")],
+            active_project_id: Some("a".to_string()),
+        };
+        let (path, dir) = temp_registry(&registry).await;
+        let result = remove_project_from_registry(Some(path), Path::new("C:/Proj/Unknown")).await.unwrap();
+        assert_eq!(result.projects.len(), 1);
+        assert_eq!(result.active_project_id.as_deref(), Some("a"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn remove_project_from_registry_keeps_active_when_removing_non_active() {
+        let registry = ProjectRegistry {
+            projects: vec![entry("a", "C:/Proj/A"), entry("b", "C:/Proj/B")],
+            active_project_id: Some("a".to_string()),
+        };
+        let (path, dir) = temp_registry(&registry).await;
+        let result = remove_project_from_registry(Some(path), Path::new("C:/Proj/B")).await.unwrap();
+        assert_eq!(result.projects.len(), 1);
+        assert_eq!(result.active_project_id.as_deref(), Some("a"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

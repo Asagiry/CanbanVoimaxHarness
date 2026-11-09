@@ -111,5 +111,74 @@ describe('projectStore - Global Rules Sync on Project Switching', () => {
     expect(closeEditorSpy).toHaveBeenCalled();
     expect(loadGlobalRulesSpy).toHaveBeenCalled();
     expect(useProjectStore.getState().activeProject.id).toBe('proj-next');
+    expect(mockInvoke).toHaveBeenCalledWith('remove_project', { path: '/path/to/active' });
+  });
+
+  it('removeProjectFromHistory on last project leaves empty list and still invokes backend removal', async () => {
+    vi.spyOn(useBoardStore.getState(), 'loadBoards').mockResolvedValue();
+    vi.spyOn(useBoardStore.getState(), 'loadTasks').mockResolvedValue();
+    vi.spyOn(useCortexStore.getState(), 'loadAgentPersonas').mockResolvedValue();
+    vi.spyOn(useCortexStore.getState(), 'loadGlobalRules').mockResolvedValue();
+    vi.spyOn(useCortexStore.getState(), 'closeEditor');
+
+    useProjectStore.setState({
+      availableProjects: [
+        {
+          id: 'proj-only',
+          name: 'Project Only',
+          rootPath: '/path/to/only',
+          activeBranch: 'main',
+          worktreesCount: 0,
+        },
+      ],
+      activeProject: {
+        id: 'proj-only',
+        name: 'Project Only',
+        rootPath: '/path/to/only',
+        activeBranch: 'main',
+        worktreesCount: 0,
+      },
+      hasActiveProject: true,
+    });
+
+    await useProjectStore.getState().removeProjectFromHistory('proj-only');
+
+    expect(useProjectStore.getState().availableProjects).toEqual([]);
+    expect(mockInvoke).toHaveBeenCalledWith('remove_project', { path: '/path/to/only' });
+  });
+
+  it('removeProjectFromHistory on non-active tab invokes backend removal without switching', async () => {
+    useProjectStore.setState({
+      availableProjects: [
+        {
+          id: 'proj-active',
+          name: 'Project Active',
+          rootPath: '/path/to/active',
+          activeBranch: 'main',
+          worktreesCount: 0,
+        },
+        {
+          id: 'proj-other',
+          name: 'Project Other',
+          rootPath: '/path/to/other',
+          activeBranch: 'main',
+          worktreesCount: 0,
+        },
+      ],
+      activeProject: {
+        id: 'proj-active',
+        name: 'Project Active',
+        rootPath: '/path/to/active',
+        activeBranch: 'main',
+        worktreesCount: 0,
+      },
+      hasActiveProject: true,
+    });
+
+    await useProjectStore.getState().removeProjectFromHistory('proj-other');
+
+    expect(useProjectStore.getState().activeProject.id).toBe('proj-active');
+    expect(useProjectStore.getState().availableProjects.map((p) => p.id)).toEqual(['proj-active']);
+    expect(mockInvoke).toHaveBeenCalledWith('remove_project', { path: '/path/to/other' });
   });
 });

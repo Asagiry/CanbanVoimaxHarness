@@ -248,6 +248,15 @@ pub async fn persist_active_project(path: &Path) {
     persist_active_project_sync(path);
 }
 
+pub fn clear_active_project() {
+    let target = get_app_config_dir().join("active_project.txt");
+    match std::fs::remove_file(&target) {
+        Ok(()) => eprintln!("CVH [clear_active_project]: Removed active project file {:?}", target),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => eprintln!("CVH [clear_active_project]: Failed to remove active_project.txt: {}", e),
+    }
+}
+
 
 /// Canonical alias for discovering the active project root.
 pub fn get_active_project_path() -> PathBuf {

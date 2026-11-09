@@ -338,6 +338,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     persistStoredProjects(updatedProjects);
 
+    const removedRootPath = targetProject?.rootPath?.trim() || (cleanId.includes('/') || cleanId.includes('\\') ? cleanId : '');
+    if (removedRootPath && !isInvalidProjectPath(removedRootPath)) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('remove_project', { path: removedRootPath }).catch(() => null);
+      } catch (err) {
+        logEvent('WARN', 'PROJECT_STORE', `removeProjectFromHistory: backend remove_project failed: ${String(err)}`, removedRootPath);
+      }
+    }
+
     const isCurrentActive =
       state.activeProject.id === cleanId ||
       state.activeProject.rootPath.toLowerCase() === cleanId.toLowerCase() ||
