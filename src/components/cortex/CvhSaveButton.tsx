@@ -9,13 +9,14 @@ export default function CvhSaveButton() {
   const cvhGitSaving = useCortexStore((s) => s.cvhGitSaving);
   const cvhGitError = useCortexStore((s) => s.cvhGitError);
   const pendingDeletes = useCortexStore((s) => s.pendingDeletes);
+  const pendingColumnChanges = useCortexStore((s) => s.pendingColumnChanges);
   const stages = useCortexStore((s) => s.stages);
   const agentStages = useCortexStore((s) => s.agentStages);
   const globalRules = useCortexStore((s) => s.globalRules);
   const activeFile = useCortexStore((s) => s.activeFile);
   const saveCvhToGit = useCortexStore((s) => s.saveCvhToGit);
 
-  const hasChanges = hasAnyCvhChanges({ cvhGitStatus, pendingDeletes, stages, agentStages, globalRules, activeFile });
+  const hasChanges = hasAnyCvhChanges({ cvhGitStatus, pendingDeletes, pendingColumnChanges, stages, agentStages, globalRules, activeFile });
   const branch = cvhGitStatus?.branch;
 
   if (cvhGitSaving) {

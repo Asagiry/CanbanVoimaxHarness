@@ -18,7 +18,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import NewCortexFileForm from './NewCortexFileForm';
 import DirtyDot from './DirtyDot';
-import { isAgentDirty } from '../../stores/cortex/cortexGitSave';
+import { isAgentDirty, isFileDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface AgentMindInspectorProps {
   stage: CortexAgentStage;
@@ -201,7 +201,7 @@ export function AgentMindInspector({
                   <span className="text-xs font-mono leading-none">{t('cortex.rules')}</span>
                   <span className="text-[10px] font-mono text-[#8f8f8f] leading-none">rules/</span>
                   <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none">({ruleFiles.length})</span>
-                  {ruleFiles.some((f) => f.isDirty || f.isDeleted) && <DirtyDot />}
+                  {ruleFiles.some((f) => isFileDirty(f, cvhGitStatus)) && <DirtyDot />}
                 </button>
                 <button
                   type="button"
@@ -285,6 +285,8 @@ interface TreeFileRowProps {
 
 function TreeFileRow({ file, isActive, icon, badge, title, onSelect, onContextMenu }: TreeFileRowProps) {
   const { t } = useTranslation();
+  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const dirty = isFileDirty(file, cvhGitStatus);
   return (
     <button
       type="button"
@@ -309,7 +311,7 @@ function TreeFileRow({ file, isActive, icon, badge, title, onSelect, onContextMe
         )}
       </div>
 
-      {file.isDirty && (
+      {dirty && (
         <span
           className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
           title={t('cortex.unsavedChanges')}

@@ -22,6 +22,7 @@ import {
   createSettingTemplateAction,
 } from './cortexTemplates';
 import {
+  markPendingColumnChangeAction,
   markPendingDeleteAction,
   refreshCvhGitStatusAction,
   restorePendingDeleteAction,
@@ -54,6 +55,7 @@ export const createCortexSlice: StateCreator<
   cvhGitSaving: false,
   cvhGitError: null,
   pendingDeletes: {},
+  pendingColumnChanges: {},
 
   // --- STAGE EXPANSION & NAVIGATION ---
   toggleStageExpand: (stageId) => {
@@ -211,6 +213,7 @@ export const createCortexSlice: StateCreator<
   saveCvhToGit: (message) => saveCvhToGitAction(set, get, message),
   markPendingDelete: (key, entry) => markPendingDeleteAction(set, key, entry),
   restorePendingDelete: (key) => restorePendingDeleteAction(set, key),
+  markPendingColumnChange: (stageId) => markPendingColumnChangeAction(set, stageId),
   clearCvhGitError: () => set({ cvhGitError: null }),
 
   // --- FILE OPEN & TEMPLATE CREATION ---

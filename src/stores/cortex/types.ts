@@ -104,6 +104,7 @@ export interface CortexFilesState {
   cvhGitSaving: boolean;
   cvhGitError: string | null;
   pendingDeletes: Record<string, PendingDelete>;
+  pendingColumnChanges: Record<string, true>;
 }
 
 export interface CortexFilesActions {
@@ -117,6 +118,7 @@ export interface CortexFilesActions {
   saveCvhToGit: (message?: string) => Promise<void>;
   markPendingDelete: (key: string, entry: PendingDelete) => void;
   restorePendingDelete: (key: string) => void;
+  markPendingColumnChange: (stageId: string) => void;
   clearCvhGitError: () => void;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;

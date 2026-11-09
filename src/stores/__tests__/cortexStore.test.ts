@@ -45,6 +45,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       cvhGitSaving: false,
       cvhGitError: null,
       pendingDeletes: {},
+      pendingColumnChanges: {},
     });
   });
 
@@ -771,6 +772,17 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(state.globalRules).toHaveLength(1);
       expect(state.globalRules[0].name).toBe('carsmash_physics.md');
       expect(state.globalRules[0].path).toBe('.cvh/rules/carsmash_physics.md');
+    });
+
+    it('markPendingColumnChange marks only the given column and saveCvhToGit clears it', async () => {
+      useCortexStore.getState().markPendingColumnChange('planning');
+      expect(useCortexStore.getState().pendingColumnChanges).toEqual({ planning: true });
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'cvh_git_save') return { hasChanges: false, changedPaths: [], branch: 'main', ahead: false };
+        return true;
+      });
+      await useCortexStore.getState().saveCvhToGit();
+      expect(useCortexStore.getState().pendingColumnChanges).toEqual({});
     });
   });
 });

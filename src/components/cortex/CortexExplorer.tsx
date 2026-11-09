@@ -51,6 +51,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
   const refreshCvhGitStatus = useCortexStore((s) => s.refreshCvhGitStatus);
   const restorePendingDelete = useCortexStore((s) => s.restorePendingDelete);
   const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
+  const pendingColumnChanges = useCortexStore((s) => s.pendingColumnChanges);
   const pendingDeletes = useCortexStore((s) => s.pendingDeletes);
   const activeFile = useCortexStore((s) => s.activeFile);
   const { columns, boards } = useBoardStore();
@@ -294,7 +295,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
                 ({stages.length})
               </span>
-              {stages.some((s) => isColumnDirty(s, columns.find((c) => c.id === s.stageId), cvhGitStatus)) && <DirtyDot />}
+              {stages.some((s) => isColumnDirty(s, columns.find((c) => c.id === s.stageId), cvhGitStatus, pendingColumnChanges)) && <DirtyDot />}
             </button>
           </div>
 
