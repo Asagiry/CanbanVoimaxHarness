@@ -14,6 +14,7 @@ pub mod healing;
 pub mod lifecycle;
 pub mod runner;
 pub mod storage;
+pub mod timing;
 pub mod transitions;
 
 pub use healing::*;

@@ -73,6 +73,38 @@ describe('CardTimerBadge component rendering', () => {
     expect(html).toContain('text-[#15803d]');
   });
 
+  it('renders Done in MM:SS for planner parent done+waiting with completedAt', () => {
+    const task = createSampleTask({
+      status: 'done',
+      waitingForSubtaskId: 'CVH-102.1',
+      createdAt: 10000,
+      completedAt: 839000,
+      stageEnteredAt: 10000,
+      totalElapsed: 0,
+      stageDurations: {},
+    });
+    const html = renderToString(<CardTimerBadge task={task} />);
+
+    expect(html).toContain('Done in 13:49');
+    expect(html).not.toContain('In Progress');
+  });
+
+  it('renders Done in MM:SS for idle+waiting stale parent with completedAt', () => {
+    const task = createSampleTask({
+      status: 'idle',
+      waitingForSubtaskId: 'CVH-102.1',
+      createdAt: 10000,
+      completedAt: 839000,
+      stageEnteredAt: 10000,
+      totalElapsed: 0,
+      stageDurations: {},
+    });
+    const html = renderToString(<CardTimerBadge task={task} />);
+
+    expect(html).toContain('Done in 13:49');
+    expect(html).not.toContain('In Progress');
+  });
+
   it('renders green Done badge when isDone is explicitly passed true', () => {
     const task = createSampleTask({ status: 'idle' });
     const html = renderToString(<CardTimerBadge task={task} isDone={true} />);
