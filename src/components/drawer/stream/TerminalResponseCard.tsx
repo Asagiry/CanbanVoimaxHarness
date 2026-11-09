@@ -77,11 +77,11 @@ function TerminalResponseCardInner({
       >
         <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f4f4f5]">
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-[#71717a] dark:text-[#71717a] shrink-0" />
+            <ChevronDown className="h-4 w-4 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-[#71717a] dark:text-[#71717a] shrink-0" />
+            <ChevronRight className="h-4 w-4 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
           )}
-          <CheckCheck className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
+          <CheckCheck className="h-4 w-4 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
           <span className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
             {t('drawer.agentResponse')}
           </span>
@@ -96,7 +96,7 @@ function TerminalResponseCardInner({
 
           {durationText && (
             <span className="flex items-center space-x-1 text-xs font-mono text-[#71717a] dark:text-[#71717a] tabular-nums">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+              <Clock className="h-3.5 w-3.5 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
               <span>{durationText}</span>
             </span>
           )}
@@ -109,9 +109,9 @@ function TerminalResponseCardInner({
               className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
             >
               {copied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Check className="h-3.5 w-3.5 block shrink-0 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <Copy className="h-3.5 w-3.5 block shrink-0" />
               )}
             </button>
           )}

@@ -210,31 +210,31 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] cursor-pointer transition select-none"
         >
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 leading-none">
             {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
+              <ChevronDown className="h-3.5 w-3.5 block shrink-0 text-[#666666] dark:text-[#71717a]" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
+              <ChevronRight className="h-3.5 w-3.5 block shrink-0 text-[#666666] dark:text-[#71717a]" />
             )}
-            <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#71717a]" />
-            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5]">
+            <Brain className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#71717a]" />
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] leading-none">
               {isReasoningTag ? '<reasoning>' : '<thinking>'}
             </span>
             {!isFinished && isTaskRunning && (
-              <span className="flex items-center space-x-1.5">
+              <span className="flex items-center gap-1.5 leading-none">
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <Loader2 className="h-3 w-3 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <Loader2 className="h-3 w-3 block shrink-0 animate-spin text-emerald-600 dark:text-emerald-400" />
               </span>
             )}
           </div>
 
-          <div className="flex items-center space-x-2.5 text-[10px] font-mono text-[#71717a] dark:text-[#71717a]">
+          <div className="flex items-center gap-2.5 leading-none text-[10px] font-mono text-[#71717a] dark:text-[#71717a]">
             {timerText && (
-              <span className="flex items-center space-x-1 tabular-nums">
-                <Clock className="h-3 w-3" />
+              <span className="flex items-center gap-1 leading-none tabular-nums">
+                <Clock className="h-3 w-3 block shrink-0" />
                 <span>{timerText}</span>
               </span>
             )}
@@ -246,9 +246,9 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
               className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-white dark:hover:bg-[#232328] transition cursor-pointer"
             >
               {copied ? (
-                <Check className="h-3 w-3 text-emerald-600" />
+                <Check className="h-3 w-3 block shrink-0 text-emerald-600" />
               ) : (
-                <Copy className="h-3 w-3" />
+                <Copy className="h-3 w-3 block shrink-0" />
               )}
             </button>
           </div>

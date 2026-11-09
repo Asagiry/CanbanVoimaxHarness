@@ -23,7 +23,7 @@ function StageSummaryCardInner({
       <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2.5 min-w-0">
         <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#17171b] border-b border-[#f4f4f5] dark:border-[#212126] border-l-2 border-l-amber-500 dark:border-l-amber-400 select-none">
           <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f4f4f5]">
-            <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <RotateCcw className="h-4 w-4 block shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="text-xs font-semibold font-sans">
               {t('stageSummary.rejectTitle')}
             </span>
@@ -45,7 +45,7 @@ function StageSummaryCardInner({
     <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2.5 min-w-0">
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#17171b] border-b border-[#f4f4f5] dark:border-[#212126] border-l-2 border-l-emerald-600 dark:border-l-emerald-400 select-none">
         <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f4f4f5]">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 block shrink-0 text-emerald-600 dark:text-emerald-400" />
           <span className="text-xs font-semibold font-sans">
             {t('stageSummary.summaryTitle')}
           </span>

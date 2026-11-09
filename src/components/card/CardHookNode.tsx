@@ -228,9 +228,9 @@ export const CardHookNode = memo(function CardHookNode({
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {status === 'running' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
-          {status === 'success' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-          {status === 'failed' && <X className="w-2.5 h-2.5 stroke-[3]" />}
+          {status === 'running' && <Loader2 className="w-2.5 h-2.5 block shrink-0 animate-spin" />}
+          {status === 'success' && <Check className="w-2.5 h-2.5 block shrink-0 stroke-[3]" />}
+          {status === 'failed' && <X className="w-2.5 h-2.5 block shrink-0 stroke-[3]" />}
           {status === 'idle' && (
             <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
           )}
@@ -262,19 +262,19 @@ export const CardHookNode = memo(function CardHookNode({
             <div className="flex items-center gap-1">
               {status === 'running' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
-                  <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />
+                  <Loader2 className="w-3 h-3 block shrink-0 animate-spin text-amber-600 dark:text-amber-400" />
                   <span>{elapsedSec.toFixed(1)}s</span>
                 </span>
               )}
               {status === 'success' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                  <Check className="w-3 h-3 stroke-[2.5]" />
+                  <Check className="w-3 h-3 block shrink-0 stroke-[2.5]" />
                   <span>Успех {state?.durationMs ? `${(state.durationMs / 1000).toFixed(2)}s` : ''}</span>
                 </span>
               )}
               {status === 'failed' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
-                  <X className="w-3 h-3 stroke-[2.5]" />
+                  <X className="w-3 h-3 block shrink-0 stroke-[2.5]" />
                   <span>Ошибка {state?.exitCode != null ? `(код ${state.exitCode})` : ''}</span>
                 </span>
               )}

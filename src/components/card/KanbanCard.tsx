@@ -193,8 +193,8 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 )}
                 {cardBranch && (
                   <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                    <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#71717a] min-w-0">
-                      <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                    <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#71717a] min-w-0 leading-none">
+                      <GitBranch className="h-2.5 w-2.5 block shrink-0" />
                       <span className="truncate">{cardBranch}</span>
                     </span>
                   </div>

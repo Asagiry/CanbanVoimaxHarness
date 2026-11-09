@@ -35,7 +35,7 @@ export const CardWaitingSubtaskBadge = memo(function CardWaitingSubtaskBadge({
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33] hover:border-[#f59e0b] transition cursor-pointer"
+      className="inline-flex items-center gap-1 leading-none px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33] hover:border-[#f59e0b] transition cursor-pointer"
       aria-label={waitingForSubtaskId ? `${t('status.waitingSubtask')}: ${waitingForSubtaskId}` : undefined}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
@@ -103,11 +103,11 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
         aria-label={t('card.expandSubtasks')}
       >
         <span className="flex items-center gap-1.5">
-          <GitFork className="h-3 w-3 text-[#8b5cf6]" />
+          <GitFork className="h-3 w-3 block shrink-0 text-[#8b5cf6]" />
           <span>{t('card.completedSubtasks', { count: subtasks.length })}</span>
         </span>
         <ChevronDown
-          className={`h-3 w-3 transition-transform duration-150 ${
+          className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
             isSubtasksOpen ? 'rotate-180' : ''
           }`}
         />
@@ -179,7 +179,7 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                       Готово
                     </span>
                   )}
-                  <MessageSquare className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition" />
+                  <MessageSquare className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition" />
                 </div>
               </div>
             );

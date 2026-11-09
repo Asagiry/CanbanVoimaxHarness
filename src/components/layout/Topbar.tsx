@@ -177,7 +177,7 @@ export default function Topbar() {
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                       </span>
                       {runningSessionsCount > 1 && (
-                        <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums leading-none translate-y-[0.5px]">
+                        <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums leading-none">
                           {runningSessionsCount}
                         </span>
                       )}
@@ -216,7 +216,7 @@ export default function Topbar() {
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
             aria-label={t('topbar.toolPolicyTitle')}
           >
-            <Wrench className="h-3.5 w-3.5" />
+            <Wrench className="h-3.5 w-3.5 block shrink-0" />
           </button>
           <button
             onMouseDown={(e) => e.stopPropagation()}
@@ -224,7 +224,7 @@ export default function Topbar() {
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
             aria-label={t('topbar.llmSettings')}
           >
-            <Settings className="h-3.5 w-3.5" />
+            <Settings className="h-3.5 w-3.5 block shrink-0" />
           </button>
 
           {/* Language Switcher Button (EN / RU) */}

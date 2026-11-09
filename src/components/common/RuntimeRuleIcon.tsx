@@ -7,7 +7,7 @@ export function isRuntimeRule(fileName?: string | null): boolean {
   return clean === 'runtime.md' || clean === 'runtime';
 }
 
-export function RuntimeRuleIcon({ className = 'h-3.5 w-3.5 shrink-0' }: RuntimeRuleIconProps) {
+export function RuntimeRuleIcon({ className = 'h-3.5 w-3.5 shrink-0 block' }: RuntimeRuleIconProps) {
   return (
     <svg
       className={className}

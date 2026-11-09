@@ -87,13 +87,13 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
     return (
       <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs min-w-0 overflow-hidden">
         <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
-          <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
-            <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex items-center gap-1.5 leading-none text-amber-500 dark:text-amber-400 font-medium">
+            <ShieldAlert className="h-3.5 w-3.5 block shrink-0" />
             <span>{t(titleKey)}</span>
           </div>
           {formattedTime && (
-            <span className="flex items-center space-x-1 text-amber-600 dark:text-amber-400 tabular-nums">
-              <Clock className="h-3 w-3 shrink-0" />
+            <span className="flex items-center gap-1 leading-none text-amber-600 dark:text-amber-400 tabular-nums">
+              <Clock className="h-3 w-3 block shrink-0" />
               <span>{formattedTime}</span>
             </span>
           )}
@@ -130,20 +130,20 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   return (
     <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#111114] p-3.5 shadow-xs min-w-0 overflow-hidden">
       <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#212126] text-[10px] font-mono text-[#666666] dark:text-[#71717a]">
-        <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f4f4f5] font-medium">
+        <div className="flex items-center gap-1.5 leading-none text-[#171717] dark:text-[#f4f4f5] font-medium">
           {isAgentMessage ? (
             <>
-              <Bot className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
+              <Bot className="h-3.5 w-3.5 block shrink-0 text-blue-500 dark:text-blue-400" />
               <span>{t('drawer.agentMessage')}</span>
             </>
           ) : (
             <>
-              <User className="h-3 w-3" />
+              <User className="h-3 w-3 block shrink-0" />
               <span>{t('drawer.userSteer')}</span>
             </>
           )}
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2 leading-none">
           {onDelete && !isAgentMessage && (
             <button
               type="button"
@@ -151,12 +151,12 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
               className="p-0.5 rounded text-[#71717a] hover:text-red-500 hover:bg-[#e4e4e7] dark:hover:bg-[#232328] transition cursor-pointer"
               title={t('drawer.deleteMessage') || 'Удалить сообщение'}
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3 w-3 block shrink-0" />
             </button>
           )}
           {formattedTime && (
-            <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#71717a] tabular-nums">
-              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+            <span className="flex items-center gap-1 leading-none text-[#71717a] dark:text-[#71717a] tabular-nums">
+              <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
               <span>{formattedTime}</span>
             </span>
           )}

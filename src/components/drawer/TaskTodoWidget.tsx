@@ -167,11 +167,11 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             : 'bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] border-[#ebebeb] dark:border-[#2c2c33] text-[#737373] dark:text-[#71717a]'
         }`}
       >
-        <ListTodo className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors" />
+        <ListTodo className="h-3.5 w-3.5 block shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors" />
         <span className="font-medium text-xs tracking-tight">{t('drawer.todos')}</span>
 
         {hasTodos ? (
-          <div className="flex items-center space-x-1 pl-0.5 leading-none translate-y-px">
+          <div className="flex items-center gap-1 pl-0.5 leading-none">
             <span className="font-mono tabular-nums text-[11px] font-semibold text-[#15803d] dark:text-[#4ade80]">
               {completedCount}
             </span>
@@ -181,7 +181,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             </span>
           </div>
         ) : (
-          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#71717a] leading-none translate-y-px">0</span>
+          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#71717a] leading-none">0</span>
         )}
 
         {/* Static indicator when an item is currently in progress */}
@@ -190,7 +190,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         )}
 
         <ChevronDown
-          className={`h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition-transform duration-200 shrink-0 ${
+          className={`h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition-transform duration-200 ${
             isOpen ? 'rotate-180 text-[#171717] dark:text-[#f4f4f5]' : ''
           }`}
         />

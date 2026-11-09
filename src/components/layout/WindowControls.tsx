@@ -89,7 +89,7 @@ export default function WindowControls() {
         className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] dark:text-[#71717a] dark:hover:text-[#f4f4f5] dark:hover:bg-[#17171b] active:bg-[#e4e4e7] dark:active:bg-[#232328] transition-colors cursor-pointer select-none"
         aria-label="Свернуть окно"
       >
-        <Minus className="h-3.5 w-3.5" strokeWidth={1.75} />
+        <Minus className="h-3.5 w-3.5 block shrink-0" strokeWidth={1.75} />
       </button>
 
       {/* Maximize / Restore Button */}
@@ -102,9 +102,9 @@ export default function WindowControls() {
         aria-label={isMaximized ? 'Восстановить окно' : 'Развернуть окно'}
       >
         {isMaximized ? (
-          <Copy className="h-3 w-3 -scale-y-100" strokeWidth={1.75} />
+          <Copy className="h-3 w-3 block shrink-0 -scale-y-100" strokeWidth={1.75} />
         ) : (
-          <Square className="h-3 w-3" strokeWidth={1.75} />
+          <Square className="h-3 w-3 block shrink-0" strokeWidth={1.75} />
         )}
       </button>
 
@@ -117,7 +117,7 @@ export default function WindowControls() {
         className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:bg-rose-600 hover:text-white active:bg-rose-700 transition-colors cursor-pointer select-none"
         aria-label="Закрыть окно"
       >
-        <X className="h-3.5 w-3.5" strokeWidth={2} />
+        <X className="h-3.5 w-3.5 block shrink-0" strokeWidth={2} />
       </button>
     </div>
   );

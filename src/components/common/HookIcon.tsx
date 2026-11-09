@@ -14,7 +14,7 @@ export function HookIcon({ moment, file, className }: HookIconProps) {
   if (effectiveMoment === 'on_enter') {
     return (
       <ArrowRightToLine
-        className={`text-emerald-600 dark:text-emerald-400 shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
+        className={`text-emerald-600 dark:text-emerald-400 block shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
         aria-label="on_enter hook"
       />
     );
@@ -23,7 +23,7 @@ export function HookIcon({ moment, file, className }: HookIconProps) {
   if (effectiveMoment === 'on_leave' || effectiveMoment === 'on_finish' || effectiveMoment === 'on_exit') {
     return (
       <ArrowRightFromLine
-        className={`text-amber-600 dark:text-amber-400 shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
+        className={`text-amber-600 dark:text-amber-400 block shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
         aria-label={`${effectiveMoment} hook`}
       />
     );
@@ -31,7 +31,7 @@ export function HookIcon({ moment, file, className }: HookIconProps) {
 
   return (
     <Zap
-      className={`text-[#666666] dark:text-[#8b949e] shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
+      className={`text-[#666666] dark:text-[#8b949e] block shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
       aria-label="hook"
     />
   );

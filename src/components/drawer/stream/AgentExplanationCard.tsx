@@ -54,14 +54,14 @@ function AgentExplanationCardInner({
       >
         <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f4f4f5]">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
           )}
           {effectiveTodos ? (
-            <ListTodo className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+            <ListTodo className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#58a6ff]" />
           ) : (
-            <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+            <Bot className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#58a6ff]" />
           )}
           <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
             {effectiveTodos ? t('drawer.actionPlan') : t('drawer.agentExplanation')}
@@ -69,7 +69,7 @@ function AgentExplanationCardInner({
         </div>
         {durationText && (
           <span className="flex items-center space-x-1 text-[10px] font-mono text-[#71717a] dark:text-[#71717a] tabular-nums">
-            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+            <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
             <span>{durationText}</span>
           </span>
         )}

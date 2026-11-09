@@ -364,7 +364,7 @@ export default function StageContextMenu({
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
           >
             <span className="flex items-center gap-1.5 min-w-0">
-              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
+              <ArrowRightToLine className="h-3.5 w-3.5 block shrink-0 text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
               <span>{t('columnMenu.enterScript')}</span>
             </span>
             {currentEnterScript && (
@@ -385,7 +385,7 @@ export default function StageContextMenu({
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
           >
             <span className="flex items-center gap-1.5 min-w-0">
-              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
+              <ArrowRightFromLine className="h-3.5 w-3.5 block shrink-0 text-amber-600 dark:text-amber-400 stroke-[2.2]" />
               <span>{t('columnMenu.leaveScript')}</span>
             </span>
             {currentLeaveScript && (

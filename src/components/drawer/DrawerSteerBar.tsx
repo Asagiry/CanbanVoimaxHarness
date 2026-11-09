@@ -407,7 +407,7 @@ export default function DrawerSteerBar({
                 className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#171717] dark:hover:bg-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5] hover:text-white dark:hover:text-[#0b0b0e] flex items-center justify-center transition cursor-pointer"
                 aria-label={t('drawer.attachImage')}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 block shrink-0" />
               </button>
 
               {/* Hidden File Input for "+" Button */}
@@ -457,7 +457,7 @@ export default function DrawerSteerBar({
                   aria-label={t('drawer.taskModel', { model: modelId })}
                 >
                   <span className="truncate">{providerModelLabel}</span>
-                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
+                  <ChevronDown className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
                 </button>
                 <EffortSelector
                   taskEffort={activeSubagentId ? (subConfig?.reasoningEffort ?? task.reasoningEffort) : task.reasoningEffort}
@@ -496,7 +496,7 @@ export default function DrawerSteerBar({
                   className="w-8 h-8 rounded-full bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
                   aria-label={t('drawer.stopExecution')}
                 >
-                  <Square className="h-3.5 w-3.5 fill-current" />
+                  <Square className="h-3.5 w-3.5 block shrink-0 fill-current" />
                 </button>
               ) : hasContent ? (
                 <button
@@ -506,7 +506,7 @@ export default function DrawerSteerBar({
                   aria-label={t('drawer.sendMessage')}
                   title={t('drawer.sendMessage')}
                 >
-                  <ArrowUp className="h-4 w-4 stroke-[2.5]" />
+                  <ArrowUp className="h-4 w-4 block shrink-0 stroke-[2.5]" />
                 </button>
               ) : (
                 <button
@@ -516,7 +516,7 @@ export default function DrawerSteerBar({
                   aria-label={t('drawer.runLoop')}
                   title={t('drawer.runLoop')}
                 >
-                  <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+                  <Play className="h-3.5 w-3.5 block shrink-0 fill-current ml-0.5" />
                   <span className="hidden sm:inline font-sans">{t('drawer.continueLoop')}</span>
                 </button>
               )}

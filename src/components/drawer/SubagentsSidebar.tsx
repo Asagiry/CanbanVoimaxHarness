@@ -199,7 +199,7 @@ export default function SubagentsSidebar({
           className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
           aria-label={t('subagents.expandPanel')}
         >
-          <PanelLeftOpen className="h-4 w-4" />
+          <PanelLeftOpen className="h-4 w-4 block shrink-0" />
         </button>
         <div
           onClick={onToggleCollapse}
@@ -239,7 +239,7 @@ export default function SubagentsSidebar({
         {/* Sidebar Header */}
         <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#212126] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#17171b]">
           <div className="flex items-center space-x-2 min-w-0">
-            <Bot className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
+            <Bot className="h-4 w-4 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
             <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f4f4f5] tracking-tight">
               {t('subagents.title')}
             </span>
@@ -260,7 +260,7 @@ export default function SubagentsSidebar({
             className="p-1 rounded-md text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#e4e4e7] dark:hover:bg-[#232328] transition cursor-pointer"
             aria-label={t('subagents.collapsePanel')}
           >
-            <PanelLeftClose className="h-3.5 w-3.5" />
+            <PanelLeftClose className="h-3.5 w-3.5 block shrink-0" />
           </button>
         </div>
 
@@ -347,7 +347,7 @@ export default function SubagentsSidebar({
                                   className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
                                   aria-label={t('subagents.stop')}
                                 >
-                                  <Square className="h-2.5 w-2.5 fill-current shrink-0" />
+                                  <Square className="h-2.5 w-2.5 block shrink-0 fill-current" />
                                 </button>
                               </>
                             ) : sub.status === 'paused' ? (
@@ -375,13 +375,13 @@ export default function SubagentsSidebar({
                         <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#71717a] pt-1.5 border-t border-[#f4f4f5] dark:border-[#212126]/60">
                           <div className="flex items-center space-x-2">
                             <div className="flex items-center space-x-1">
-                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+                              <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">
                                 {formatDuration(sub.durationMs, sub.status === 'running')}
                               </span>
                             </div>
                             <div className="flex items-center space-x-1">
-                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+                              <Layers className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
                           </div>
@@ -447,12 +447,12 @@ export default function SubagentsSidebar({
                           <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
                             {sub.isBg ? (
                               <div className="relative shrink-0 flex items-center justify-center">
-                                <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                <Layers className="h-3.5 w-3.5 block shrink-0 text-purple-600 dark:text-purple-400" />
                                 <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#111114]" />
                               </div>
                             ) : (
                               <div className="relative shrink-0 flex items-center justify-center">
-                                <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                                <Zap className="h-3.5 w-3.5 block shrink-0 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
                                 <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#111114]" />
                               </div>
                             )}
@@ -496,7 +496,7 @@ export default function SubagentsSidebar({
                                   className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
                                   aria-label={t('subagents.stop')}
                                 >
-                                  <Square className="h-2.5 w-2.5 fill-current shrink-0" />
+                                  <Square className="h-2.5 w-2.5 block shrink-0 fill-current" />
                                 </button>
                               </>
                             ) : sub.status === 'paused' ? (
@@ -526,7 +526,7 @@ export default function SubagentsSidebar({
                             <div
                               className="flex items-center space-x-1"
                             >
-                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+                              <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">
                                 {(() => {
                                   const isSubRunning = sub.status === 'running';
@@ -567,7 +567,7 @@ export default function SubagentsSidebar({
                             <div
                               className="flex items-center space-x-1"
                             >
-                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+                              <Layers className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
                           </div>

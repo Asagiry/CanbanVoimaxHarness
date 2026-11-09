@@ -179,14 +179,14 @@ export default function BoardTabsHeader({
                       setRenamingBoardId(b.id);
                       setRenamingBoardName(b.name);
                     }}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer select-none ${
+                    className={`flex items-center gap-1.5 leading-none px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer select-none ${
                       isActive
                         ? 'bg-[#171717] dark:bg-[#232328] text-white shadow-xs'
                         : 'bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#e4e4e7] dark:hover:bg-[#232328] text-[#52525b] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                     }`}
                     aria-label={t('board.boardTabTitle', { name: b.name })}
                   >
-                    <Layout className="h-3.5 w-3.5 shrink-0" />
+                    <Layout className="h-3.5 w-3.5 block shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
                     <span
                       className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-medium leading-none tabular-nums shrink-0 ${
@@ -204,7 +204,7 @@ export default function BoardTabsHeader({
           })}
           {isCreatingBoard ? (
             <div className="flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium border bg-white dark:bg-[#111114] border-[#171717] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]">
-              <Layout className="h-3.5 w-3.5 shrink-0 text-[#71717a] dark:text-[#71717a]" />
+              <Layout className="h-3.5 w-3.5 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
               <input
                 type="text"
                 autoFocus
@@ -233,10 +233,10 @@ export default function BoardTabsHeader({
                 setNewBoardName('');
                 setIsCreatingBoard(true);
               }}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#2c2c33] hover:border-[#171717] dark:hover:border-[#f4f4f5] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] text-xs font-medium transition cursor-pointer select-none"
+              className="flex items-center gap-1 leading-none px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#2c2c33] hover:border-[#171717] dark:hover:border-[#f4f4f5] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] text-xs font-medium transition cursor-pointer select-none"
               aria-label={t('board.newBoardTitle')}
             >
-              <Plus className="h-3 w-3 shrink-0" />
+              <Plus className="h-3 w-3 block shrink-0" />
               <span className="leading-none">{t('board.newBoard')}</span>
             </button>
           )}
@@ -295,9 +295,9 @@ export default function BoardTabsHeader({
                 setRenamingBoardId(targetBoard.id);
                 setRenamingBoardName(targetBoard.name);
               }}
-              className="w-full flex items-center space-x-2 px-3 py-1.5 text-left text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-1.5 leading-none text-left text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
             >
-              <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a]" />
+              <Pencil className="h-3.5 w-3.5 block shrink-0 text-[#71717a] dark:text-[#71717a]" />
               <span>{t('board.renameBoard')}</span>
             </button>
             <button
@@ -319,7 +319,7 @@ export default function BoardTabsHeader({
                   : 'text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer'
               }`}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5 block shrink-0" />
               <span>{t('board.deleteBoard')}</span>
             </button>
           </div>

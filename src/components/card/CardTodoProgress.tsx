@@ -222,11 +222,11 @@ export const CardTodoProgress = memo(function CardTodoProgress({
           aria-label={t('card.todosProgress', { completed: completedCount, total: totalCount, percent })}
         >
           {isAllCompleted ? (
-            <CheckCircle2 className="h-3 w-3 text-[#15803d] dark:text-[#4ade80] shrink-0" />
+            <CheckCircle2 className="h-3 w-3 block shrink-0 text-[#15803d] dark:text-[#4ade80]" />
           ) : (
-            <ListTodo className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
+            <ListTodo className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
           )}
-          <span className="inline-flex items-center gap-1 translate-y-px leading-none">
+          <span className="inline-flex items-center gap-1 leading-none">
             <span className={completedCount > 0 ? 'text-[#15803d] dark:text-[#4ade80] font-semibold' : 'text-[#171717] dark:text-[#f4f4f5]'}>
               {completedCount}
             </span>

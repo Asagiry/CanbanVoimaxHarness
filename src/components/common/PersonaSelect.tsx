@@ -103,14 +103,14 @@ export default function PersonaSelect({
         <div className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
           {isNewAgent ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <Plus className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              <Plus className="h-3.5 w-3.5 block shrink-0 text-indigo-500" />
               <span className="text-indigo-600 dark:text-indigo-400 font-medium truncate">
                 {t('personaSelect.newAgent')}
               </span>
             </div>
           ) : !value && allowEmpty ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#71717a]">
-              <UserX className="h-3.5 w-3.5 shrink-0" />
+              <UserX className="h-3.5 w-3.5 block shrink-0" />
               <span className="font-sans truncate">{resolvedEmptyLabel}</span>
             </div>
           ) : selected ? (
@@ -129,7 +129,7 @@ export default function PersonaSelect({
             </div>
           ) : value ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <AgentIcon name="Bot" className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
+              <AgentIcon name="Bot" className="h-3.5 w-3.5 block shrink-0 text-[#8f8f8f]" />
               <span className="font-semibold truncate leading-none text-[#171717] dark:text-[#f4f4f5] min-w-0 flex-1" title={value}>
                 {value}
               </span>
@@ -142,7 +142,7 @@ export default function PersonaSelect({
         </div>
 
         <ChevronDown
-          className={`h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] shrink-0 transition-transform ${
+          className={`h-3.5 w-3.5 block shrink-0 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
@@ -163,10 +163,10 @@ export default function PersonaSelect({
               }`}
             >
               <div className="flex items-center gap-2 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#71717a]">
-                <UserX className="h-3.5 w-3.5 shrink-0" />
+                <UserX className="h-3.5 w-3.5 block shrink-0" />
                 <span className="font-sans">{resolvedEmptyLabel}</span>
               </div>
-              {!value && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />}
+              {!value && <Check className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />}
             </button>
           )}
 
@@ -201,7 +201,7 @@ export default function PersonaSelect({
                     </span>
                   )}
                 </div>
-                {isCurrent && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />}
+                {isCurrent && <Check className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />}
               </button>
             );
           })}
@@ -218,7 +218,7 @@ export default function PersonaSelect({
                   isNewAgent ? 'bg-indigo-50 dark:bg-indigo-950/40' : ''
                 }`}
               >
-                <Plus className="h-3.5 w-3.5 shrink-0" />
+                <Plus className="h-3.5 w-3.5 block shrink-0" />
                 <span>{t('personaSelect.newAgent')}</span>
               </button>
             </div>

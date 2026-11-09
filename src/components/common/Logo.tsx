@@ -7,12 +7,13 @@ interface LogoProps extends React.SVGProps<SVGSVGElement> {
 }
 
 function LogoGlyph({ className = '', ...props }: React.SVGProps<SVGSVGElement>) {
+  const resolvedClass = `block shrink-0 ${className}`.trim();
   return (
     <svg
       viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
+      className={resolvedClass}
       {...props}
     >
       {/* Terminal Delta Glyph (▲) */}
@@ -43,7 +44,7 @@ export default function Logo({
       viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`shrink-0 ${className}`}
+      className={`block shrink-0 ${className}`}
       {...props}
     >
       {/* Obsidian Badge Surface with 6px Geist Radius */}

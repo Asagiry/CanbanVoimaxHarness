@@ -184,9 +184,9 @@ export default function StageHookBadge({
         }`}
       >
         {side === 'left' ? (
-          <ArrowRightToLine className="w-3.5 h-3.5 stroke-[2.2]" />
+          <ArrowRightToLine className="w-3.5 h-3.5 block shrink-0 stroke-[2.2]" />
         ) : (
-          <ArrowRightFromLine className="w-3.5 h-3.5 stroke-[2.2]" />
+          <ArrowRightFromLine className="w-3.5 h-3.5 block shrink-0 stroke-[2.2]" />
         )}
       </div>
 
@@ -234,7 +234,7 @@ export default function StageHookBadge({
               {t('board.hookScript')}
             </div>
             <div className="flex items-center gap-1.5 p-1.5 rounded bg-neutral-50 dark:bg-[#111114] border border-neutral-200 dark:border-[#2c2c33]">
-              <Terminal className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0" />
+              <Terminal className="w-3.5 h-3.5 block shrink-0 text-neutral-500 dark:text-neutral-400" />
               <span
                 className="font-mono text-xs text-neutral-900 dark:text-[#a1a1aa] truncate flex-1 select-all"
                 title={script}
