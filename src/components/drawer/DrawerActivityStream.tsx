@@ -111,8 +111,8 @@ export default function DrawerActivityStream({
   } = useActivityScroll(displayActivities, task?.id);
 
   const handleToggleOutput = useCallback(
-    (key: string, idx: number, total: number, activity?: DrawerActivityItem) =>
-      toggleCollapsed(key, idx, total, activity),
+    (key: string, idx: number, total: number, activity?: DrawerActivityItem, isFinal?: boolean) =>
+      toggleCollapsed(key, idx, total, activity, isFinal),
     [toggleCollapsed]
   );
 
@@ -178,9 +178,9 @@ export default function DrawerActivityStream({
                   isRunning={isRunning}
                   isLast={idx === ((displayActivities?.length ?? 1) - 1)}
                   durationMs={activityDurations[idx]}
-                  isExpanded={!isCollapsed(key, idx, displayActivities?.length ?? 0, activity)}
+                  isExpanded={!isCollapsed(key, idx, displayActivities?.length ?? 0, activity, activityFlags[idx]?.isFinal)}
                   onToggleExpanded={() =>
-                    handleToggleOutput(key, idx, displayActivities?.length ?? 0, activity)
+                    handleToggleOutput(key, idx, displayActivities?.length ?? 0, activity, activityFlags[idx]?.isFinal)
                   }
                   onImageClick={handleOpenLightbox}
                   taskId={activeSubagentId || task.id}
