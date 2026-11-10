@@ -111,6 +111,9 @@ export function appendStreamChunk(
   const entryIndex = entries.findIndex((entry) => entry.id === id);
   const feedIndex = feed.findIndex((item) => item.id === id);
   const previous = feed[feedIndex] || entries[entryIndex];
+  if (type === 'thought' && !previous && !content.trim()) {
+    return state;
+  }
   const now = Date.now();
   const createdAt = previous?.createdAt ?? now;
   const entry: LiveStreamEntry = {

@@ -498,3 +498,30 @@ describe('StageSummaryCard localized rendering', () => {
     expect(htmlEn).toContain('Stage Summary');
   });
 });
+
+describe('ThoughtStreamCard empty and leading-whitespace handling', () => {
+  it('renders nothing for finished whitespace-only thoughts and trims leading newlines', () => {
+    const emptyThought = renderToString(
+      React.createElement(ThoughtStreamCard, {
+        activity: { id: 'th-empty', type: 'thought', timestamp: '12:00:00', content: '\n\n' },
+        isTaskRunning: false,
+        taskId: 'CVH-073',
+        durationMs: 706,
+        isLive: false,
+      }),
+    );
+    expect(emptyThought).toBe('');
+
+    const realThought = renderToString(
+      React.createElement(ThoughtStreamCard, {
+        activity: { id: 'th-real', type: 'thought', timestamp: '12:00:01', content: '\nNow I understand the flow' },
+        isTaskRunning: false,
+        taskId: 'CVH-073',
+        durationMs: 706,
+        isLive: false,
+      }),
+    );
+    expect(realThought).toContain('Now I understand the flow');
+    expect(realThought).not.toContain('>\nNow I understand');
+  });
+});

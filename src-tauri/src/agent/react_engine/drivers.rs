@@ -142,7 +142,7 @@ impl SubagentDriver {
     }
 
     pub fn finalize_turn_thoughts(&self) {
-        let thoughts = self.accumulated_thoughts.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let thoughts = self.accumulated_thoughts.lock().unwrap_or_else(|p| p.into_inner()).trim().to_string();
         if !thoughts.is_empty() {
             let start = *self.thought_start.lock().unwrap_or_else(|p| p.into_inner());
             let end = *self.thought_end.lock().unwrap_or_else(|p| p.into_inner());
@@ -200,6 +200,10 @@ impl AgentSessionDriver for SubagentDriver {
                 thoughts_guard.push_str(&text);
                 let current_thoughts = thoughts_guard.clone();
                 drop(thoughts_guard);
+
+                if current_thoughts.trim().is_empty() {
+                    return;
+                }
 
                 let thought_id = self.turn_thought_id.lock().unwrap_or_else(|p| p.into_inner()).clone();
                 let th_item = ActivityItem {

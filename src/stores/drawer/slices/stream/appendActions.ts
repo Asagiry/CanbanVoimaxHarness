@@ -93,7 +93,10 @@ export function createStreamAppendActions(
           };
         }
 
-        // Fresh thought block
+        // Fresh thought block: ignore whitespace-only openings (e.g. <think>\n\n</think>)
+        if (!content.trim()) {
+          return {};
+        }
         const newEntry: LiveStreamEntry = {
           id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           timestamp: timeStr,

@@ -176,7 +176,7 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
     }, 1500);
   };
 
-  const visibleText = (isFinished ? fullText : fullText.slice(0, displayedLength)).trimEnd();
+  const visibleText = (isFinished ? fullText : fullText.slice(0, displayedLength)).trimStart().trimEnd();
   const isTyping = !isFinished && displayedLength < fullText.length;
 
   // Auto-scroll to bottom during live streaming unless user intentionally scrolled up
@@ -201,6 +201,10 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
   };
 
   const isReasoningTag = fullText.includes('<reasoning>') || fullText.includes('</reasoning>');
+
+  if (isFinished && !visibleText) {
+    return null;
+  }
 
   return (
     <div className="animate-silk-entrance motion-reduce:animate-none">

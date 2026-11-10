@@ -197,4 +197,21 @@ describe('stream attempt rollback', () => {
     await store.loadTaskActivity(taskId);
     expect(useDrawerStore.getState().activityFeed[taskId].map((item) => item.id)).toEqual(optimistic.map((item) => item.id));
   });
+
+  it('ignores whitespace-only thought streams until real reasoning text arrives', () => {
+    buffers.startStream(taskId, 'empty-think');
+    buffers.queueThought(taskId, '\n\n', 'empty-think');
+    vi.advanceTimersByTime(TEXT_FLUSH_MS);
+
+    expect(useDrawerStore.getState().activityFeed[taskId] ?? []).toHaveLength(0);
+    expect(useDrawerStore.getState().streamEntries[taskId]?.thoughts ?? []).toHaveLength(0);
+
+    useDrawerStore.getState().appendThought(taskId, '\n\n');
+    expect(useDrawerStore.getState().activityFeed[taskId] ?? []).toHaveLength(0);
+
+    buffers.queueThought(taskId, '\nActual reasoning', 'empty-think');
+    vi.advanceTimersByTime(TEXT_FLUSH_MS);
+    expect(useDrawerStore.getState().activityFeed[taskId]).toHaveLength(1);
+    expect(useDrawerStore.getState().activityFeed[taskId][0].content).toBe('\nActual reasoning');
+  });
 });
