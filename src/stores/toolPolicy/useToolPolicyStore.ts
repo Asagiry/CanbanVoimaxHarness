@@ -3,6 +3,30 @@ import { useBoardStore } from '../boardStore';
 import { ToolPolicyState, ToolSettings } from './toolPolicyTypes';
 import { AVAILABLE_TOOLS } from './toolMeta';
 import { DEFAULT_TOOL_SETTINGS, DEFAULT_OVERRIDES } from './toolPolicyDefaults';
+import { isToolSchemaCustomized, type ExecuteShell } from './toolSchemaUtils';
+
+const TOOL_BY_ID = new Map(AVAILABLE_TOOLS.map((t) => [t.id, t]));
+
+function getExecuteShell(toolSettings: ToolSettings): ExecuteShell {
+  return ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
+}
+
+function pruneDefaultCustomSchemas(
+  rawSchemas: Record<string, unknown> | undefined,
+  toolSettings: ToolSettings,
+): Record<string, unknown> {
+  if (!rawSchemas) return {};
+  const shell = getExecuteShell(toolSettings);
+  const cleaned: Record<string, unknown> = {};
+  for (const [toolId, schema] of Object.entries(rawSchemas)) {
+    const meta = TOOL_BY_ID.get(toolId);
+    if (meta && !isToolSchemaCustomized(meta, schema, shell)) {
+      continue;
+    }
+    cleaned[toolId] = schema;
+  }
+  return cleaned;
+}
 
 export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   isModalOpen: false,
@@ -67,12 +91,16 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   },
 
   setToolCustomSchema: (toolId, schema) => {
-    set((state) => ({
-      toolCustomSchemas: {
-        ...state.toolCustomSchemas,
-        [toolId]: schema,
-      },
-    }));
+    set((state) => {
+      const meta = TOOL_BY_ID.get(toolId);
+      const next = { ...state.toolCustomSchemas };
+      if (meta && !isToolSchemaCustomized(meta, schema, getExecuteShell(state.toolSettings))) {
+        delete next[toolId];
+      } else {
+        next[toolId] = schema;
+      }
+      return { toolCustomSchemas: next };
+    });
     get().saveToTauri();
   },
 
@@ -172,7 +200,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
           toolSettings: mergedSettings,
           toolDescriptions: policies.toolDescriptions || {},
-          toolCustomSchemas: policies.toolCustomSchemas || {},
+          toolCustomSchemas: pruneDefaultCustomSchemas(policies.toolCustomSchemas, mergedSettings),
         });
       }
     } catch {

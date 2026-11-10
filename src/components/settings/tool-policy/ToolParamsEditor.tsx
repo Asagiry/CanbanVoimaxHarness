@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useToolPolicyStore, TOOL_PARAM_DEFS } from '../../../stores/toolPolicyStore';
+import {
+  applyShellToExecuteCommandSchema,
+  useToolPolicyStore,
+  TOOL_PARAM_DEFS,
+  type ExecuteShell,
+} from '../../../stores/toolPolicyStore';
 import { useTranslation, type TranslationKey } from '../../../stores/languageStore';
 
 export function PolicyToggle({
@@ -149,40 +154,16 @@ function ToolParamRow({
 
 function ShellSelectorRow() {
   const { toolSettings, setToolSetting, toolCustomSchemas, setToolCustomSchema } = useToolPolicyStore();
-  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as 'bash' | 'pwsh' | 'cmd';
+  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
 
-  const handleShellChange = (newShell: 'bash' | 'pwsh' | 'cmd') => {
+  const handleShellChange = (newShell: ExecuteShell) => {
     setToolSetting('execute_command', 'shell', newShell);
     const custom = toolCustomSchemas['execute_command'];
     if (custom !== undefined) {
       try {
         const parsed = typeof custom === 'string' ? JSON.parse(custom) : { ...custom };
-        if (parsed?.function) {
-          parsed.function.aliases =
-            newShell === 'pwsh' ? ['pwsh', 'powershell'] : newShell === 'cmd' ? ['cmd'] : ['bash'];
-          if (newShell === 'pwsh') {
-            parsed.function.description =
-              'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
-            if (parsed.function.parameters?.properties?.command) {
-              parsed.function.parameters.properties.command.description =
-                "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').";
-            }
-          } else if (newShell === 'cmd') {
-            parsed.function.description =
-              'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
-            if (parsed.function.parameters?.properties?.command) {
-              parsed.function.parameters.properties.command.description =
-                "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').";
-            }
-          } else {
-            parsed.function.description =
-              'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
-            if (parsed.function.parameters?.properties?.command) {
-              parsed.function.parameters.properties.command.description =
-                "Command string to run in Git Bash (e.g. 'cargo check', 'git status').";
-            }
-          }
-          setToolCustomSchema('execute_command', parsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.function) {
+          setToolCustomSchema('execute_command', applyShellToExecuteCommandSchema(parsed as Record<string, unknown>, newShell));
         }
       } catch {
         // Ignore draft syntax errors

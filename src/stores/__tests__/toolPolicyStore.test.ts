@@ -263,5 +263,25 @@ describe('toolPolicyStore (Modular Tool Policy Engine)', () => {
         }),
       });
     });
+
+    it('drops unmodified default schemas on setToolCustomSchema and loadFromTauri', async () => {
+      const { AVAILABLE_TOOLS, buildDefaultToolSchema, isToolSchemaCustomized } = await import('../toolPolicyStore');
+      const advanceTool = AVAILABLE_TOOLS.find((t) => t.id === 'advance_task')!;
+      const defSchema = buildDefaultToolSchema(advanceTool);
+
+      mockInvoke.mockResolvedValueOnce({
+        toolCustomSchemas: {
+          advance_task: defSchema,
+          glob: { type: 'object' },
+        },
+      });
+      await useToolPolicyStore.getState().loadFromTauri();
+      expect(useToolPolicyStore.getState().toolCustomSchemas['advance_task']).toBeUndefined();
+      expect(useToolPolicyStore.getState().toolCustomSchemas['glob']).toEqual({ type: 'object' });
+
+      expect(isToolSchemaCustomized(advanceTool, defSchema)).toBe(false);
+      useToolPolicyStore.getState().setToolCustomSchema('advance_task', defSchema);
+      expect(useToolPolicyStore.getState().toolCustomSchemas['advance_task']).toBeUndefined();
+    });
   });
 });

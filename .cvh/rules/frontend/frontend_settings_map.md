@@ -25,6 +25,7 @@ Cortex edits personas, rules and stage settings (also indexed in `frontend_corte
 | `src/stores/toolPolicy/useToolPolicyStore.ts` | Zustand store and Tauri IPC actions for tool policy state and schemas. |
 | `src/stores/toolPolicy/toolPolicyTypes.ts` | Tool policy state contracts, parameter definitions, and override shapes. |
 | `src/stores/toolPolicy/toolPolicyDefaults.ts` | Default stage/role permissions and parameter values. |
+| `src/stores/toolPolicy/toolSchemaUtils.ts` | Shared default tool schema builders, shell presets, and deep customization equality helpers. |
 | `src/stores/toolPolicy/builtinTools.ts` | Built-in tool catalog metadata and category definitions. |
 | `src/stores/toolPolicy/agentTools.ts` | Effective per-role tool resolution and matrix helper functions. |
 | `src/stores/toolPolicy/toolMeta.ts` | Tool display names, descriptions, and grouping lookups. |

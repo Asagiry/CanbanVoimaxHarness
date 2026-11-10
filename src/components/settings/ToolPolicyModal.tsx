@@ -1,5 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, AVAILABLE_TOOLS, getToolTranslationKey } from '../../stores/toolPolicyStore';
+import {
+  useToolPolicyStore,
+  AVAILABLE_TOOLS,
+  getToolTranslationKey,
+  isToolSchemaCustomized,
+  type ExecuteShell,
+} from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
@@ -26,9 +32,11 @@ export default function ToolPolicyModal() {
     closeModal,
     setStageTool,
     isToolAllowed,
+    toolSettings,
     toolDescriptions,
     toolCustomSchemas,
   } = useToolPolicyStore();
+  const executeShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
   const { t } = useTranslation();
   const { agentPersonas, loadAgentPersonas } = useCortexStore();
   const { columns } = useBoardStore();
@@ -162,7 +170,7 @@ export default function ToolPolicyModal() {
                                         <span className={`font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
                                           {toolLabel}
                                         </span>
-                                        {toolCustomSchemas[tool.id] !== undefined ? (
+                                        {isToolSchemaCustomized(tool, toolCustomSchemas[tool.id], executeShell) ? (
                                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono leading-none bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                                             Кастомная схема
                                           </span>

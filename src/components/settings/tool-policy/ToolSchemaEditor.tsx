@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, type ToolMeta } from '../../../stores/toolPolicyStore';
+import {
+  applyShellToExecuteCommandSchema,
+  buildDefaultToolSchema,
+  isToolSchemaCustomized,
+  normalizeStoredToolSchema,
+  stableSchemaEqual,
+  useToolPolicyStore,
+  type ExecuteShell,
+  type ToolMeta,
+} from '../../../stores/toolPolicyStore';
 
 export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
   const {
@@ -11,91 +20,34 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
   } = useToolPolicyStore();
 
   const isExecuteCommand = tool.id === 'execute_command';
-  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as 'bash' | 'pwsh' | 'cmd';
+  const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
 
-  const defaultSchema = useMemo(() => {
-    let aliases = tool.aliases;
-    let description = tool.description;
-    let parameters = tool.parameters || { type: 'object', properties: {} };
-
-    if (isExecuteCommand) {
-      if (selectedShell === 'pwsh') {
-        aliases = ['pwsh', 'powershell'];
-        description = 'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
-        const props = (parameters.properties || {}) as Record<string, unknown>;
-        parameters = {
-          ...parameters,
-          properties: {
-            ...props,
-            command: {
-              ...((props.command as Record<string, unknown>) || { type: 'string' }),
-              description: "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').",
-            },
-          },
-        };
-      } else if (selectedShell === 'cmd') {
-        aliases = ['cmd'];
-        description = 'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
-        const props = (parameters.properties || {}) as Record<string, unknown>;
-        parameters = {
-          ...parameters,
-          properties: {
-            ...props,
-            command: {
-              ...((props.command as Record<string, unknown>) || { type: 'string' }),
-              description: "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').",
-            },
-          },
-        };
-      } else {
-        aliases = ['bash'];
-        description = 'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
-        const props = (parameters.properties || {}) as Record<string, unknown>;
-        parameters = {
-          ...parameters,
-          properties: {
-            ...props,
-            command: {
-              ...((props.command as Record<string, unknown>) || { type: 'string' }),
-              description: "Command string to run in Git Bash (e.g. 'cargo check', 'git status').",
-            },
-          },
-        };
-      }
-    }
-
-    return {
-      type: 'function',
-      function: {
-        name: tool.name,
-        description,
-        ...(aliases && aliases.length > 0 ? { aliases } : {}),
-        parameters,
-      },
-    };
-  }, [tool.name, tool.description, tool.parameters, tool.aliases, isExecuteCommand, selectedShell]);
+  const defaultSchema = useMemo(
+    () => buildDefaultToolSchema(tool, selectedShell),
+    [tool, selectedShell],
+  );
 
   const defaultJsonString = useMemo(() => {
     return JSON.stringify(defaultSchema, null, 2);
   }, [defaultSchema]);
 
   const customSchema = toolCustomSchemas[tool.id];
-  const isCustomized = customSchema !== undefined;
+  const isCustomized = useMemo(
+    () => isToolSchemaCustomized(tool, customSchema, selectedShell),
+    [tool, customSchema, selectedShell],
+  );
 
   const activeJsonString = useMemo(() => {
     if (customSchema !== undefined) {
       try {
-        const obj = typeof customSchema === 'string' ? JSON.parse(customSchema) : { ...customSchema };
-        if (obj?.function && !obj.function.aliases && defaultSchema.function.aliases?.length) {
-          obj.function.aliases = defaultSchema.function.aliases;
-        }
-        return JSON.stringify(obj, null, 2);
+        const normalized = normalizeStoredToolSchema(customSchema, defaultSchema);
+        return typeof normalized === 'string' ? normalized : JSON.stringify(normalized, null, 2);
       } catch {
         return typeof customSchema === 'string' ? customSchema : JSON.stringify(customSchema, null, 2);
       }
     }
     return defaultJsonString;
-  }, [customSchema, defaultJsonString, defaultSchema.function.aliases]);
+  }, [customSchema, defaultJsonString, defaultSchema]);
 
   const [jsonText, setJsonText] = useState(activeJsonString);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -106,40 +58,15 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
     setParseError(null);
   }, [activeJsonString]);
 
-  const handleShellChange = (newShell: 'bash' | 'pwsh' | 'cmd') => {
+  const handleShellChange = (newShell: ExecuteShell) => {
     setToolSetting('execute_command', 'shell', newShell);
     try {
       const parsed = JSON.parse(jsonText);
-      if (parsed?.function) {
-        const shellAliases =
-          newShell === 'pwsh' ? ['pwsh', 'powershell'] : newShell === 'cmd' ? ['cmd'] : ['bash'];
-        parsed.function.aliases = shellAliases;
-        if (newShell === 'pwsh') {
-          parsed.function.description =
-            'Execute a shell command inside the isolated worktree via PowerShell with piped stdout/stderr.';
-          if (parsed.function.parameters?.properties?.command) {
-            parsed.function.parameters.properties.command.description =
-              "Command string to run in PowerShell (e.g. 'cargo check', 'Get-ChildItem').";
-          }
-        } else if (newShell === 'cmd') {
-          parsed.function.description =
-            'Execute a shell command inside the isolated worktree via Command Prompt (cmd.exe) with piped stdout/stderr.';
-          if (parsed.function.parameters?.properties?.command) {
-            parsed.function.parameters.properties.command.description =
-              "Command string to run in Command Prompt (e.g. 'cargo check', 'dir').";
-          }
-        } else {
-          parsed.function.description =
-            'Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.';
-          if (parsed.function.parameters?.properties?.command) {
-            parsed.function.parameters.properties.command.description =
-              "Command string to run in Git Bash (e.g. 'cargo check', 'git status').";
-          }
-        }
-        const formatted = JSON.stringify(parsed, null, 2);
-        setJsonText(formatted);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.function) {
+        const updated = applyShellToExecuteCommandSchema(parsed as Record<string, unknown>, newShell);
+        setJsonText(JSON.stringify(updated, null, 2));
         if (isCustomized) {
-          setToolCustomSchema('execute_command', parsed);
+          setToolCustomSchema('execute_command', updated);
         }
       }
     } catch {
@@ -167,7 +94,12 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
         setParseError('JSON должен быть объектом { "type": "function", "function": { ... } }');
         return;
       }
-      setToolCustomSchema(tool.id, parsed);
+      const normalized = normalizeStoredToolSchema(parsed, defaultSchema);
+      if (stableSchemaEqual(normalized, defaultSchema)) {
+        resetToolCustomSchema(tool.id);
+      } else {
+        setToolCustomSchema(tool.id, parsed);
+      }
       setParseError(null);
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2000);

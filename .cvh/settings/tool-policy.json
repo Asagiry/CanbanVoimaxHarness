@@ -215,58 +215,5 @@
     }
   },
   "toolDescriptions": {},
-  "toolCustomSchemas": {
-    "advance_task": {
-      "function": {
-        "aliases": [
-          "move_task",
-          "move_task_stage",
-          "advance_stage",
-          "next_stage"
-        ],
-        "description": "Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). CRITICAL: All TODO items must be fully completed before calling. Requires comprehensive summary of completed work and verification proof.",
-        "name": "advance_task",
-        "parameters": {
-          "properties": {
-            "stage_id": {
-              "description": "Target pipeline stage ID (e.g. 'review', 'retro', 'ready'). Defaults to sequential next stage.",
-              "type": "string"
-            },
-            "summary": {
-              "description": "Comprehensive summary of modifications, sensor results, and verification proof.",
-              "type": "string"
-            }
-          },
-          "type": "object"
-        }
-      },
-      "type": "function"
-    },
-    "execute_command": {
-      "function": {
-        "aliases": [
-          "bash"
-        ],
-        "description": "Execute a shell command inside the isolated worktree via Git Bash with piped stdout/stderr.",
-        "name": "execute_command",
-        "parameters": {
-          "properties": {
-            "command": {
-              "description": "Command string to run in Git Bash (e.g. 'cargo check', 'git status').",
-              "type": "string"
-            },
-            "timeout_seconds": {
-              "description": "Execution timeout in seconds (default: 60).",
-              "type": "integer"
-            }
-          },
-          "required": [
-            "command"
-          ],
-          "type": "object"
-        }
-      },
-      "type": "function"
-    }
-  }
+  "toolCustomSchemas": {}
 }
