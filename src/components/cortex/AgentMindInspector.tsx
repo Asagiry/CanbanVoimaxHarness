@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -11,6 +11,7 @@ import {
   Plus,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
+import type { ExpandAllSignal } from './types';
 import AgentIcon from '../common/AgentIcon';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 import { useTranslation } from '../../stores/languageStore';
@@ -24,6 +25,7 @@ export interface AgentMindInspectorProps {
   stage: CortexAgentStage;
   isFocused?: boolean;
   isSearching?: boolean;
+  expandAllSignal?: ExpandAllSignal;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
@@ -39,6 +41,7 @@ export function AgentMindInspector({
   stage,
   isFocused = false,
   isSearching = false,
+  expandAllSignal,
   onContextMenu,
 }: AgentMindInspectorProps) {
   const { t } = useTranslation();
@@ -55,6 +58,12 @@ export function AgentMindInspector({
 
   const [isRulesOpen, setIsRulesOpen] = useState(true);
   const [isCreatingRule, setIsCreatingRule] = useState(false);
+
+  useEffect(() => {
+    if (expandAllSignal && expandAllSignal.nonce > 0) {
+      setIsRulesOpen(expandAllSignal.expanded);
+    }
+  }, [expandAllSignal]);
 
   const personaFile = stage.files.find((f) => f.type === 'persona');
   const ruleFiles = stage.files.filter((f) => f.type === 'rule');

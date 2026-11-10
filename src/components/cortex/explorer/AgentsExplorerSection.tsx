@@ -5,6 +5,7 @@ import { useCortexStore } from '../../../stores/cortexStore';
 import { isAgentDirty } from '../../../stores/cortex/cortexGitSave';
 import AgentMindInspector from '../AgentMindInspector';
 import DirtyDot from '../DirtyDot';
+import type { ExpandAllSignal } from '../types';
 
 export interface AgentsExplorerSectionProps {
   stages: CortexAgentStage[];
@@ -12,6 +13,7 @@ export interface AgentsExplorerSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   isSearching: boolean;
+  expandAllSignal?: ExpandAllSignal;
   onCreateAgent: () => void;
   onAgentContextMenu: (e: React.MouseEvent, stage: CortexAgentStage) => void;
 }
@@ -25,6 +27,7 @@ export function AgentsExplorerSection({
   isOpen,
   onToggle,
   isSearching,
+  expandAllSignal,
   onCreateAgent,
   onAgentContextMenu,
 }: AgentsExplorerSectionProps) {
@@ -100,6 +103,7 @@ export function AgentsExplorerSection({
               stage={stage}
               isFocused={focusedStageId === stage.stageId}
               isSearching={isSearching}
+              expandAllSignal={expandAllSignal}
               onContextMenu={(e) => onAgentContextMenu(e, stage)}
             />
           ))}

@@ -112,6 +112,7 @@ export interface CortexFilesState {
 export interface CortexFilesActions {
   toggleStageExpand: (stageId: string) => void;
   expandStage: (stageId: string) => void;
+  setAllStagesExpanded: (expanded: boolean) => void;
   focusStage: (stageId: string) => void;
   syncStagesFromStages?: (stages: PipelineStage[]) => void;
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;

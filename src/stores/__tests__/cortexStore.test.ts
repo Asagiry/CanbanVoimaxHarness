@@ -848,5 +848,25 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       await useCortexStore.getState().saveCvhToGit();
       expect(useCortexStore.getState().pendingColumnChanges).toEqual({});
     });
+
+    it('setAllStagesExpanded expands and collapses all stages and agentStages uniformly', () => {
+      useCortexStore.setState({
+        stages: [
+          { stageId: 'backlog', stageTitle: 'Backlog', color: '#64748b', icon: 'Inbox', personaName: 'system', isExpanded: false, files: [] },
+          { stageId: 'dev', stageTitle: 'Dev', color: '#6366f1', icon: 'Bot', personaName: 'cvh-dev', isExpanded: true, files: [] },
+        ],
+        agentStages: [
+          { stageId: 'agent:planner', stageTitle: 'planner', color: '#3b82f6', icon: 'Compass', personaName: 'planner', isExpanded: false, files: [] },
+        ],
+      });
+
+      useCortexStore.getState().setAllStagesExpanded(true);
+      expect(useCortexStore.getState().stages.every((s) => s.isExpanded)).toBe(true);
+      expect(useCortexStore.getState().agentStages.every((s) => s.isExpanded)).toBe(true);
+
+      useCortexStore.getState().setAllStagesExpanded(false);
+      expect(useCortexStore.getState().stages.every((s) => !s.isExpanded)).toBe(true);
+      expect(useCortexStore.getState().agentStages.every((s) => !s.isExpanded)).toBe(true);
+    });
   });
 });

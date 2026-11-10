@@ -510,6 +510,8 @@ export const ru = {
 
   // Cortex Explorer
   'cortex.title': 'Проводник разума агента',
+  'cortex.expandAllTitle': 'Развернуть все разделы и папки',
+  'cortex.collapseAllTitle': 'Свернуть все разделы и папки',
   'cortex.refreshAgents': 'Обновить агентов',
   'cortex.searchPlaceholder': 'Поиск колонок, агентов, файлов...',
   'cortex.columnsSection': 'Колонки',

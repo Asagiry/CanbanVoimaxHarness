@@ -1,5 +1,10 @@
 import type { CortexAgentFile, CortexAgentStage, CortexHookMoment } from '../../types';
 
+export interface ExpandAllSignal {
+  expanded: boolean;
+  nonce: number;
+}
+
 export function hookMomentOf(fileOrName: CortexAgentFile | string | null | undefined): CortexHookMoment | null {
   if (!fileOrName) return null;
 

@@ -82,6 +82,13 @@ export const createCortexSlice: StateCreator<
     }));
   },
 
+  setAllStagesExpanded: (expanded) => {
+    set((state) => ({
+      stages: state.stages.map((st) => ({ ...st, isExpanded: expanded })),
+      agentStages: state.agentStages.map((st) => ({ ...st, isExpanded: expanded })),
+    }));
+  },
+
   focusStage: (stageId) => {
     set((state) => ({
       focusedStageId: stageId,

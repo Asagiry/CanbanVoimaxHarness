@@ -3,8 +3,9 @@ import { useCortexStore } from '../../stores/cortexStore';
 import type { AgentPersonaInfo } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { Search, RotateCw } from 'lucide-react';
+import { Search, RotateCw, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import type { CortexAgentStage } from '../../types';
+import type { ExpandAllSignal } from './types';
 import GlobalRulesSection from './GlobalRulesSection';
 import EditAgentPersonaModal from './EditAgentPersonaModal';
 import CreateAgentModal from './CreateAgentModal';
@@ -29,6 +30,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
     agentPersonas,
     globalRules,
     expandStage,
+    setAllStagesExpanded,
     focusStage,
     openFile,
     loadAgentPersonas,
@@ -51,6 +53,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
     agents: true,
     globalRules: true,
   });
+  const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>({ expanded: true, nonce: 0 });
   const [isRefreshingPersonas, setIsRefreshingPersonas] = useState(false);
   const [isCreateAgentOpen, setIsCreateAgentOpen] = useState(false);
   const [agentContextMenu, setAgentContextMenu] = useState<AgentContextMenuState | null>(null);
@@ -170,6 +173,18 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleExpandAll = () => {
+    setOpenSections({ columns: true, agents: true, globalRules: true });
+    setAllStagesExpanded(true);
+    setExpandAllSignal((prev) => ({ expanded: true, nonce: prev.nonce + 1 }));
+  };
+
+  const handleCollapseAll = () => {
+    setOpenSections({ columns: false, agents: false, globalRules: false });
+    setAllStagesExpanded(false);
+    setExpandAllSignal((prev) => ({ expanded: false, nonce: prev.nonce + 1 }));
+  };
+
   const normalizedQuery = filterQuery.trim().toLowerCase();
   const isSearching = normalizedQuery.length > 0;
 
@@ -182,16 +197,38 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
       className={`w-64 shrink-0 my-1.5 ml-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs bg-[#f9f9f9] dark:bg-[#111114] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none text-[#171717] dark:text-[#f4f4f5] transition-colors ${className}`}
     >
       {/* Sidebar Header */}
-      <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] flex items-center justify-between transition-colors">
-        <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5]">
+      <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] flex items-center justify-between gap-2 transition-colors">
+        <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] min-w-0 truncate">
           {t('cortex.title')}
         </span>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center border border-[#ebebeb] dark:border-[#2c2c33] rounded bg-white dark:bg-[#17171b]">
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              aria-label={t('cortex.expandAllTitle')}
+              title={t('cortex.expandAllTitle')}
+              className="p-1 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
+            >
+              <ChevronsUpDown className="h-3 w-3" />
+            </button>
+            <div className="w-px h-3 bg-[#ebebeb] dark:bg-[#2c2c33]" />
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              aria-label={t('cortex.collapseAllTitle')}
+              title={t('cortex.collapseAllTitle')}
+              className="p-1 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
+            >
+              <ChevronsDownUp className="h-3 w-3" />
+            </button>
+          </div>
           <CvhSaveButton />
           <button
             type="button"
             onClick={handleRefreshPersonas}
             aria-label={t('cortex.refreshAgents')}
+            title={t('cortex.refreshAgents')}
             className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#232328] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
           >
             <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
@@ -223,6 +260,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           isOpen={openSections.columns}
           onToggle={() => toggleSection('columns')}
           isSearching={isSearching}
+          expandAllSignal={expandAllSignal}
         />
 
         <AgentsExplorerSection
@@ -231,6 +269,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           isOpen={openSections.agents}
           onToggle={() => toggleSection('agents')}
           isSearching={isSearching}
+          expandAllSignal={expandAllSignal}
           onCreateAgent={() => setIsCreateAgentOpen(true)}
           onAgentContextMenu={handleAgentContextMenu}
         />
@@ -241,6 +280,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           isOpen={openSections.globalRules}
           onToggle={() => toggleSection('globalRules')}
           isSearching={isSearching}
+          expandAllSignal={expandAllSignal}
         />
       </div>
 

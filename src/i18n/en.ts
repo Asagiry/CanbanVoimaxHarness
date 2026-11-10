@@ -508,6 +508,8 @@ export const en = {
 
   // Cortex Explorer
   'cortex.title': 'Agent Mind Explorer',
+  'cortex.expandAllTitle': 'Expand all sections and folders',
+  'cortex.collapseAllTitle': 'Collapse all sections and folders',
   'cortex.refreshAgents': 'Refresh agents',
   'cortex.searchPlaceholder': 'Search columns, agents, files...',
   'cortex.columnsSection': 'Columns',

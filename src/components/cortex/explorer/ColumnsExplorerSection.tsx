@@ -4,7 +4,7 @@ import { useTranslation } from '../../../stores/languageStore';
 import { useCortexStore } from '../../../stores/cortexStore';
 import { useBoardStore } from '../../../stores/boardStore';
 import { isColumnDirty } from '../../../stores/cortex/cortexGitSave';
-import { isBacklogSystemStage } from '../types';
+import { isBacklogSystemStage, type ExpandAllSignal } from '../types';
 import ColumnStageCard from '../ColumnStageCard';
 import DirtyDot from '../DirtyDot';
 
@@ -14,6 +14,7 @@ export interface ColumnsExplorerSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   isSearching: boolean;
+  expandAllSignal?: ExpandAllSignal;
 }
 
 /**
@@ -25,6 +26,7 @@ export function ColumnsExplorerSection({
   isOpen,
   onToggle,
   isSearching,
+  expandAllSignal,
 }: ColumnsExplorerSectionProps) {
   const { t } = useTranslation();
   const allStages = useCortexStore((s) => s.stages);
@@ -101,6 +103,7 @@ export function ColumnsExplorerSection({
                 isBacklogSystem={backlog}
                 isFocused={focusedStageId === stage.stageId}
                 isSearching={isSearching}
+                expandAllSignal={expandAllSignal}
               />
             );
           })}

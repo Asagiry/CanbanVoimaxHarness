@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -21,7 +21,7 @@ import {
   resolveStageColor,
   resolveStageIcon,
 } from '../../lib/agentPalette';
-import { hookMomentOf, savePipelineConfig } from './types';
+import { hookMomentOf, savePipelineConfig, type ExpandAllSignal } from './types';
 import NewCortexFileForm from './NewCortexFileForm';
 import DirtyDot from './DirtyDot';
 import { isColumnDirty, isFileDirty } from '../../stores/cortex/cortexGitSave';
@@ -32,6 +32,7 @@ export interface ColumnStageCardProps {
   isBacklogSystem?: boolean;
   isFocused?: boolean;
   isSearching?: boolean;
+  expandAllSignal?: ExpandAllSignal;
 }
 
 /**
@@ -47,6 +48,7 @@ export function ColumnStageCard({
   isBacklogSystem = false,
   isFocused = false,
   isSearching = false,
+  expandAllSignal,
 }: ColumnStageCardProps) {
   const { t } = useTranslation();
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
@@ -68,6 +70,12 @@ export function ColumnStageCard({
 
   const [isHooksOpen, setIsHooksOpen] = useState(true);
   const [isCreatingHook, setIsCreatingHook] = useState(false);
+
+  useEffect(() => {
+    if (expandAllSignal && expandAllSignal.nonce > 0) {
+      setIsHooksOpen(expandAllSignal.expanded);
+    }
+  }, [expandAllSignal]);
   const [agentSaving, setAgentSaving] = useState(false);
   const [agentSaveError, setAgentSaveError] = useState<string | null>(null);
 

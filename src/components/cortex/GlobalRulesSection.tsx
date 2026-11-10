@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Folder, FolderOpen, Globe, Plus, Trash2, RotateCcw } from 'lucide-react';
 import type { CortexAgentFile } from '../../types';
+import type { ExpandAllSignal } from './types';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
@@ -13,6 +14,7 @@ export interface GlobalRulesSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   isSearching: boolean;
+  expandAllSignal?: ExpandAllSignal;
 }
 
 /**
@@ -27,6 +29,7 @@ export function GlobalRulesSection({
   isOpen,
   onToggle,
   isSearching,
+  expandAllSignal,
 }: GlobalRulesSectionProps) {
   const { t } = useTranslation();
   const activeFile = useCortexStore((s) => s.activeFile);
@@ -48,6 +51,15 @@ export function GlobalRulesSection({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!expandAllSignal || expandAllSignal.nonce === 0) return;
+    const next: Record<string, boolean> = {};
+    for (const r of allGlobalRules) {
+      if (r.folder) next[r.folder] = expandAllSignal.expanded;
+    }
+    setOpenFolders(next);
+  }, [expandAllSignal, allGlobalRules]);
 
   const handleStartCreate = (e: React.MouseEvent, folder?: string) => {
     e.stopPropagation();
