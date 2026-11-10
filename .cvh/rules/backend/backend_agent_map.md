@@ -11,7 +11,8 @@ Agent orchestration assembles prompts and dispatches tools. The ReAct engine coo
 | `src-tauri/src/agent/types.rs` | Agent types (`AgentSessionDriver`, `TurnOutcome`, `ToolContext`, etc.). |
 | `src-tauri/src/agent/engine.rs` | Core agent execution loop and turn driver. |
 | `src-tauri/src/agent/engine_context.rs` | In-memory conversation state assembly and context pruning. |
-| `src-tauri/src/agent/engine_tools.rs` | Tool execution dispatch within the agent loop. |
+| `src-tauri/src/agent/engine_tools.rs` | Tool execution orchestration and spill wrapping within the agent loop. |
+| `src-tauri/src/agent/tool_dispatch.rs` | Policy enforcement and canonical tool call routing to executors. |
 | `src-tauri/src/agent/prompts.rs` | System prompt assembly, persona injection, and rule compilation. |
 | `src-tauri/src/agent/spill.rs` | Output spill threshold management (>500 lines / >64KB to `.cvh/spill/`). |
 | `src-tauri/src/agent/command_runner.rs` | Subprocess execution with timeout, CP866 fallback, and stdio pipes. |
