@@ -235,7 +235,7 @@ use std::path::PathBuf;
             .expect("read setting");
         let parsed_setting: crate::config::AgentSetting =
             serde_json::from_str(&setting).expect("parse setting");
-        assert_eq!(parsed_setting.model.as_deref(), Some("gemini-3.8-flash-high"));
+        assert_eq!(parsed_setting.model, None);
         assert_eq!(parsed_setting.context_window, Some(200000));
         assert_eq!(parsed_setting.temperature, Some(0.2));
         assert_eq!(parsed_setting.max_tokens, Some(8192));

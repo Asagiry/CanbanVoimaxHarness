@@ -26,7 +26,7 @@ pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
 /// 2. Stage persona agent settings (`agent_setting.model`)
 /// 3. Column model override (`col.model_override`)
 /// 4. Project default model (`proj_cfg.default_model`)
-/// 5. Hardcoded fallback ("crouton-alpha-free")
+/// 5. First configured model from provider catalogs (or empty when none configured)
 pub async fn resolve_task_active_agent_model(
     root: &Path,
     task: Option<&Task>,
@@ -75,16 +75,22 @@ pub async fn resolve_task_active_agent_model(
     let candidate = agent_model
         .or(col_override)
         .or(proj_default)
-        .unwrap_or_else(|| "crouton-alpha-free".to_string());
+        .unwrap_or_default();
 
     if !llm_settings.providers.is_empty() {
-        let in_any = llm_settings.providers.iter().any(|p| p.models.iter().any(|m| m.id == candidate));
+        let in_any = !candidate.is_empty()
+            && llm_settings
+                .providers
+                .iter()
+                .any(|p| p.models.iter().any(|m| m.id == candidate));
         if !in_any {
             if let Some(first) = llm_settings.providers.iter().flat_map(|p| p.models.iter()).next() {
-                eprintln!(
-                    "CVH [resolve_model]: model '{}' not in any provider catalog, using '{}'",
-                    candidate, first.id
-                );
+                if !candidate.is_empty() {
+                    eprintln!(
+                        "CVH [resolve_model]: model '{}' not in any provider catalog, using '{}'",
+                        candidate, first.id
+                    );
+                }
                 return first.id.clone();
             }
         }

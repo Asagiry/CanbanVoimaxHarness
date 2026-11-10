@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::config::models::normalize_tool_name;
 
 pub const DEFAULT_AGENT_SETTING_JSON: &str = r##"{
-  "model": "gemini-3.8-flash-high",
+  "model": null,
   "context_window": 200000,
   "temperature": 0.2,
   "max_tokens": 8192,

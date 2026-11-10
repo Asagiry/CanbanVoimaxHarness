@@ -1424,8 +1424,16 @@ use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_advance_propagates_on_enter_hook_states_to_new_subtask() {
-        let base = PathBuf::from("target").join(format!("cvh_hook_prop_{}", uuid::Uuid::new_v4()));
+        let base = std::env::temp_dir().join(format!("cvh_hook_prop_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let hooks_dir = base.join(".cvh").join("hooks");
+        tokio::fs::create_dir_all(&hooks_dir).await.expect("hooks dir");
+        #[cfg(windows)]
+        let (hook_rel, hook_body) = (".cvh/hooks/on_review.bat", "@echo off\r\nexit /b 0\r\n");
+        #[cfg(not(windows))]
+        let (hook_rel, hook_body) = (".cvh/hooks/on_review.sh", "#!/bin/sh\nexit 0\n");
+        tokio::fs::write(base.join(hook_rel), hook_body).await.expect("write hook");
 
         let mut review_col = crate::config::PipelineColumn {
             id: "review".to_string(),
@@ -1445,7 +1453,7 @@ use std::path::PathBuf;
             terminal: None,
             is_intake: None,
         };
-        review_col.hooks.insert("on_enter".to_string(), "builtin:create_worktree".into());
+        review_col.hooks.insert("on_enter".to_string(), hook_rel.into());
 
         let cols = vec![
             crate::config::PipelineColumn {

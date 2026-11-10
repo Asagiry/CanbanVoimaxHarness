@@ -134,7 +134,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
             "version": "0.1.0",
             "description": format!("CanbanVoimaxHarness Workspace for {}", project_name),
             "activePipeline": "default-engineering",
-            "defaultModel": "crouton-alpha-free",
+            "defaultModel": null,
             "apiBaseUrl": "https://opencode.ai/inference/go/openai/v1"
         });
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;

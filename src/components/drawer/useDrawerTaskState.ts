@@ -54,11 +54,11 @@ export function useDrawerTaskState(activeTaskId: string | null) {
     useShallow((s) => (rootTaskId ? s.tasks.filter((t) => t.parentId === rootTaskId) : []))
   );
 
-  const effectiveModel = settings.model || 'crouton-alpha-free';
+  const effectiveModel = settings.model || '';
   const selectableModels = useMemo(() => {
-    const seen = new Set<string>([effectiveModel]);
+    const seen = new Set<string>(effectiveModel ? [effectiveModel] : []);
     const catalogIds = providers.flatMap((p) => p.models.map((m) => m.id));
-    const fallback = catalogIds.length > 0 ? catalogIds : [settings.model || 'crouton-alpha-free'];
+    const fallback = catalogIds.length > 0 ? catalogIds : (settings.model ? [settings.model] : []);
     for (const id of fallback) {
       if (id) seen.add(id);
     }

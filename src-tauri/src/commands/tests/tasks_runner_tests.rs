@@ -49,17 +49,17 @@ use std::path::PathBuf;
         };
 
         // task.model and global llm model are intentionally ignored —
-        // per-agent setting is source of truth, otherwise fallback.
+        // per-agent setting is source of truth, otherwise empty ("none") when unconfigured.
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(resolved, "crouton-alpha-free");
+        assert_eq!(resolved, "");
 
         task.model = None;
         let fallback_global = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(fallback_global, "crouton-alpha-free");
+        assert_eq!(fallback_global, "");
 
         task.model = Some("   ".to_string());
         let fallback_whitespace = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(fallback_whitespace, "crouton-alpha-free");
+        assert_eq!(fallback_whitespace, "");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -154,11 +154,11 @@ use std::path::PathBuf;
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
         assert_eq!(resolved, "beam-free");
         // Without a provider option (legacy stale row) the pair is ignored:
-        // the default fallback path applies instead.
+        // resolution picks the first model from configured provider catalogs.
         task.provider_id = None;
-        task.model = Some("gemini-3.8-flash-high".to_string());
+        task.model = Some("legacy-deleted-model".to_string());
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
-        assert_eq!(resolved, "crouton-alpha-free");
+        assert_eq!(resolved, "gemini-3.8-flash-high");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

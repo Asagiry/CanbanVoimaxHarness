@@ -454,11 +454,11 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
         isExpanded: true,
         files: [
           {
-            id: 'hook-worktree',
-            name: 'create_worktree',
+            id: 'hook-enter',
+            name: 'on_enter',
             stageId: 'backlog',
             type: 'hook' as const,
-            path: 'builtin:create_worktree',
+            path: 'builtin:on_enter',
             content: '',
             isDirty: false,
           },
@@ -467,10 +467,10 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
 
       useCortexStore.setState({ stages: [builtinStage] });
 
-      await useCortexStore.getState().openFile('hook-worktree');
+      await useCortexStore.getState().openFile('hook-enter');
 
       const active = useCortexStore.getState().activeFile;
-      expect(active?.id).toBe('hook-worktree');
+      expect(active?.id).toBe('hook-enter');
       expect(active?.content).toContain('Встроенный хук');
       expect(useCortexStore.getState().isEditorOpen).toBe(true);
     });

@@ -154,35 +154,6 @@ export function extractScriptPath(cmd: string): string | null {
 
 // Генерация подробного описания и псевдокода для встроенного хука
 export function buildBuiltinHookDescription(path: string, moment: string, stageTitle: string): string {
-  if (path === 'builtin:create_worktree' || path.startsWith('builtin:create_worktree')) {
-    return `# Встроенный хук: create_worktree (${moment})
-
-Выполняется автоматически при перемещении задачи в колонку ${stageTitle || 'Backlog'}.
-
-## Логика работы:
-1. Создает изолированный git worktree по пути worktrees/<task-id>.
-2. Создает и переключает ветку feat/<task-id> от main.
-3. Синхронизирует актуальное состояние проекта и .cvh/ в изолированный каталог.
-4. Изолирует правки агента от основной ветки.
-
-## Переменные окружения:
-- CVH_TASK_ID, CVH_TASK_TITLE, CVH_WORKTREE_PATH, CVH_BRANCH, CVH_STAGE_ID.
-
-## Псевдокод выполнения:
-\`\`\`bash
-# 1. Определение целевого пути и имени ветки
-WORKTREE_DIR="worktrees/\${CVH_TASK_ID}"
-BRANCH_NAME="feat/\${CVH_TASK_ID}"
-
-# 2. Создание изолированной ветки и worktree от main
-git branch "\${BRANCH_NAME}" main
-git worktree add "\${WORKTREE_DIR}" "\${BRANCH_NAME}"
-
-# 3. Синхронизация актуальной конфигурации harness
-cp -r .cvh/ "\${WORKTREE_DIR}/.cvh/"
-\`\`\``;
-  }
-
   const hookName = path.replace(/^builtin:/, '');
   return `# Встроенный хук: ${hookName} (${moment})
 

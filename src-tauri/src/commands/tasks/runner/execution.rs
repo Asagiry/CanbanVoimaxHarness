@@ -249,6 +249,9 @@ pub(crate) async fn run_agent_inner(
 
     let llm_settings = load_llm_settings(&root).await.unwrap_or_default();
     let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
+    if model.trim().is_empty() {
+        return Err("Модель не выбрана: укажите модель в карточке задачи, настройках агента или Settings → Providers".to_string());
+    }
 
     let base_url = llm_settings
         .providers

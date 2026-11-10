@@ -10,7 +10,7 @@ All agent definitions reside in dedicated directories under `.cvh/agents/<role>/
 ```text
 .cvh/agents/<role>/
 ├── persona.md       # Primary persona prompt with YAML frontmatter
-├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "temperature": 0.2, ... })
+├── setting          # JSON settings ({ "model": null, "temperature": 0.2, ... })
 └── rules/           # Role-specific modular rules
     ├── rule1.md
     └── ...
@@ -25,7 +25,7 @@ All agent definitions reside in dedicated directories under `.cvh/agents/<role>/
 Each agent directory `.cvh/agents/<role>/setting` contains JSON configuration without extension:
 ```json
 {
-  "model": "gemini-3.8-flash-high",
+  "model": null,
   "temperature": 0.2,
   "context_window": 200000,
   "max_tokens": 8192,

@@ -24,7 +24,7 @@
   "context_window": 200000,
   "icon": "Cpu",
   "maxTokens": 8192,
-  "model": "crouton-alpha-free",
+  "model": null,
   "reasoningEffort": "medium",
   "temperature": 0.2
 }

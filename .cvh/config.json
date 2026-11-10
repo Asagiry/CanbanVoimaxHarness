@@ -1,6 +1,6 @@
 {
   "apiBaseUrl": "https://opencode.ai/inference/go/openai/v1",
-  "defaultModel": "crouton-alpha-free",
+  "defaultModel": null,
   "description": "CanbanVoimaxHarness Workspace for CanbanVoimaxHarness",
   "name": "CanbanVoimaxHarness",
   "version": "0.1.0"

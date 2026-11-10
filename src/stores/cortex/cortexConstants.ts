@@ -32,7 +32,7 @@ export const DEFAULT_CORTEX_STAGES: CortexAgentStage[] = [
         stageId: 'dev',
         type: 'settings',
         path: '.cvh/agents/cvh-dev/setting',
-        content: '{\n  "model": "gemini-3.8-flash-high",\n  "context_window": 200000,\n  "max_tokens": 8192\n}',
+        content: '{\n  "model": null,\n  "context_window": 200000,\n  "max_tokens": 8192\n}',
       },
       {
         id: 'dev-rule-tools',

@@ -326,7 +326,7 @@ fn default_llm_base_url() -> String {
 }
 
 fn default_llm_model() -> String {
-    "crouton-alpha-free".to_string()
+    String::new()
 }
 
 fn default_compactor_model() -> String {

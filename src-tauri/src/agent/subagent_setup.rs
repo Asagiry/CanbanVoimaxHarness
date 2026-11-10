@@ -186,7 +186,13 @@ pub async fn prepare_subagent_execution(
             if !m.is_empty() {
                 m.to_string()
             } else {
-                "crouton-alpha-free".to_string()
+                global_settings
+                    .providers
+                    .iter()
+                    .flat_map(|p| p.models.iter())
+                    .next()
+                    .map(|m| m.id.clone())
+                    .unwrap_or_default()
             }
         }
     };

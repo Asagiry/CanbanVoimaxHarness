@@ -353,7 +353,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
     let setting_path = role_dir.join("setting");
     if !setting_path.exists() {
         let setting_obj = serde_json::json!({
-            "model": "gemini-3.8-flash-high",
+            "model": serde_json::Value::Null,
             "context_window": 200000,
             "temperature": 0.2,
             "max_tokens": 8192,

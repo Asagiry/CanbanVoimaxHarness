@@ -11,7 +11,6 @@ use crate::config::{load_boards_config, resolve_actual_repo_root};
 use crate::hooks::{execute_hook, HookContext};
 use crate::commands::healing::stage_id_matches;
 use crate::commands::tasks::storage::{load_tasks_from_disk, resolve_or_allocate_task_id, save_tasks_to_disk};
-use crate::commands::tasks::transitions::ensure_task_worktree;
 use super::hook_records::record_task_hook_result;
 
 #[allow(clippy::too_many_arguments)]
@@ -109,7 +108,6 @@ pub async fn internal_create_task(
         .filter_map(|t| t.position)
         .fold(0.0f64, f64::max);
 
-    let is_intake_stage = stage_id_matches(&stage_id, "backlog");
     let mut new_task = Task {
         id: task_id.clone(),
         title: title.clone(),
@@ -146,12 +144,6 @@ pub async fn internal_create_task(
         total_elapsed: None,
     };
 
-    // Auto-allocate worktree immediately on task creation if not explicitly skipped
-    let skip_wt = skip_worktree.unwrap_or(false);
-    if !skip_wt {
-        let _ = ensure_task_worktree(root, &mut new_task).await;
-    }
-
     // Persist immediately to SQLite so hooks or subsequent transitions find the task
     let _ = crate::db::db_upsert_task(root, &new_task);
 
@@ -172,70 +164,19 @@ pub async fn internal_create_task(
         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
     }
 
-    // Run on_enter hook for the creation column (e.g. backlog creation hook) if configured
-    if !skip_wt {
-        let boards_cfg = load_boards_config(root).await.ok();
-        let col_opt = if let Some(ref bc) = boards_cfg {
-            bc.boards
-                .iter()
-                .find(|b| b.id == effective_board_id)
-                .and_then(|b| b.stages.iter().find(|c| stage_id_matches(&c.id, &stage_id)).cloned())
-        } else {
-            None
-        };
+    // Run custom on_enter hook for the creation column if configured
+    let boards_cfg = load_boards_config(root).await.ok();
+    let col_opt = if let Some(ref bc) = boards_cfg {
+        bc.boards
+            .iter()
+            .find(|b| b.id == effective_board_id)
+            .and_then(|b| b.stages.iter().find(|c| stage_id_matches(&c.id, &stage_id)).cloned())
+    } else {
+        None
+    };
 
-        if let Some(col) = col_opt {
-            let is_builtin = col.hooks.get("on_enter").map(|cfg| {
-                let s = cfg.script();
-                s == "builtin:create_worktree" || s.starts_with("builtin:create_worktree")
-            }).unwrap_or(false);
-
-            if is_builtin || is_intake_stage {
-                let wt_empty = new_task.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true);
-                if wt_empty {
-                    if let Some(app) = app_handle {
-                        let _ = app.emit("hook:start", serde_json::json!({
-                            "taskId": task_id,
-                            "stageId": stage_id,
-                            "hookType": "on_enter",
-                            "hookName": "builtin:create_worktree",
-                            "description": "Allocate isolated git worktree",
-                        }));
-                    }
-                    let started_at = chrono::Utc::now().timestamp_millis();
-                    let wt_res = ensure_task_worktree(root, &mut new_task).await;
-                    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at).max(0) as u64;
-                    let success = wt_res.is_ok();
-                    let wt_stdout = new_task.worktree_path.clone().unwrap_or_default();
-                    let wt_stderr = if let Err(ref e) = wt_res { e.clone() } else { String::new() };
-                    record_task_hook_result(
-                        &mut new_task,
-                        &stage_id,
-                        "on_enter",
-                        "builtin:create_worktree",
-                        started_at,
-                        duration_ms,
-                        success,
-                        if success { Some(0) } else { Some(1) },
-                        &wt_stdout,
-                        &wt_stderr,
-                        if !wt_stderr.is_empty() { Some(&wt_stderr) } else { None },
-                    );
-                    if let Some(app) = app_handle {
-                        let _ = app.emit("hook:finish", serde_json::json!({
-                            "taskId": task_id,
-                            "stageId": stage_id,
-                            "hookType": "on_enter",
-                            "success": success,
-                            "exitCode": if success { Some(0) } else { Some(1) },
-                            "stdout": new_task.worktree_path.as_deref().unwrap_or(""),
-                            "stderr": if let Err(ref e) = wt_res { e.as_str() } else { "" },
-                        }));
-                    }
-                }
-            }
-            if !is_builtin {
-                if let Some(hook_cfg) = col.hooks.get("on_enter").cloned() {
+    if let Some(col) = col_opt {
+        if let Some(hook_cfg) = col.hooks.get("on_enter").cloned() {
                 let hook_rel = hook_cfg.script().to_string();
                 let hook_desc = hook_cfg.description().map(str::to_string);
                 let hook_path = crate::config::resolve_hook_path(
@@ -383,12 +324,10 @@ pub async fn internal_create_task(
                         }
                     }
                 }
-            }
-            }
         }
     }
 
-    // After worktree creation and hooks, update worktree_path and branch fields.
+    // After hooks, update worktree_path and branch fields.
     // If the task was moved or modified concurrently, preserve its latest stage_id and status.
     let mut updated_tasks = load_tasks_from_disk(root).await;
     if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {

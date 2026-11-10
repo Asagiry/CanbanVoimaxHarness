@@ -4,7 +4,6 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::Task;
 use crate::commands::state::AppState;
-use crate::git::create_worktree;
 use crate::commands::healing::task_id_matches;
 
 /// Upserts a single mutated task into SQLite (ensuring `project_path` is set) without
@@ -52,53 +51,6 @@ pub fn format_handover_steer_prompt(summary: &str) -> String {
         "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
         summary
     )
-}
-
-/// Allocates an isolated git worktree for a task if not already provisioned (§ 3.1 & § 3.2).
-pub async fn ensure_task_worktree(root: &Path, task: &mut Task) -> Result<(), String> {
-    if task.skip_worktree.unwrap_or(false) {
-        return Ok(());
-    }
-    if let Some(ref wt) = task.worktree_path {
-        let trimmed = wt.trim();
-        if !trimmed.is_empty() {
-            let p = Path::new(trimmed);
-            let abs_p = if p.is_absolute() { p.to_path_buf() } else { root.join(p) };
-            if abs_p.exists() {
-                return Ok(());
-            }
-        }
-    }
-    let slug = task.id.to_lowercase();
-    match create_worktree(root, &slug, "HEAD").await {
-        Ok(wt_abs) => {
-            let rel = wt_abs.strip_prefix(root).unwrap_or(&wt_abs);
-            let rel_str = rel.to_string_lossy().replace('\\', "/");
-            task.worktree_path = Some(rel_str);
-            if task.branch.as_deref().map(|b| b.trim().is_empty()).unwrap_or(true) {
-                task.branch = Some(format!("feat/{}", slug));
-            }
-            crate::logger::cvh_log(
-                Some(root),
-                "INFO",
-                "WORKTREE",
-                &format!(
-                    "Allocated worktree {:?} on branch {:?} for task '{}'",
-                    task.worktree_path, task.branch, task.id
-                ),
-            );
-            Ok(())
-        }
-        Err(e) => {
-            crate::logger::cvh_log(
-                Some(root),
-                "WARN",
-                "WORKTREE",
-                &format!("Failed to allocate worktree for task '{}': {}", task.id, e),
-            );
-            Ok(())
-        }
-    }
 }
 
 /// Fallback: auto-completes any unfinished task todos (status != 'completed')

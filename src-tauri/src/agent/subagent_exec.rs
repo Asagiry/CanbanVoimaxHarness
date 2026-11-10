@@ -47,6 +47,9 @@ pub fn run_inprocess_subagent(
         let subagent_setting = prep.subagent_setting;
         let mut sub_messages = prep.sub_messages;
         let mut resolved_model = prep.resolved_model;
+        if resolved_model.trim().is_empty() {
+            return Err(anyhow::anyhow!("Модель не выбрана: укажите модель в настройках задачи, персоны или Settings → Providers"));
+        }
         let mut base_url = prep.base_url;
         let mut api_key = prep.api_key;
         let mut reasoning_effort = prep.reasoning_effort;

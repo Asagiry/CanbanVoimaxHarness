@@ -57,7 +57,7 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
   gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
   baseUrl: 'https://opencode.ai/inference/go/openai/v1',
   apiKey: '',
-  model: 'crouton-alpha-free',
+  model: '',
   compactorModel: 'inherit',
 };
 
@@ -135,7 +135,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
   settings: { ...DEFAULT_SETTINGS, providers: DEFAULT_PROVIDERS.providers },
   notificationSettings: loadStoredNotificationSettings(),
-  availableModels: ['gemini-3.8-flash-high'],
+  availableModels: [],
   providers: DEFAULT_PROVIDERS.providers,
   isSaving: false,
   saveStatus: 'idle',
