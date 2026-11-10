@@ -7,7 +7,11 @@ Cortex inspects and edits agent personas (`.cvh/agents/<role>/persona.md`), role
 
 | File | Responsibility |
 | --- | --- |
-| `src/components/cortex/CortexExplorer.tsx` | File navigation tree for pipeline stages, personas, rules, and hooks. |
+| `src/components/cortex/CortexExplorer.tsx` | File navigation tree coordinator for pipeline stages, personas, rules, and hooks. |
+| `src/components/cortex/explorer/cortexFilter.ts` | Search and visibility filtering helpers for Cortex stages and global rules. |
+| `src/components/cortex/explorer/ColumnsExplorerSection.tsx` | Pipeline columns explorer tree section with stage cards and hook controls. |
+| `src/components/cortex/explorer/AgentsExplorerSection.tsx` | Agent personas explorer tree section with creation and filtering actions. |
+| `src/components/cortex/explorer/AgentContextMenu.tsx` | Right-click context menu for agent persona quick actions and deletion. |
 | `src/components/cortex/CvhSaveButton.tsx` | Button triggering Git save and commit for Cortex modifications. |
 | `src/components/cortex/DirtyDot.tsx` | Visual indicator for unsaved/dirty configuration files in Cortex tree. |
 | `src/components/cortex/AgentSettingVisualEditor.tsx` | Public facade re-exporting persona visual setting editor. |

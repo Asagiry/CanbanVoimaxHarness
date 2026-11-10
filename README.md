@@ -283,7 +283,6 @@ cargo clippy                       # Rust lints (-D warnings in CI)
 CanbanVoimaxHarness/
 ├── README.md                  # Showcase Presentation & Architecture Guide
 ├── IDEAS.md                   # Roadmap & future architectural ideas
-├── HANDOFF.md                 # Handover & architectural backlog
 ├── package.json               # Frontend dependencies (React 19, Tailwind v4, Vite, Zustand)
 ├── pnpm-lock.yaml             # Deterministic pnpm dependency lockfile
 ├── pnpm-workspace.yaml        # pnpm workspace configuration

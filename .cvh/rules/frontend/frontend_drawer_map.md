@@ -44,7 +44,11 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/TokenUsagePopover.tsx` | Cache ratio, total input, cached/uncached input and output. |
 | `src/components/drawer/ContextPopover.tsx` | Proportional segment breakdown popover, compaction trigger. |
 | `src/components/drawer/telemetryFormatters.ts` | Compact time, TTFT, TPS, and localized token formatters. |
-| `src/components/drawer/useContextGaugeMetrics.ts` | Extracted context resolution, token counting, and compaction listeners. |
+| `src/components/drawer/useContextGaugeMetrics.ts` | Context gauge coordinator hook orchestrating breakdown, telemetry, and compaction actions. |
+| `src/components/drawer/metrics/types.ts` | Shared context gauge metric interfaces and hook options types. |
+| `src/components/drawer/metrics/tokenMetrics.ts` | Pure token estimation, compaction log parsing, incremental char cache, and ring geometry. |
+| `src/components/drawer/metrics/telemetryMetrics.ts` | Turn/step counters, tool duration aggregation, TPS/TTFT formatting, and token display summaries. |
+| `src/components/drawer/metrics/useGaugeEffects.ts` | Effects for persona context limit sync, telemetry ledger sync, and manual compaction triggers. |
 | `src/components/drawer/useActivityScroll.ts` | Activity feed scroll management, auto-scroll, and resize observer. |
 | `src/components/drawer/diff/ImageDiffViewer.tsx` | Visual image diffs coordinator with multi-mode comparison. |
 | `src/components/drawer/diff/image/ImageDiffLightbox.tsx` | Full-screen image diff lightbox with zoom controls. |
@@ -96,13 +100,20 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/stores/drawerStore.ts` | Composed Zustand drawer store (`useDrawerStore`) wiring drawer slices. |
 | `src/stores/drawer/types.ts` | Drawer state, activity item, tab and telemetry contracts. |
 | `src/stores/drawer/drawerHelpers.ts` | Drawer helper utilities. |
-| `src/stores/drawer/activityDedup.ts` | Activity feed deduplication helpers. |
+| `src/stores/drawer/activityDedup.ts` | Re-export facade for drawer activity deduplication and rolling-window helpers. |
+| `src/stores/drawer/dedup/windowing.ts` | 500-item rolling-window caps (`capActivityFeed`, `capToolExecutions`) and log evaporation. |
+| `src/stores/drawer/dedup/feedMerge.ts` | Final response merging and optimistic user/steer deduplication helpers. |
+| `src/stores/drawer/dedup/toolMerge.ts` | Tool execution upsert/update and subagent ID extraction helpers. |
+| `src/stores/drawer/dedup/hydration.ts` | SQLite dialog history deduplication and store state hydration. |
 | `src/stores/drawer/activityQuestionHelpers.ts` | Interactive question activity helpers. |
 | `src/stores/drawer/subagentListeners.ts` | Subagent event listener wiring for drawer slices. |
 | `src/stores/drawer/index.ts` | Barrel re-exports for drawer store types, helpers and slices. |
 | `src/stores/drawer/slices/drawerMetaSlice.ts` | `activeTaskId`, drawer open/close, view mode. |
 | `src/stores/drawer/slices/activitySlice.ts` | `activityFeed`, optimistic tool injection, deduplication. |
-| `src/stores/drawer/slices/streamSlice.ts` | Live streaming chunks, thoughts, token telemetry. |
+| `src/stores/drawer/slices/streamSlice.ts` | Stream slice facade & lifecycle coordinator (`startStream`, `retryStream`). |
+| `src/stores/drawer/slices/stream/chunkBuffer.ts` | RAF/timeout stream chunk batching buffer and rollback drop helpers. |
+| `src/stores/drawer/slices/stream/appendActions.ts` | Store actions for appending streamed thought and assistant output chunks. |
+| `src/stores/drawer/slices/stream/telemetryActions.ts` | Store actions for TTFT, TPS, token counters, and turn telemetry updates. |
 | `src/stores/drawer/slices/subagentsSlice.ts` | Subagent lifecycle, active subtasks, subagent logs. |
 | `src/stores/drawer/slices/draftsSlice.ts` | Per-task draft text persistence for steer input bar. |
 
