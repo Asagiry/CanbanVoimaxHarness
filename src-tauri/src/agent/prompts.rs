@@ -381,10 +381,10 @@ pub async fn compile_primed_system_prompt_with_tools(
             sub_mandate.push_str("- When delegating work to a subagent, prefer `subagent` (oneshot sync) which blocks and waits for the full report before proceeding.\n");
         }
         if resolved_tools.iter().any(|t| t == "subagent_bg") {
-            sub_mandate.push_str("- If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n");
+            sub_mandate.push_str("- If you use `subagent_bg` for background execution, you MUST call `collect_subagent` to wait for and consume all reports before taking subsequent actions or finishing the task. When multiple `subagent_bg` instances are running, pass ALL their IDs together in ONE `collect_subagent` call via `subagent_ids: [\"id1\", \"id2\", ...]` instead of collecting them one by one across separate turns. Never fire-and-forget background subagents.\n");
         }
         if resolved_tools.iter().any(|t| t == "collect_subagent" || t == "subagent_bg") {
-            sub_mandate.push_str("- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.\n");
+            sub_mandate.push_str("- Single-Action Collection: When invoking `collect_subagent`, do NOT batch unrelated tools (like `read_file` or `execute_command`) alongside it in the same turn—pass all pending `subagent_ids` in that single `collect_subagent` call and inspect the received reports before planning next steps.\n");
         }
         sections.push(sub_mandate.trim().to_string());
     }

@@ -143,7 +143,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "collect_subagent",
-            "Await the completion of one or multiple background subagents (launched via subagent_bg) and retrieve their final reports without polling. Accepts either 'subagent_id' (string) or 'subagent_ids' (array of strings). Invoke as the single tool in turn to inspect received reports before next steps.",
+            "Await the completion of one or ALL background subagents (launched via subagent_bg) and retrieve their final reports in one call without polling. When multiple subagents were launched, ALWAYS pass all of them together via 'subagent_ids' (array of strings) in a SINGLE call rather than collecting one by one across turns. Do not batch unrelated tools in the same turn.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
