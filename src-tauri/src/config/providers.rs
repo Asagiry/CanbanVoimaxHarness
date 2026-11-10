@@ -130,7 +130,7 @@ pub fn legacy_provider(provider: &str, api_key: &str, base_url: &str, model: &st
     result.base_url = base_url.to_string();
     result.is_custom = !matches!(
         name,
-        "Antigravity Proxy" | "OpenCode Go" | "OpenAI" | "Anthropic" | "Ollama" | "DeepSeek"
+        "OpenCode Go" | "OpenAI" | "Anthropic" | "Ollama" | "DeepSeek"
     );
     let model = model.trim();
     if !model.is_empty() {
@@ -210,12 +210,12 @@ mod unit_tests {
 
     #[test]
     fn legacy_provider_migration_keeps_model_and_key() {
-        let provider = legacy_provider("Antigravity Proxy", "key", "http://127.0.0.1:8045/v1", "gemini-3.8-flash-high");
-        assert_eq!(provider.id, "antigravity proxy");
+        let provider = legacy_provider("OpenCode Go", "key", "https://opencode.ai/inference/go/openai/v1", "crouton-alpha-free");
+        assert_eq!(provider.id, "opencode go");
         assert!(!provider.is_custom);
         assert_eq!(provider.api_key, "key");
         assert_eq!(provider.models.len(), 1);
-        assert_eq!(provider.models[0].id, "gemini-3.8-flash-high");
+        assert_eq!(provider.models[0].id, "crouton-alpha-free");
 
         let custom = legacy_provider("tg", "", "http://x/v1", "");
         assert!(custom.is_custom);

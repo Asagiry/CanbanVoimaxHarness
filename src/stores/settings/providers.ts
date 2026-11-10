@@ -99,7 +99,6 @@ export function normalizeProviders(providers: Provider[]): Provider[] {
 }
 
 const BUILTIN_PROVIDER_NAMES = new Set([
-  'Antigravity Proxy',
   'OpenCode Go',
   'OpenAI',
   'Anthropic',

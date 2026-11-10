@@ -113,10 +113,6 @@ const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: strin
     gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
     defaultModel: '',
   },
-  'Antigravity Proxy': {
-    gatewayUrl: 'http://127.0.0.1:8045/v1',
-    defaultModel: 'gemini-3.8-flash-high',
-  },
   'OpenAI': {
     gatewayUrl: 'https://api.openai.com/v1',
     defaultModel: 'gpt-4o',
