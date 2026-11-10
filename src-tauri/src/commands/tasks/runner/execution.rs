@@ -231,7 +231,6 @@ pub(crate) async fn run_agent_inner(
                     reasoning_effort: None,
                     temperature: Some(0.2),
                     gatekeeper_sensor: None,
-                    allowed_tools: None,
                     hooks: HashMap::new(),
                     auto_run: None,
                     is_intake: None,

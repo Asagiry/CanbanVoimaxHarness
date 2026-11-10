@@ -178,8 +178,6 @@ pub struct PipelineStage {
     pub temperature: Option<f32>,
     #[serde(rename = "gatekeeperSensor", default)]
     pub gatekeeper_sensor: Option<String>,
-    #[serde(rename = "allowedTools", default)]
-    pub allowed_tools: Option<Vec<String>>,
     #[serde(default)]
     pub hooks: HashMap<String, HookConfig>,
     #[serde(rename = "autoRun", default)]

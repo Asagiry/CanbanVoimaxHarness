@@ -17,7 +17,7 @@
   - **SVG-Иконка**: векторная иконка Lucide, заданная в frontmatter или JSON setting.
   - **Модель**: переопределение LLM (`modelOverride`), если для этапа нужна более быстрая или более мощная нейросеть.
   - **Температура**: детерминированная для аудита (0.1) или креативная для концептов (0.4).
-  - **Разрешенные инструменты**: срез доступных тулов согласно `tool-policy.json` и `allowedTools`.
+  - **Разрешенные инструменты**: срез доступных тулов согласно `tool-policy.json` (и опционально `allowed_tools` в `setting` персоны).
   - **Переходные скрипты**: хуки `on_enter` для подготовки окружения.
 
 ### Анатомия схемы колонки (`PipelineColumn`)
@@ -31,7 +31,6 @@
   "contextWindow": 200000,
   "modelOverride": "gemini-3.8-flash-high",
   "temperature": 0.1,
-  "allowedTools": ["execute_command", "read_file", "glob", "grep"],
   "hooks": {
     "on_enter": {
       "script": ".cvh/hooks/gatekeeper_sensor.bat",

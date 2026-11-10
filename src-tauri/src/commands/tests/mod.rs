@@ -17,7 +17,6 @@ pub(crate) fn test_col(id: &str) -> PipelineColumn {
         reasoning_effort: None,
         temperature: None,
         gatekeeper_sensor: None,
-        allowed_tools: None,
         hooks: HashMap::new(),
         auto_run: None,
         terminal: None,
