@@ -47,6 +47,8 @@
           "temperature": 0.2,
           "gatekeeperSensor": null,
           "allowedTools": [
+            "execute_command",
+            "create_task",
             "read_file",
             "glob",
             "grep",
@@ -152,6 +154,8 @@
           "gatekeeperSensor": null,
           "allowedTools": [
             "read_file",
+            "edit_file",
+            "write_file",
             "glob",
             "grep",
             "load_rule",

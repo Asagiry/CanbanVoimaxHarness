@@ -8,7 +8,7 @@ Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 ---
 
 ## 1. Hook Configuration Schema & Invocation Triggers
-Columns declare transition hooks in configuration (`boards.json` and `pipeline.json`) within the `hooks` object:
+Columns declare transition hooks in configuration (`boards.json`) within the `hooks` object:
 - `hooks.on_enter`: Executes when a task enters the stage.
 - `hooks.on_leave`: Executes when a task exits the stage.
 

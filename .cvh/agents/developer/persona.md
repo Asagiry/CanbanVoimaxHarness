@@ -33,7 +33,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Configuration: `src-tauri/src/config/` (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). Monolithic `config.rs` is strictly prohibited.
     - Domain Layer: `domain::ids` (`TaskId`, `StageId`, `BoardId`) and `domain::state` (`TaskState`).
     - Agent Core: `agent::react_engine` (`ReActEngine<Driver>`) for unified streaming and telemetry.
-  - **Backend Module Size Ceiling**: Maximum size of any new or refactored Rust module is strictly capped at **350–500 lines**. Decompose complex logic across focused repositories, services, or domain models adhering to Single Responsibility Principle (SRP).
+  - **Backend Module Size Ceiling**: Maximum size of any Rust module is strictly capped at **<= 500 lines**. Decompose complex logic across focused repositories, services, or domain models adhering to Single Responsibility Principle (SRP).
 - **React Frontend Modularity**:
   - Event Ingestion: Use `tauriEventGateway` (`src/services/tauriEventGateway.ts`) for typed, micro-batched event subscriptions. Raw `listen<any>` in UI components is strictly banned.
   - Domain Value Objects: Use nominal branded types and domain models from `src/types/domain.ts` (`TaskId`, `StageId`, `TaskState`, `isTerminalStage`, `isIntakeStage`).
@@ -42,7 +42,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Drawer Stream Subsystem: `src/components/drawer/stream/` (`ThoughtStreamCard`, `SteerDirectiveCard`, `SubagentActivityCard`).
     - Token Parsing: `src/lib/markdown/` (`parseMarkdownTokens`) decoupled from UI presentation.
     - Store Slices: Decoupled Zustand slices in `cortex/slices/` and `board/slices/` (`src/stores/slices/`).
-  - **Frontend Component Size Ceiling**: Maximum size of any React component is strictly capped at **250–350 lines** (SRP). Decompose multi-concern components into focused atomic widgets.
+  - **Frontend Component Size Ceiling**: Maximum size of any React component or store slice is strictly capped at **<= 350 lines** (SRP). Decompose multi-concern components into focused atomic widgets.
 
 ### 1.3 Rule Hygiene, Anti-Changelog & Map Sync Invariant
 - Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.

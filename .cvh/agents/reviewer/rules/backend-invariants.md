@@ -16,7 +16,7 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
 - **Monolithic File Size Ceiling (<= 500 lines)**:
   - Any new file or significantly refactored module in `src-tauri/src/` must not exceed 500 lines of code.
   - **Audit**: If a diff introduces or expands a backend module beyond 500 lines, **REJECT IMMEDIATELY**: Mandate decomposition into submodules within the corresponding domain package (e.g. splitting into `runner.rs`, `storage.rs`, `lifecycle.rs`).
-  - *Note on Legacy Files*: Pre-existing historical files retain immunity (§ 4.1), but new code must adhere strictly to the 500-line ceiling.
+  - *Note on Legacy Files*: Following the CVH-069 decomposition where all 21 historical monoliths were refactored, any file touched or introduced in or after CVH-069 must strictly adhere to the <=500-line ceiling (no legacy debt immunity for touched files; immunity applies solely to untouched legacy files originating before the task's branch point).
 
 ---
 

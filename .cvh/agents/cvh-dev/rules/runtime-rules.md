@@ -33,7 +33,7 @@ description: Turn 1 runtime contract, batch tool execution & fail-fast mechanics
   - Four central tabs: Columns (Stage configuration & personas), Personas (Agent profiles & settings), Global Rules (`.cvh/rules/` markdown editor), and Harness Settings (`tool-policy.json`, LLM credentials, and board configs).
   - Allows live inspection and editing of agent prompts, global rules, and column gatekeepers without restarting the app.
 - **Kanban Board**:
-  - Visual stage columns matching `activeBoardId` in `.cvh/boards.json` (mirrored in `.cvh/pipeline.json`).
+  - Visual stage columns matching `activeBoardId` in `.cvh/boards.json`.
   - Drag-and-drop or programmatic task movement via `advance_task`, `move_task`, or `reject_task`.
   - Column enter hooks trigger agent execution (`run_agent(taskId)`).
 - **Task Drawer & Live Activity Stream**:
@@ -41,7 +41,7 @@ description: Turn 1 runtime contract, batch tool execution & fail-fast mechanics
   - Displays live streaming ReAct reasoning thoughts, tool execution cards with parameters, outputs, durations, error banners, and final response summaries.
   - Emits real-time Tauri IPC events (`agent:activity`, `subagent:activity`, `task:status`).
 - **Tool Policy Matrix (`.cvh/settings/tool-policy.json`)**:
-  - Configures global tool enablement and per-column/per-role overrides (`stageOverrides`).
+  - Configures per-column/per-role tool permissions (`stageOverrides`).
   - Backend authoritative: agents cannot execute tools disabled by the matrix.
 - **Worktree Isolation**:
   - Every engineering task executes in an isolated git worktree (`worktrees/<task-slug>`).

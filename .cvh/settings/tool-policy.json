@@ -96,8 +96,8 @@
       "web_search": false,
       "create_task": false,
       "execute_command": true,
-      "edit_file": false,
-      "write_file": false,
+      "edit_file": true,
+      "write_file": true,
       "subagent": false,
       "read_file": true,
       "complete_task": false

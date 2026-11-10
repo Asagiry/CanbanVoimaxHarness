@@ -3,14 +3,20 @@ description: Tauri bootstrap, IPC registration, logging and notifications.
 ---
 # Desktop platform
 
-Register commands and shared state in the Tauri entrypoint. Keep native notification and process handling platform-aware. Runtime failures propagate as typed errors through IPC.
+Register commands and shared state in the Tauri entrypoint. Keep native notification and process handling platform-aware. Runtime failures propagate as typed errors through IPC. All submodules strictly observe the <=500 lines ceiling.
 
 | File | Responsibility |
 | --- | --- |
 | `src-tauri/src/commands/mod.rs` | Top-level IPC command module aggregation. |
-| `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration. |
+| `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration (<=500 lines). |
 | `src-tauri/src/udf.rs` | WebView2 User Data Folder resolution, writability/lock checks and stale-lock cleanup. |
 | `src-tauri/src/logger.rs` | Rotating file & terminal logging configuration. |
 | `src-tauri/src/error.rs` | Domain errors and Tauri IPC error formatting. |
 | `src-tauri/src/lib.rs` | Tauri invoke handler wiring and application setup. |
 | `src-tauri/src/main.rs` | Windows subsystem bootstrap, panic hook, crash telemetry. |
+
+## Related checks
+
+Choose checks for the changed behavior; use the active role's `sensors` rule for execution policy.
+
+- `src-tauri/src/commands/notifications_tests.rs` — Desktop notification unit and integration tests.

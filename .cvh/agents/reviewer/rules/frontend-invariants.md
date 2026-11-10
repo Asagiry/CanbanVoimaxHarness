@@ -18,7 +18,7 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 - **Rule**: React components must NOT exceed 350 lines of code. Keep components atomic, focused, and maintainable (gold standard: `KanbanCard.tsx` at ~239 lines).
 - **Audit**: Check line counts of all new or modified `.tsx` files in `src/components/`:
   - Monolithic components exceeding 350 lines must be decomposed into dedicated subcomponents, extracted custom hooks (`use...`), or pure helper modules.
-  - *Immunity for Pre-Existing Files*: Untouched legacy components that historically exceed 350 lines enjoy historical immunity (§ 4.1). However, if a task modifies or expands such a file, or creates a new component exceeding 350 lines, it must be decomposed.
+  - *Immunity for Pre-Existing Files*: Following the CVH-069 decomposition where all 12 historical frontend monoliths were decomposed into modular subcomponents and slices, any component touched or introduced in or after CVH-069 must strictly adhere to the <=350-line ceiling (no legacy debt immunity for touched files; immunity applies solely to untouched legacy files originating before the task's branch point).
 - **REJECTION TRIGGER**: Introducing a new component or expanding an existing component beyond 350 lines without decomposition.
 
 ---

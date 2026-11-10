@@ -3,7 +3,7 @@ description: Multi-board layout configuration, pipeline column schemas, board pr
 ---
 # Guide: Boards and Pipelines Configuration (boards.md)
 
-Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.
+Authoritative rules for `.cvh/boards.json`.
 
 ---
 
@@ -22,7 +22,7 @@ The ONLY structural invariants across all boards:
 2. **Delivery Anchor**: Final column (e.g. `ready`), `persona: null`, `terminal: true`. Tasks entering this column are finalized deliverables.
 3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and lifecycle hooks).
 
-Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
+Boards are configured in `.cvh/boards.json` (single SSOT).
 
 ---
 

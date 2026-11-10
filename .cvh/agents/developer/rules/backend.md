@@ -50,9 +50,9 @@ Implements DDD principles and Uncle Bob's Clean Architecture:
 - `agent/tools/`: Modular tool handlers partitioned into domain submodules (`file_ops.rs`, `command.rs`, `web.rs`, `pipeline.rs`, `tasks.rs`, `planning.rs`, `subagent.rs`).
 
 ### 2.5 Anti-Monolith Invariant (Module Size Ceiling & SRP)
-- **Ceiling Mandate**: The maximum size of any new or refactored Rust backend module is strictly capped at **350–500 lines**.
+- **Ceiling Mandate**: The maximum size of any Rust backend module is strictly capped at **<= 500 lines**.
 - **Prohibition of Kitchen-Sink Files**: Never append unrelated helper functions, extra database queries, or command handlers into single files.
-- If a module approaches or exceeds 500 lines, it MUST be decomposed into focused submodules (repositories, domain models, or distinct service drivers) following Single Responsibility Principle (SRP).
+- If a module approaches or exceeds 500 lines, it MUST be decomposed into focused submodules (repositories, domain models, or distinct service drivers) following Single Responsibility Principle (SRP). All 21 historical backend monoliths were refactored in CVH-069.
 
 ---
 

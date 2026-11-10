@@ -48,7 +48,7 @@ When planning technical solutions, identify affected subsystems and map them str
 | **Hooks Engine** | `src-tauri/src/hooks.rs` | Transition scripts runner, Windows argument escaping, timeout enforcement, gatekeeper sensor checks. |
 | **Frontend Event Gateway** | `src/services/tauriEventGateway.ts` | Centralized typed event listeners (`AgentEventMap`), 150ms streaming micro-batching. (Strict ban on `listen<any>`). |
 | **Frontend Domain Layer** | `src/types/domain.ts` | Value Objects (`TaskId`, `StageId`, `BoardId`), factories (`toTaskId`), state machine (`TaskState`, `TaskStates`). |
-| **Frontend Card Subsystem** | `src/components/card/CardTimerBadge.tsx`, `CardSubtaskBadge.tsx`, `CardContextMenu.tsx`, `CardHookNode.tsx`, `KanbanCard.tsx` | Modular card widgets and layout coordinator. (Card widgets <= 250–350 lines). |
+| **Frontend Card Subsystem** | `src/components/card/CardTimerBadge.tsx`, `CardSubtaskBadge.tsx`, `CardContextMenu.tsx`, `CardHookNode.tsx`, `KanbanCard.tsx` | Modular card widgets and layout coordinator. (Card widgets <= 350 lines). |
 | **Frontend Drawer Streams** | `src/components/drawer/stream/ThoughtStreamCard.tsx`, `SteerDirectiveCard.tsx`, `SubagentActivityCard.tsx` | Modular thought, steer directive, and subagent stream cards. |
 | **Frontend Markdown** | `src/lib/markdown/parseMarkdownTokens.ts` | Decoupled Markdown token parsing and syntax highlighting tokens. |
 | **Frontend State Slices** | `src/stores/cortex/slices/*`, `src/stores/slices/*` (board), `src/stores/drawer/slices/*` | Modular Zustand state slices composed into unified stores. |
@@ -58,8 +58,8 @@ When planning technical solutions, identify affected subsystems and map them str
 ## 3. High-Level Invariants to Plan For
 
 1. **Anti-Monolith & Module Size Limits**:
-   - **Backend Module Ceiling**: Maximum **350–500 lines** per Rust file.
-   - **Frontend Component Ceiling**: Maximum **250–350 lines** per React component.
+   - **Backend Module Ceiling**: Maximum **<= 500 lines** per Rust file.
+   - **Frontend Component Ceiling**: Maximum **<= 350 lines** per React component or store slice.
    - **No Kitchen-Sink Dumps**: Strictly prohibit planning additions into `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, `db/mod.rs`, or `config/mod.rs`.
 2. **Centralized Event Gateway Invariant**: Plan all Tauri event handling through `tauriEventGateway`. Raw `listen<any>` in React components is strictly forbidden.
 3. **Domain Layer Value Objects**: Always plan use of strongly typed Value Objects from `src/types/domain.ts` and `src-tauri/src/domain/`. Validate once at the boundary, trust internally.

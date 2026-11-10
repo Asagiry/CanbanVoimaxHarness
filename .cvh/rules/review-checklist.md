@@ -53,7 +53,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ### Gate 3: Backend Architectural Invariants & Uncle Bob Clean Architecture
 - **Single Responsibility Principle (SRP)**: Code strictly partitioned into `db/` (repositories & pool), `config/` (I/O, models, scaffold, tool policy), `domain/` (Value Objects & state machines), and `agent/` (ReAct engine, compactor, tools). The remaining top-level modules are first-class partitions, not exceptions: `commands/` (Tauri IPC handlers), `git/` (git operations), `llm/` (provider client/cache/models), plus root modules `hooks.rs`, `udf.rs`, `logger.rs`, `error.rs`, `lib.rs`, `main.rs`.
-- **Backend File Size Ceiling (<= 500 lines, target for new/modified files)**: New backend files or modified modules must not exceed 500 lines. Monolithic modules must be decomposed into submodules. Pre-existing legacy files exceeding this (e.g. `agent.rs`, `agent/compactor.rs`, `tasks/transitions.rs`) are grandfathered under §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
+- **Backend File Size Ceiling (<= 500 lines)**: All backend Rust modules must strictly remain <= 500 lines. All 21 historical backend monoliths (including `agent.rs`, `compactor.rs`, `transitions.rs`, `models.rs`, `runner.rs`, `lifecycle.rs`, `client.rs`, `boards.rs`, etc.) were decomposed into modular submodules in CVH-069. Files touched or modified in or after CVH-069 are NOT exempt from line ceilings under legacy debt immunity. Pre-existing immunity (§4.1) applies solely to historically untouched legacy files.
 - **Elimination of Primitive Obsession**: Mandatory use of Domain Value Objects (`domain::ids::TaskId`, `StageId`, `BoardId`) instead of naked strings.
 - **Make Illegal States Unrepresentable**: Mandatory use of Algebraic Data Types (`domain::state::TaskState`) for lifecycle tracking. No conflicting booleans.
 - Single-Instance plugin ordering first in `src-tauri/src/lib.rs`.
@@ -65,7 +65,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ### Gate 4: Frontend UI Invariants, Size & Testing Gates
 - **Strict Ban on Direct `listen<any>`**: Direct `listen(...)` or unvalidated `any` event listening is strictly banned. ALL Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`. Sole exception: `src/components/layout/WindowControls.tsx:50` `win.onResized` (Tauri window API, not an event-gateway subscription).
-- **Component File Size Ceiling (<= 350 lines, target for new/modified files)**: React components must not exceed 350 lines. Reject monolithic views; mandate extraction into subcomponents or custom hooks. Pre-existing legacy files exceeding this (e.g. `src/services/tauriEventGateway.ts`) are grandfathered under §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
+- **Component File Size Ceiling (<= 350 lines)**: React components and store slices must strictly remain <= 350 lines. All 12 historical frontend monoliths (including `tauriEventGateway.ts`, `tasksCrudSlice.ts`, `SubagentToolCard.tsx`, `AgentSettingVisualEditor.tsx`, `AgentConsoleDrawer.tsx`, `SubagentsSidebar.tsx`, `StageContextMenu.tsx`, `ImageDiffViewer.tsx`, `FileOpsToolCard.tsx`, `DrawerSteerBar.tsx`, `GitDiffSidebar.tsx`, `KanbanBoard.tsx`) were decomposed into modular subcomponents and slices in CVH-069. Files touched or modified in or after CVH-069 are NOT exempt from line ceilings under legacy debt immunity. Pre-existing immunity (§4.1) applies solely to historically untouched legacy files.
 - **Vitest Unit Test Coverage**: Pure utilities in `src/lib/`, `src/types/`, and store slices in `src/stores/` must have matching Vitest unit tests in `__tests__/`.
 - Zustand store selections returning objects or arrays wrapped in `useShallow`.
 - Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
@@ -92,11 +92,12 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 To prevent infinite review cycles, nitpicking loops, and cognitive drift between agent author and agent reviewer:
 
 ### 4.1 Immunity to Pre-Existing Historical Bugs
-- The Reviewer is **strictly forbidden from failing a task (`reject_task`) for bugs, stylistic choices, or architectural debt that existed prior to the current task's branch point** (including pre-existing legacy files that historically exceed 350 or 500 lines).
-- If a pre-existing defect or improvement opportunity is discovered in surrounding code:
+- The Reviewer is **strictly forbidden from failing a task (`reject_task`) for bugs, stylistic choices, or architectural debt that existed prior to the current task's branch point** (specifically in untouched legacy code).
+- **Scope of Immunity**: In CVH-069, all historical monoliths were refactored. Any file touched, refactored, or newly introduced in or after CVH-069 is subject to strict line ceilings (<=500 lines Rust, <=350 lines TS/React) and clean architecture standards without exception. Immunity applies exclusively to files untouched by the current task that existed prior to its branch point.
+- If a pre-existing defect or improvement opportunity is discovered in untouched surrounding code:
   - Do NOT issue `CHANGES_REQUESTED`.
   - Record it as an informative non-blocking note or recommend creating a separate backlog card.
-  - Never hold the current PR hostage for legacy code.
+  - Never hold the current PR hostage for untouched legacy code.
 
 ### 4.2 Diff-Only Re-Review Protocol
 - On follow-up review cycles (after a developer addresses prior rejection feedback):

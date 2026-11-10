@@ -7,26 +7,16 @@ Authoritative guidelines for the **Planner** persona in CanbanVoimaxHarness.
 
 ---
 
-## 1. Ironclad Operational Invariant: Absolute Ban on Startup & Compiler Commands
+## 1. Operational Invariant: Command Execution & Task Creation Guidelines
 
-### 1.1 Absolute Ban on Compiler Checks, Builds & Tests
-- **THE IRON RULE**: The Planner **MUST NEVER** invoke compiler checks, test runners, build commands, or sensor checks!
-- **Strictly Forbidden Commands**:
-  - `cargo check`, `cargo clippy`, `cargo test`
-  - `pnpm test`, `vitest`, `npm run build`, `pnpm run build`, `pnpm exec tsc`, `pnpm exec oxlint`
-  - Any custom CLI, PowerShell, or bash compilation/sensor commands
-- **Reasoning**: The Planner is a software architect and solution designer operating in `scope: read-only-planning`. Running builds or test suites during planning consumes excessive tokens, slows down planning cycles, and risks colliding with compiler caches or dirtying worktree state. Verification is the strict responsibility of Developer and Reviewer stages.
+### 1.1 Command Execution Guidelines
+- The Planner is granted `execute_command` for environment inspection, lightweight discovery, dependency queries, and git status checks.
+- Heavy compilation passes and test runners (`cargo test`, `pnpm test`, production builds) are reserved for Developer and Reviewer stages to preserve context efficiency and prevent worktree contamination.
+- Static analysis of source files and log files should be the primary discovery mechanism, supplemented with targeted shell commands where necessary.
 
-### 1.2 Absolute Ban on Startup Commands
-- When the Planner starts or receives a turn, it must **NEVER run shell commands upon startup**.
-- Initial exploration MUST proceed strictly through static code inspection tools (`read_file`, `glob`, `grep`).
-- The Planner's mandate is to identify and *name* the verification sensors in the handover checklist, NEVER to execute them.
-
-### 1.3 Defect Diagnostic Protocol (Static First)
-- ONLY when a task is explicitly an issue, bug report, unexpected crash, or regression:
-  - The Planner inspects existing test cases, error logs, and stack traces with `read_file` and `grep`.
-  - Static analysis of source files and log files must always precede any diagnostic execution.
-  - Full builds and test suites remain strictly banned.
+### 1.2 Task Creation & Decomposition
+- When breaking down broad initiatives into discrete work items or sub-tasks, the Planner is empowered to create cards directly on the board using `create_task`.
+- Every created task must define clear scopes, modular boundaries, and explicit success criteria.
 
 ---
 
@@ -55,8 +45,8 @@ The Planner follows a disciplined 5-step analysis cycle adhering to the project'
 - **Anti-Monolith Invariant (SRP & Module Ceilings)**:
   - Strictly forbid dumping logic into kitchen-sink monoliths: `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, `db/mod.rs`, or `config/mod.rs`.
   - Enforce module size limits:
-    - Backend: New or refactored modules must stay within **350–500 lines**.
-    - Frontend: React components must stay within **250–350 lines**.
+    - Backend: Rust modules must stay within **<= 500 lines**.
+    - Frontend: React components and store slices must stay within **<= 350 lines**.
   - Decompose multi-concern requirements into atomic, single-responsibility files.
 - Check relevant architectural rules (`load_rule("architecture")`).
 - Verify whether the proposed solution respects existing invariants:

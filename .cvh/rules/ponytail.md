@@ -13,8 +13,8 @@ Ponytail engineering discipline for CanbanVoimaxHarness agents: achieving requir
 - **Modularity is NOT Over-Engineering**:
   - Ponytail minimalism does **NOT** mean stuffing 500 lines into `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, or monolithic `db/mod.rs` / `config/mod.rs`.
   - Creating a focused new file is mandatory when logic crosses a Single Responsibility Principle (SRP) boundary or exceeds size ceilings:
-    - **Backend Module Ceiling (target for new/modified files)**: **≤500 lines** per Rust module (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`). Pre-existing legacy files exceeding this (e.g. `agent.rs`, `agent/compactor.rs`, `tasks/transitions.rs`) are grandfathered under `review-checklist.md` §4.1 immunity: they must not grow, and any touched file must be decomposed toward the ceiling.
-    - **Frontend Component Ceiling (target for new/modified files)**: **≤350 lines** per React component (`src/components/card/`, `drawer/stream/`, `stores/*/slices/`). Pre-existing legacy files exceeding this (e.g. `src/services/tauriEventGateway.ts`) are grandfathered under the same immunity.
+    - **Backend Module Ceiling**: Strictly **≤500 lines** per Rust module (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`, etc.). All 21 historical monoliths were decomposed in CVH-069; any file touched or introduced in or after CVH-069 must strictly satisfy the ≤500 lines ceiling (no legacy immunity).
+    - **Frontend Component Ceiling**: Strictly **≤350 lines** per React component or store slice (`src/components/`, `stores/*/slices/`, `services/`, etc.). All 12 historical monoliths were decomposed in CVH-069; any file touched or introduced in or after CVH-069 must strictly satisfy the ≤350 lines ceiling (no legacy immunity). Pre-existing debt immunity applies only to untouched files originating before a task's branch point.
   - Modular decomposition into dedicated widgets (e.g. `CardTimerBadge.tsx`, `CardHookNode.tsx`, `domain::ids`) prevents unmaintainable monolithic drift while keeping individual files minimal and surgical.
 
 ---

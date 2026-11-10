@@ -1,5 +1,5 @@
 ---
-description: Scope containment invariants, anti-slop rules, read-only boundary enforcement, and command execution bans.
+description: Scope containment invariants, anti-slop rules, read-only boundary enforcement, and minimal blast radius discipline.
 ---
 # Rule: Scope Hygiene & Anti-Slop Discipline (scope-hygiene.md)
 

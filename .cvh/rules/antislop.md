@@ -19,7 +19,7 @@ AI slop in user interfaces is strictly eradicated:
    - Prohibit gradient-clip text headers (`bg-clip-text text-transparent bg-gradient-to-r`).
 2. **No Neon Glows & Over-Decoration**:
    - No pulsating neon glow borders (`shadow-[0_0_20px_...]`).
-   - No glassmorphism (`backdrop-blur-xl bg-white/5` with noisy borders).
+   - No glassmorphism (`backdrop-blur-xl bg-white/5` with noisy borders). Functional `backdrop-blur` (e.g. `backdrop-blur-xs`, `backdrop-blur-sm`, `backdrop-blur-md`) is explicitly allowed on full-screen modal overlays, lightbox backdrops, and drawer scrims to maintain background contrast and readability.
    - No floating background ambient gradient orbs.
    - No wobbling spinners or decorative non-functional animations.
 3. **Hierarchy Through Scale, Space & Contrast**:

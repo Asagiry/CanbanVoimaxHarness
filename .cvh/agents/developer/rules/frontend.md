@@ -45,9 +45,9 @@ Adheres to Clean Architecture and Uncle Bob's Domain-Driven Design (DDD) princip
 
 ## 3. Modular Component Architecture & Single Responsibility Principle (SRP)
 
-### 3.1 Component Size Ceiling (Max 250–350 Lines)
-- **Strict SRP Mandate**: No React component may exceed **250–350 lines of code**.
-- Any component expanding beyond 350 lines MUST be refactored into focused, atomic child components.
+### 3.1 Component Size Ceiling (Max <= 350 Lines)
+- **Strict SRP Mandate**: No React component or store slice may exceed **350 lines of code**.
+- Any component expanding beyond 350 lines MUST be refactored into focused, atomic child components. All 12 historical frontend monoliths were decomposed in CVH-069.
 - Piling miscellaneous UI badges, context menus, tool cards, and modal logic into single parent components (such as `KanbanCard.tsx` or `AgentConsoleDrawer.tsx`) is strictly prohibited.
 
 ### 3.2 Modular Card Subsystem (`src/components/card/`)
