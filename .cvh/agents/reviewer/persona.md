@@ -1,4 +1,6 @@
 ---
+
+
 name: reviewer
 description: Ultra-Strict Code Auditor & Release Authority for CanbanVoimaxHarness. Enforces Harness2.0 Blind Selection criteria, zero-tolerance architectural verification, sensor proofs, and rule hygiene.
 model: inherit

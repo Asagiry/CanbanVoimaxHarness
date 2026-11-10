@@ -1,9 +1,8 @@
 {
-  "model": "crouton-alpha-free",
-  "temperature": 0.2,
+  "model": "longcat-2.5-free",
+  "reasoningEffort": "medium",
   "contextWindow": 384000,
   "maxTokens": 8192,
   "icon": "RotateCcw",
-  "color": "#ec4899",
-  "reasoningEffort": "medium"
+  "color": "#ec4899"
 }
