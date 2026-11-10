@@ -1,16 +1,28 @@
 import { useRef, useState, useEffect } from 'react';
 import { useContextMenuPosition } from '../../hooks/useContextMenuPosition';
 import { createPortal } from 'react-dom';
-import { ArrowRightToLine, ArrowRightFromLine } from 'lucide-react';
-import type { PipelineStage, PipelineConfig, HookDefinition } from '../../types';
+import type { PipelineStage, HookDefinition } from '../../types';
 import { getHookScript } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import { getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
-import PersonaSelect from '../common/PersonaSelect';
 import { useTranslation } from '../../stores/languageStore';
+import {
+  StageMainMenu,
+  StageRenameView,
+  StagePersonaView,
+  StageScriptView,
+  AgentPersonaOption,
+  savePipelineConfig,
+  MENU_WIDTH,
+  VIEWPORT_MARGIN,
+  isStageProtected,
+  canStageChangeAgent,
+} from './stageMenu';
+
+export * from './stageMenu';
 
 export interface StageContextMenuProps {
   stage?: PipelineStage;
@@ -23,23 +35,6 @@ export interface StageContextMenuProps {
   /** @deprecated Use onDeleteStage instead */
   onDeleteColumn?: (columnId: string) => void;
 }
-
-interface AgentPersonaOption {
-  role: string;
-  hasPrompt?: boolean;
-  has_prompt?: boolean;
-  isBuiltin?: boolean;
-  is_builtin?: boolean;
-  icon?: string;
-  color?: string;
-}
-
-const MENU_WIDTH = 264;
-const VIEWPORT_MARGIN = 8;
-const NEW_AGENT_OPTION = '__new__';
-
-// backlog и ready — особые системные стадии: удалить их нельзя.
-const PROTECTED_STAGE_IDS = new Set(['backlog', 'ready']);
 
 export default function StageContextMenu({
   stage,
@@ -57,16 +52,8 @@ export default function StageContextMenu({
   const [mode, setMode] = useState<'main' | 'rename' | 'persona' | 'script'>('main');
   const { t } = useTranslation();
 
-  const isProtected =
-    PROTECTED_STAGE_IDS.has(currentStage.id) ||
-    Boolean(currentStage.isIntake) ||
-    Boolean(currentStage.terminal);
-
-  const canChangeAgent =
-    currentStage.id !== 'backlog' &&
-    currentStage.id !== 'ready' &&
-    !currentStage.isIntake &&
-    !currentStage.terminal;
+  const isProtected = isStageProtected(currentStage);
+  const canChangeAgent = canStageChangeAgent(currentStage);
 
   const enterHookDef =
     currentStage.hooks?.['on_enter'] ??
@@ -79,18 +66,15 @@ export default function StageContextMenu({
   const currentEnterScript = getHookScript(enterHookDef) ?? '';
   const currentLeaveScript = getHookScript(leaveHookDef) ?? '';
 
-  // Переименование
   const [draftTitle, setDraftTitle] = useState(currentStage.title);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
 
-  // Скрипт перехода
   const [scriptType, setScriptType] = useState<'on_enter' | 'on_leave'>('on_enter');
   const [draftScript, setDraftScript] = useState('');
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [scriptSaving, setScriptSaving] = useState(false);
 
-  // Смена агента
   const [personas, setPersonas] = useState<AgentPersonaOption[]>([]);
   const [usePersonaSelect, setUsePersonaSelect] = useState(false);
   const [personasLoading, setPersonasLoading] = useState(false);
@@ -100,30 +84,27 @@ export default function StageContextMenu({
   const [personaError, setPersonaError] = useState<string | null>(null);
   const [personaSaving, setPersonaSaving] = useState(false);
 
-
-
-  const savePipelineConfig = async (next: PipelineStage[]): Promise<boolean> => {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      let cfg: PipelineConfig | null = null;
+  useEffect(() => {
+    let cancelled = false;
+    setPersonasLoading(true);
+    void (async () => {
       try {
-        cfg = await invoke<PipelineConfig>('get_pipeline');
+        const { invoke } = await import('@tauri-apps/api/core');
+        const list = await invoke<AgentPersonaOption[]>('list_agent_personas');
+        if (!cancelled && Array.isArray(list)) {
+          setPersonas(list);
+          setUsePersonaSelect(true);
+        }
       } catch {
-        cfg = null;
+        if (!cancelled) setUsePersonaSelect(false);
+      } finally {
+        if (!cancelled) setPersonasLoading(false);
       }
-      const pipeline = {
-        id: cfg?.id ?? 'default-engineering',
-        title: cfg?.title ?? 'Инженерный пайплайн',
-        stages: next,
-      };
-      await useBoardStore.getState().saveCurrentBoard(next);
-      await invoke('save_pipeline', { pipeline });
-      return true;
-    } catch (err) {
-      console.info('save_pipeline недоступен, изменения стадий откачены:', err);
-      return false;
-    }
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSaveRename = async () => {
     const title = draftTitle.trim();
@@ -150,100 +131,62 @@ export default function StageContextMenu({
     onClose();
   };
 
-  const loadPersonas = async () => {
-    setPersonasLoading(true);
-    setPersonaError(null);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const list = await invoke<AgentPersonaOption[]>('list_agent_personas');
-      if (Array.isArray(list)) {
-        setPersonas(list);
-        setUsePersonaSelect(true);
-      } else {
-        setUsePersonaSelect(false);
-      }
-    } catch {
-      // IPC недоступен — откат на свободный текстовый ввод.
-      setUsePersonaSelect(false);
-    } finally {
-      setPersonasLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (mode === 'persona') {
-      setSelectedPersona(currentStage.persona ?? '');
-      setIsNewAgentSelected(false);
-      setNewAgentName('');
-      setPersonaError(null);
-      void loadPersonas();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
-
   const handleSavePersona = async () => {
-    setPersonaError(null);
-    let personaName: string;
+    let personaToSave = selectedPersona.trim();
+    let newIconToSave: string | undefined = undefined;
+    let newColorToSave: string | undefined = undefined;
+
     if (usePersonaSelect && isNewAgentSelected) {
-      // Кириллица преобразуется в латиницу автоматически (бэкенд принимает только [a-z0-9-]).
-      const role = slugifyTitle(newAgentName);
-      if (!role || role === 'column') {
+      const agentTitle = newAgentName.trim();
+      if (!agentTitle) {
         setPersonaError(t('columnMenu.errNameLettersOrDigits'));
         return;
       }
+      const roleSlug = slugifyTitle(agentTitle);
+      if (!roleSlug || roleSlug === 'column') {
+        setPersonaError(t('columnMenu.errNameLettersOrDigits'));
+        return;
+      }
+      setPersonaError(null);
+      setPersonaSaving(true);
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('create_agent_persona', { role });
+        newIconToSave = getDefaultColumnIcon(roleSlug);
+        const autoColor = getDeterministicAgentColor(roleSlug);
+        newColorToSave = isAllowedAgentColor(autoColor) ? autoColor : undefined;
+
+        await invoke('create_agent_persona', {
+          role: roleSlug,
+          persona: `# ${agentTitle}\n\nОписание роли и цели агента.\n`,
+          icon: newIconToSave,
+          color: newColorToSave,
+        });
+
         await useCortexStore.getState().loadAgentPersonas();
+        personaToSave = roleSlug;
       } catch (err) {
+        setPersonaSaving(false);
         setPersonaError(err instanceof Error ? err.message : String(err));
         return;
       }
-      personaName = role;
-    } else {
-      personaName = selectedPersona.trim();
     }
 
-    const nextPersona = personaName || null;
-    if (nextPersona === (currentStage.persona ?? null)) {
-      setMode('main');
-      return;
-    }
-
-    const matchedPersona = personas.find((p) => p.role === nextPersona);
-    let nextIcon = currentStage.icon;
-    if (nextPersona && matchedPersona?.icon) {
-      nextIcon = matchedPersona.icon;
-    } else if (!nextPersona) {
-      nextIcon = getDefaultColumnIcon(currentStage.id, currentStage.icon);
-    }
-
-    // Автоматическое наследование цвета агента стадией (если не backlog и не ready)
-    let nextColor = currentStage.color;
-    if (currentStage.id !== 'backlog' && currentStage.id !== 'ready' && !currentStage.isIntake && !currentStage.terminal) {
-      if (nextPersona) {
-        const personaColor = matchedPersona?.color || getDeterministicAgentColor(nextPersona);
-        if (personaColor && isAllowedAgentColor(personaColor)) {
-          nextColor = personaColor;
-        }
-      }
-    }
-
+    setPersonaError(null);
     setPersonaSaving(true);
+    const finalPersona = personaToSave || null;
+    const finalColor = newColorToSave || currentStage.color;
+    const finalIcon = newIconToSave || currentStage.icon;
+
     const prev = stages;
-    const next = prev.map((c) =>
-      c.id === currentStage.id ? { ...c, persona: nextPersona, icon: nextIcon, color: nextColor } : c,
-    );
+    const next = prev.map((c) => (c.id === currentStage.id ? { ...c, persona: finalPersona, color: finalColor, icon: finalIcon } : c));
     setStages(next);
-    useCortexStore.getState().syncStagesFromColumns(next);
     if (updateStage) {
-      await updateStage(currentStage.id, { persona: nextPersona, icon: nextIcon, color: nextColor });
+      await updateStage(currentStage.id, { persona: finalPersona, color: finalColor, icon: finalIcon });
     }
     const saved = await savePipelineConfig(next);
     setPersonaSaving(false);
     if (!saved) {
       setStages(prev);
-      useCortexStore.getState().syncStagesFromColumns(prev);
       setPersonaError(t('columnMenu.saveErrorRollback'));
       return;
     }
@@ -251,54 +194,42 @@ export default function StageContextMenu({
   };
 
   const handleSaveScript = async () => {
-    const trimmed = draftScript.trim();
-    const currentVal = scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript;
-    if (trimmed === currentVal) {
-      setMode('main');
-      return;
-    }
-
+    const raw = draftScript.trim();
     setScriptError(null);
     setScriptSaving(true);
-    const prev = stages;
 
-    const existingHooks = { ...currentStage.hooks };
-    const updatedHooks: Record<string, HookDefinition> = { ...existingHooks };
-    let updatedOnEnterScript: string | null | undefined = currentStage.onEnterScript;
+    const prevHooks = currentStage.hooks ?? {};
+    const nextHooks: Record<string, HookDefinition> = { ...prevHooks };
 
-    if (scriptType === 'on_enter') {
-      if (trimmed) {
-        const existingEnter = existingHooks['on_enter'];
-        const desc = typeof existingEnter === 'object' && existingEnter !== null ? existingEnter.description : undefined;
-        updatedHooks['on_enter'] = desc ? { script: trimmed, description: desc } : { script: trimmed };
-        updatedOnEnterScript = trimmed;
-      } else {
-        delete updatedHooks['on_enter'];
-        updatedOnEnterScript = null;
+    if (!raw) {
+      delete nextHooks[scriptType];
+      if (scriptType === 'on_leave') {
+        delete nextHooks['on_exit'];
+        delete nextHooks['on_finish'];
       }
     } else {
-      if (trimmed) {
-        const existingLeave = existingHooks['on_leave'] ?? existingHooks['on_exit'] ?? existingHooks['on_finish'];
-        const desc = typeof existingLeave === 'object' && existingLeave !== null ? existingLeave.description : undefined;
-        updatedHooks['on_leave'] = desc ? { script: trimmed, description: desc } : { script: trimmed };
-      } else {
-        delete updatedHooks['on_leave'];
-      }
-      delete updatedHooks['on_exit'];
-      delete updatedHooks['on_finish'];
+      nextHooks[scriptType] = { script: raw };
     }
 
-    const finalHooks = Object.keys(updatedHooks).length > 0 ? updatedHooks : undefined;
-    const updatedFields: Partial<PipelineStage> = {
-      hooks: finalHooks,
-      ...(scriptType === 'on_enter' ? { onEnterScript: updatedOnEnterScript } : {}),
-    };
+    const prev = stages;
+    const next = prev.map((c) =>
+      c.id === currentStage.id
+        ? {
+            ...c,
+            hooks: Object.keys(nextHooks).length > 0 ? nextHooks : undefined,
+            onEnterScript: scriptType === 'on_enter' ? (raw || undefined) : c.onEnterScript,
+          }
+        : c
+    );
 
-    const next = prev.map((c) => (c.id === currentStage.id ? { ...c, ...updatedFields } : c));
     setStages(next);
     if (updateStage) {
-      await updateStage(currentStage.id, updatedFields);
+      await updateStage(currentStage.id, {
+        hooks: Object.keys(nextHooks).length > 0 ? nextHooks : undefined,
+        onEnterScript: scriptType === 'on_enter' ? (raw || undefined) : currentStage.onEnterScript,
+      });
     }
+
     const saved = await savePipelineConfig(next);
     setScriptSaving(false);
     if (!saved) {
@@ -310,288 +241,98 @@ export default function StageContextMenu({
   };
 
   const handleDelete = () => {
-    onClose();
-    if (onDeleteStage) {
-      onDeleteStage(currentStage.id);
-    } else if (onDeleteColumn) {
-      onDeleteColumn(currentStage.id);
+    if (isProtected) return;
+    const handler = onDeleteStage ?? onDeleteColumn;
+    if (handler) {
+      handler(currentStage.id);
+    } else {
+      const prev = stages;
+      const next = prev.filter((c) => c.id !== currentStage.id);
+      setStages(next);
+      void savePipelineConfig(next);
     }
+    onClose();
   };
 
   const menu = (
     <div
       ref={menuRef}
+      style={{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${MENU_WIDTH}px` }}
       role="menu"
-      className="fixed z-50 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] py-1 font-sans text-xs text-[#171717] dark:text-[#f4f4f5] shadow-md transition-colors"
-      style={{ left: pos.left, top: pos.top, width: MENU_WIDTH }}
-      onClick={(e) => e.stopPropagation()}
-      onContextMenu={(e) => e.preventDefault()}
+      aria-label={currentStage.title}
+      className="fixed z-50 rounded-lg bg-white dark:bg-[#1c1c21] border border-[#ebebeb] dark:border-[#2c2c33] shadow-lg py-1 text-xs select-none animate-in fade-in zoom-in-95 duration-100"
     >
+      <div className="px-3 py-1.5 text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a] border-b border-[#ebebeb] dark:border-[#212126] flex items-center justify-between">
+        <span className="truncate">{currentStage.title}</span>
+        <span className="font-semibold text-[#666666] dark:text-[#a1a1aa]">[{currentStage.id}]</span>
+      </div>
+
       {mode === 'main' && (
-        <>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setDraftTitle(currentStage.title);
-              setRenameError(null);
-              setMode('rename');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
-          >
-            {t('columnMenu.rename')}
-          </button>
-          {canChangeAgent && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => setMode('persona')}
-              className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
-            >
-              {t('columnMenu.changeAgent')}
-            </button>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setDraftScript(currentEnterScript);
-              setScriptType('on_enter');
-              setScriptError(null);
-              setMode('script');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
-          >
-            <span className="flex items-center gap-1.5 min-w-0">
-              <ArrowRightToLine className="h-3.5 w-3.5 block shrink-0 text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
-              <span>{t('columnMenu.enterScript')}</span>
-            </span>
-            {currentEnterScript && (
-              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px]">
-                {currentEnterScript.split(/[\\/]/).pop()}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setDraftScript(currentLeaveScript);
-              setScriptType('on_leave');
-              setScriptError(null);
-              setMode('script');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
-          >
-            <span className="flex items-center gap-1.5 min-w-0">
-              <ArrowRightFromLine className="h-3.5 w-3.5 block shrink-0 text-amber-600 dark:text-amber-400 stroke-[2.2]" />
-              <span>{t('columnMenu.leaveScript')}</span>
-            </span>
-            {currentLeaveScript && (
-              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px]">
-                {currentLeaveScript.split(/[\\/]/).pop()}
-              </span>
-            )}
-          </button>
-          <div className="my-1 border-t border-[#ebebeb] dark:border-[#212126]" />
-          <button
-            type="button"
-            role="menuitem"
-            disabled={isProtected}
-            title={isProtected ? t('columnMenu.protectedNotice') : undefined}
-            onClick={handleDelete}
-            className={`w-full px-3 py-1.5 text-left ${
-              isProtected
-                ? 'text-[#8f8f8f] dark:text-[#71717a] cursor-not-allowed'
-                : 'text-[#b91c1c] dark:text-[#f87171] hover:bg-[#fef2f2] dark:hover:bg-[#450a0a]/40 cursor-pointer'
-            }`}
-          >
-            {t('columnMenu.delete')}
-          </button>
-        </>
+        <StageMainMenu
+          isProtected={isProtected}
+          canChangeAgent={canChangeAgent}
+          currentEnterScript={currentEnterScript}
+          currentLeaveScript={currentLeaveScript}
+          onOpenRename={() => setMode('rename')}
+          onOpenPersona={() => setMode('persona')}
+          onOpenEnterScript={() => {
+            setDraftScript(currentEnterScript);
+            setScriptType('on_enter');
+            setScriptError(null);
+            setMode('script');
+          }}
+          onOpenLeaveScript={() => {
+            setDraftScript(currentLeaveScript);
+            setScriptType('on_leave');
+            setScriptError(null);
+            setMode('script');
+          }}
+          onDelete={handleDelete}
+        />
       )}
 
       {mode === 'rename' && (
-        <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">{t('columnMenu.newTitle')}</div>
-          <input
-            type="text"
-            autoFocus
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleSaveRename();
-              }
-            }}
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] transition"
-          />
-          {renameError && (
-            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-              {renameError}
-            </div>
-          )}
-          <div className="mt-2 flex items-center justify-end space-x-2">
-            <button
-              type="button"
-              onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              disabled={!draftTitle.trim() || renameSaving}
-              onClick={() => void handleSaveRename()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
-            >
-              {t('common.save')}
-            </button>
-          </div>
-        </div>
+        <StageRenameView
+          draftTitle={draftTitle}
+          setDraftTitle={setDraftTitle}
+          renameError={renameError}
+          renameSaving={renameSaving}
+          onSave={() => void handleSaveRename()}
+          onCancel={() => setMode('main')}
+        />
       )}
 
       {mode === 'persona' && (
-        <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">{t('columnMenu.agentColumn')}</div>
-          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#71717a]">
-            {t('columnMenu.currentAgent', { agent: currentStage.persona ?? t('columnMenu.notAssigned') })}
-          </div>
-          {usePersonaSelect ? (
-            <PersonaSelect
-              value={isNewAgentSelected ? NEW_AGENT_OPTION : selectedPersona}
-              onChange={(val) => {
-                if (val === NEW_AGENT_OPTION) {
-                  setIsNewAgentSelected(true);
-                } else {
-                  setIsNewAgentSelected(false);
-                  setSelectedPersona(val);
-                }
-              }}
-              disabled={personasLoading || personaSaving}
-              personas={personas}
-              allowNewAgent={true}
-              newAgentOptionValue={NEW_AGENT_OPTION}
-            />
-          ) : (
-            <input
-              type="text"
-              autoFocus
-              value={selectedPersona}
-              onChange={(e) => setSelectedPersona(e.target.value)}
-              placeholder={personasLoading ? t('board.loadingAgents') : 'developer'}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono transition"
-            />
-          )}
-          {usePersonaSelect && isNewAgentSelected && (
-            <>
-              <input
-                type="text"
-                autoFocus
-                value={newAgentName}
-                onChange={(e) => setNewAgentName(e.target.value)}
-                placeholder={t('board.newAgentNamePlaceholder')}
-                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono transition"
-              />
-              {newAgentName.trim() !== '' ? (
-                <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
-                  {t('columnMenu.roleNameHint', {
-                    role: slugifyTitle(newAgentName) === 'column'
-                      ? t('columnMenu.lettersOrDigitsRequired')
-                      : slugifyTitle(newAgentName)
-                  })}
-                </div>
-              ) : (
-                <div className="mt-1 text-[10px] text-[#8f8f8f]">
-                  {t('columnMenu.translitHint')}
-                </div>
-              )}
-            </>
-          )}
-          {personaError && (
-            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-              {personaError}
-            </div>
-          )}
-          <div className="mt-2 flex items-center justify-end space-x-2">
-            <button
-              type="button"
-              onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] transition cursor-pointer"
-            >
-              {t('common.back')}
-            </button>
-            <button
-              type="button"
-              disabled={personaSaving || personasLoading}
-              onClick={() => void handleSavePersona()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
-            >
-              {t('common.save')}
-            </button>
-          </div>
-        </div>
+        <StagePersonaView
+          currentPersona={currentStage.persona}
+          selectedPersona={selectedPersona}
+          setSelectedPersona={setSelectedPersona}
+          usePersonaSelect={usePersonaSelect}
+          personas={personas}
+          personasLoading={personasLoading}
+          personaSaving={personaSaving}
+          isNewAgentSelected={isNewAgentSelected}
+          setIsNewAgentSelected={setIsNewAgentSelected}
+          newAgentName={newAgentName}
+          setNewAgentName={setNewAgentName}
+          personaError={personaError}
+          onSave={() => void handleSavePersona()}
+          onCancel={() => setMode('main')}
+        />
       )}
 
       {mode === 'script' && (
-        <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 flex items-center gap-1.5">
-            {scriptType === 'on_enter' ? (
-              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
-            ) : (
-              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
-            )}
-            <span>{scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}</span>
-          </div>
-          <div
-            className="mb-1.5 text-[#8f8f8f] dark:text-[#71717a] truncate font-mono text-[10px]"
-            title={(scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet')}
-          >
-            {t('columnMenu.currentScript', {
-              script: (scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet'),
-            })}
-          </div>
-          <input
-            type="text"
-            autoFocus
-            value={draftScript}
-            onChange={(e) => setDraftScript(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleSaveScript();
-              }
-            }}
-            placeholder="scripts/setup.bat, .py, .ps1, .sh"
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono text-xs transition"
-          />
-          <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
-            {scriptType === 'on_enter' ? t('columnMenu.enterScriptHint') : t('columnMenu.leaveScriptHint')}
-          </div>
-          {scriptError && (
-            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-              {scriptError}
-            </div>
-          )}
-          <div className="mt-2 flex items-center justify-end space-x-2">
-            <button
-              type="button"
-              onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] transition cursor-pointer"
-            >
-              {t('common.back')}
-            </button>
-            <button
-              type="button"
-              disabled={scriptSaving}
-              onClick={() => void handleSaveScript()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
-            >
-              {t('common.save')}
-            </button>
-          </div>
-        </div>
+        <StageScriptView
+          scriptType={scriptType}
+          currentEnterScript={currentEnterScript}
+          currentLeaveScript={currentLeaveScript}
+          draftScript={draftScript}
+          setDraftScript={setDraftScript}
+          scriptError={scriptError}
+          scriptSaving={scriptSaving}
+          onSave={() => void handleSaveScript()}
+          onCancel={() => setMode('main')}
+        />
       )}
     </div>
   );

@@ -23,32 +23,6 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
         }
     }
 
-    let pipeline_file = root.join(".cvh").join("pipeline.json");
-    if pipeline_file.exists() {
-        if let Ok(content) = tokio::fs::read_to_string(&pipeline_file).await {
-            if let Ok(pipe) = serde_json::from_str::<PipelineConfig>(&content) {
-                if let Some(boards) = pipe.boards {
-                    if !boards.is_empty() {
-                        let active = pipe.active_board_id.unwrap_or_else(default_board_id);
-                        return Ok(BoardsConfig {
-                            active_board_id: active,
-                            boards,
-                        });
-                    }
-                }
-                let def_board = BoardDef {
-                    id: "development".to_string(),
-                    name: if pipe.title.trim().is_empty() { "Разработка".to_string() } else { pipe.title },
-                    stages: if pipe.stages.is_empty() { default_pipeline_config().stages } else { pipe.stages },
-                };
-                return Ok(BoardsConfig {
-                    active_board_id: "development".to_string(),
-                    boards: vec![def_board],
-                });
-            }
-        }
-    }
-
     Ok(default_boards_config())
 }
 

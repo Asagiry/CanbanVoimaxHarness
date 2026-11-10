@@ -1,0 +1,399 @@
+use super::activity::sanitize_task_id;
+use crate::commands::state::AppState;
+use crate::db::ActivityItem;
+use tauri::State;
+
+#[tauri::command]
+pub async fn load_subagent_dialog(
+    parent_task_id: String,
+    subagent_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ActivityItem>, String> {
+    let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    let s_trim = subagent_id.trim();
+
+    // 1. If subagent_id already contains ":sub:", use it directly.
+    if s_trim.contains(":sub:") {
+        if let Ok(safe_id) = sanitize_task_id(s_trim) {
+            let items = crate::db::load_dialog_items(&root, &safe_id)?;
+            if !items.is_empty() {
+                return Ok(items);
+            }
+        }
+    }
+
+    // 2. Direct format: "{}:sub:{}"
+    let direct_key = format!("{}:sub:{}", p_trim, s_trim);
+    if let Ok(safe_id) = sanitize_task_id(&direct_key) {
+        let items = crate::db::load_dialog_items(&root, &safe_id)?;
+        if !items.is_empty() {
+            return Ok(items);
+        }
+    }
+
+    // 3. Hierarchical format: "{}:sub:{}.sub-{}" if s_trim does not already contain ".sub-"
+    if !s_trim.contains(".sub-") && !p_trim.is_empty() {
+        let nested_key = format!("{}:sub:{}.sub-{}", p_trim, p_trim, s_trim);
+        if let Ok(safe_id) = sanitize_task_id(&nested_key) {
+            let items = crate::db::load_dialog_items(&root, &safe_id)?;
+            if !items.is_empty() {
+                return Ok(items);
+            }
+        }
+    }
+
+    // 4. Check if subagent_id is a tool call ID (e.g. "call_...") or ends with tool call ID,
+    // and search SQLite for keys ending with ".sub-{tool_call_id}".
+    let tool_call_id = if let Some(pos) = s_trim.rfind(".sub-") {
+        &s_trim[(pos + 5)..]
+    } else {
+        s_trim
+    };
+
+    if !tool_call_id.is_empty() {
+        if let Ok(Some(matched_key)) = crate::db::find_subagent_dialog_key(&root, Some(p_trim), tool_call_id) {
+            if let Ok(safe_id) = sanitize_task_id(&matched_key) {
+                let items = crate::db::load_dialog_items(&root, &safe_id)?;
+                if !items.is_empty() {
+                    return Ok(items);
+                }
+            }
+        }
+    }
+
+    // 5. Fallback: return result of direct key
+    let fallback_key = if s_trim.contains(":sub:") {
+        s_trim.to_string()
+    } else {
+        format!("{}:sub:{}", p_trim, s_trim)
+    };
+    let safe_id = sanitize_task_id(&fallback_key)?;
+    crate::db::load_dialog_items(&root, &safe_id)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentSummary {
+    pub id: String,
+    pub parent_task_id: String,
+    pub tool_call_id: Option<String>,
+    pub title: String,
+    #[serde(alias = "persona")]
+    pub role: String,
+    pub prompt: String,
+    pub status: String,
+    pub created_at: i64,
+    pub duration_ms: Option<f64>,
+    pub steps_count: usize,
+    pub last_error: Option<String>,
+    #[serde(default)]
+    pub is_bg: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentDialogKeyInfo {
+    pub key: String,
+    pub is_bg: bool,
+}
+
+#[tauri::command]
+pub async fn list_subagents(
+    parent_task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SubagentSummary>, String> {
+    let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    if p_trim.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let disk_tasks = crate::commands::tasks::load_tasks_from_disk(&root).await;
+    let mut result_map: std::collections::HashMap<String, SubagentSummary> = std::collections::HashMap::new();
+
+    // 1. In-memory sessions from SUBAGENT_SESSIONS
+    {
+        let session_snapshots: Vec<(String, std::sync::Arc<tokio::sync::Mutex<crate::agent::SubagentRetryInfo>>)> = {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            sessions
+                .iter()
+                .filter(|(sub_id, _)| !disk_tasks.iter().any(|t| t.id == **sub_id))
+                .map(|(sub_id, session)| (sub_id.clone(), std::sync::Arc::clone(&session.retry_info)))
+                .collect()
+        };
+
+        for (sub_id, retry_info_lock) in session_snapshots {
+            let info = retry_info_lock.lock().await;
+            if info.parent_task_id == p_trim {
+                let summary = SubagentSummary {
+                    id: sub_id.clone(),
+                    parent_task_id: p_trim.to_string(),
+                    tool_call_id: info.tool_call_id.clone(),
+                    title: info.title.clone(),
+                    role: info.role.clone(),
+                    prompt: info.prompt.clone(),
+                    status: info.status.clone(),
+                    created_at: if info.created_at > 0 { info.created_at } else { chrono::Utc::now().timestamp_millis() },
+                    duration_ms: info.duration_ms,
+                    steps_count: 0,
+                    last_error: info.last_error.clone(),
+                    is_bg: info.is_bg,
+                };
+                result_map.insert(sub_id, summary);
+            }
+        }
+    }
+
+    // 2. Query parent task's dialog items to extract tool metadata (subagent/subagent_bg tool calls)
+    struct ParentSubagentTool {
+        call_id: Option<String>,
+        title: String,
+        role: String,
+        prompt: String,
+        duration: Option<f64>,
+        status: String,
+        is_bg: bool,
+        created_at: Option<i64>,
+    }
+
+    let mut parent_subagent_tools: Vec<ParentSubagentTool> = Vec::new();
+    if let Ok(safe_pid) = sanitize_task_id(p_trim) {
+        if let Ok(parent_items) = crate::db::load_dialog_items(&root, &safe_pid) {
+            for it in parent_items {
+                if it.item_type == "tool" {
+                    if let Some(ref t) = it.tool {
+                        let t_name = t.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
+                        if t_name == "subagent" || t_name == "subagent_bg" {
+                            let params = t.get("params");
+                            let title = params.and_then(|p| p.get("title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let role = params.and_then(|p| p.get("persona").or_else(|| p.get("role"))).and_then(|v| v.as_str()).unwrap_or("general").to_string();
+                            let prompt = params.and_then(|p| p.get("prompt")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let call_id = t.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let duration = t.get("durationMs").and_then(|v| v.as_f64());
+                            let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("running").to_string();
+                            let is_bg = t_name == "subagent_bg";
+                            let created_at = t
+                                .get("timestamp")
+                                .and_then(|v| {
+                                    v.as_i64()
+                                        .or_else(|| v.as_f64().map(|f| f as i64))
+                                        .or_else(|| {
+                                             v.as_str()
+                                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                                                .map(|dt| dt.timestamp_millis())
+                                        })
+                                })
+                                .or_else(|| {
+                                    chrono::DateTime::parse_from_rfc3339(&it.timestamp)
+                                        .ok()
+                                        .map(|dt| dt.timestamp_millis())
+                                });
+                            parent_subagent_tools.push(ParentSubagentTool {
+                                call_id,
+                                title,
+                                role,
+                                prompt,
+                                duration,
+                                status,
+                                is_bg,
+                                created_at,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Query SQLite for persisted subagent dialogues
+    if let Ok(keys) = crate::db::list_subagent_dialog_keys(&root, p_trim) {
+        for key in keys {
+            let raw_sub_id = key.strip_prefix(&format!("{}:sub:", p_trim)).unwrap_or(&key).to_string();
+            if disk_tasks.iter().any(|t| t.id == raw_sub_id) {
+                continue;
+            }
+            let items = crate::db::load_dialog_items(&root, &key).unwrap_or_default();
+            let steps_count = items.len();
+
+            let mut title = String::new();
+            let mut prompt = String::new();
+            let mut role = "general".to_string();
+            let mut status = "finished".to_string();
+            let mut duration_ms = 0.0f64;
+            let mut last_error: Option<String> = None;
+            let mut sub_created_at: Option<i64> = None;
+
+            for it in &items {
+                if sub_created_at.is_none() {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&it.timestamp) {
+                        sub_created_at = Some(dt.timestamp_millis());
+                    }
+                }
+                if it.item_type == "prompt" {
+                    if let Some(ref c) = it.content {
+                        prompt = c.clone();
+                    }
+                }
+                if it.item_type == "error" {
+                    status = "error".to_string();
+                    last_error = it.content.clone();
+                }
+                if let Some(dur) = it.duration_ms {
+                    duration_ms += dur;
+                }
+            }
+
+            let tool_call_id = raw_sub_id.rfind(".sub-").map(|pos| raw_sub_id[(pos + 5)..].to_string());
+
+            let mut is_bg = false;
+            let mut matched_tool_created_at: Option<i64> = None;
+            // Correlate with parent_subagent_tools if possible
+            if let Some(pt) = parent_subagent_tools.iter().find(|p| {
+                (p.call_id.is_some() && tool_call_id.is_some() && p.call_id == tool_call_id)
+                    || (!prompt.is_empty() && p.prompt == prompt)
+            }) {
+                is_bg = pt.is_bg;
+                matched_tool_created_at = pt.created_at;
+                if !pt.title.is_empty() {
+                    title = pt.title.clone();
+                }
+                if !pt.role.is_empty() {
+                    role = pt.role.clone();
+                }
+                if prompt.is_empty() && !pt.prompt.is_empty() {
+                    prompt = pt.prompt.clone();
+                }
+                if duration_ms == 0.0 {
+                    if let Some(d) = pt.duration {
+                        duration_ms = d;
+                    }
+                }
+                if status != "error" {
+                    if pt.status == "running" {
+                        status = "running".to_string();
+                    } else if pt.status == "failed" {
+                        status = "error".to_string();
+                    }
+                }
+            } else {
+                let session_info_opt = {
+                    let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+                    sessions
+                        .iter()
+                        .find(|(sid, _)| *sid == &raw_sub_id || sid.ends_with(&raw_sub_id))
+                        .map(|(_, s)| std::sync::Arc::clone(&s.retry_info))
+                };
+                if let Some(retry_info_lock) = session_info_opt {
+                    let info = retry_info_lock.lock().await;
+                    is_bg = info.is_bg;
+                    if info.created_at > 0 {
+                        matched_tool_created_at = Some(info.created_at);
+                    }
+                }
+            }
+
+            let final_created_at = matched_tool_created_at
+                .or(sub_created_at)
+                .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+
+            if title.is_empty() && !prompt.is_empty() {
+                let first_line = prompt.lines().next().unwrap_or("").trim();
+                let clean = first_line.trim_start_matches('#').trim();
+                if !clean.is_empty() {
+                    title = clean.chars().take(80).collect();
+                }
+            }
+            if title.is_empty() {
+                title = format!("Субагент {}", raw_sub_id);
+            }
+
+            if let Some(existing) = result_map.get_mut(&raw_sub_id) {
+                existing.steps_count = steps_count;
+                if existing.prompt.is_empty() {
+                    existing.prompt = prompt;
+                }
+                if duration_ms > 0.0 {
+                    existing.duration_ms = Some(duration_ms);
+                }
+                if is_bg {
+                    existing.is_bg = true;
+                }
+                if final_created_at > 0 && (existing.created_at == 0 || final_created_at < existing.created_at) {
+                    existing.created_at = final_created_at;
+                }
+            } else {
+                let summary = SubagentSummary {
+                    id: raw_sub_id.clone(),
+                    parent_task_id: p_trim.to_string(),
+                    tool_call_id,
+                    title,
+                    role,
+                    prompt,
+                    status,
+                    created_at: final_created_at,
+                    duration_ms: if duration_ms > 0.0 { Some(duration_ms) } else { None },
+                    steps_count,
+                    last_error,
+                    is_bg,
+                };
+                result_map.insert(raw_sub_id, summary);
+            }
+        }
+    }
+
+    let mut list: Vec<SubagentSummary> = result_map
+        .into_values()
+        .filter(|s| !disk_tasks.iter().any(|t| t.id == s.id))
+        .collect();
+    list.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(list)
+}
+
+#[tauri::command]
+pub async fn list_subagent_dialog_keys(
+    parent_task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SubagentDialogKeyInfo>, String> {
+    let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    if p_trim.is_empty() {
+        return Ok(Vec::new());
+    }
+    let keys = crate::db::list_subagent_dialog_keys(&root, p_trim)?;
+    let session_snapshots: Vec<(String, std::sync::Arc<tokio::sync::Mutex<crate::agent::SubagentRetryInfo>>)> = {
+        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+        sessions
+            .iter()
+            .map(|(sid, sess)| (sid.clone(), std::sync::Arc::clone(&sess.retry_info)))
+            .collect()
+    };
+
+    let mut result = Vec::new();
+    for key in keys {
+        let raw_sub_id = key.strip_prefix(&format!("{}:sub:", p_trim)).unwrap_or(&key).to_string();
+        let mut is_bg = false;
+        for (sid, retry_info_lock) in &session_snapshots {
+            if sid == &raw_sub_id || sid.ends_with(&raw_sub_id) {
+                let info = retry_info_lock.lock().await;
+                is_bg = info.is_bg;
+                break;
+            }
+        }
+        result.push(SubagentDialogKeyInfo { key, is_bg });
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn retry_subagent(
+    parent_task_id: String,
+    subagent_id: String,
+    message: Option<String>,
+    model: Option<String>,
+    provider_id: Option<String>,
+) -> Result<(), String> {
+    crate::agent::retry_subagent_execution(Some(&parent_task_id), &subagent_id, message, model, provider_id)
+        .await
+        .map_err(|e| e.to_string())
+}

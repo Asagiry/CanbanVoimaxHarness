@@ -1,5 +1,6 @@
 pub mod state;
 pub mod boards;
+pub mod personas;
 pub mod dialogs;
 pub mod git;
 pub mod cortex;

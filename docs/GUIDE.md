@@ -69,7 +69,7 @@
 .cvh/
 ├── harness.db             # SQLite SSOT (WAL-режим): задачи, диалоги и стриминг
 ├── config.json            # проект: имя, модель/endpoint по умолчанию, providers
-├── boards.json            # мульти-доски: { activeBoardId, boards[] } — единственный SSOT; pipeline.json deprecated, не создаётся — см. §2.3
+├── boards.json            # мульти-доски: { activeBoardId, boards[] } — единственный SSOT — см. §2.3
 ├── agents/
 │   └── <role>/            # модульная папка роли (канонический путь):
 │       ├── persona.md    # системный промпт роли с YAML frontmatter (icon, description)
@@ -91,7 +91,7 @@
 > **Скрипты переходов**: общие хуки лежат в `.cvh/hooks/` (`gatekeeper_sensor.bat`, `on_review_finish.bat` и др.).
 > Если хук не настроен или файл отсутствует, бэкенд безопасно пропускает вызов (`if hook_path.exists()`).
 
-### 2.2 Колонки досок (`boards.json`, SSOT) — **работает**; `pipeline.json` deprecated, не создаётся
+### 2.2 Колонки досок (`boards.json`, SSOT) — **работает**
 
 Полная схема колонки (`PipelineColumn`, `config.rs`):
 
@@ -108,7 +108,7 @@
 | `temperature` | f32? | температура стадии (приоритет №3, см. §5) |
 | `gatekeeperSensor` | string? | команда-сенсор; **блокирует** вход при ненулевом exit code |
 | `allowedTools` | string[]? | декларативный список (см. статус ниже) |
-| `hooks` | `{ on_enter?, on_finish? }` | пути скриптов ИЛИ `"builtin:create_worktree"` |
+| `hooks` | `{ on_enter?, on_leave? }` | пути скриптов ИЛИ `"builtin:create_worktree"`; для скриптов выхода поддерживаются алиасы `on_leave` / `on_finish` / `on_exit` |
 | `autoRun` | bool? | автозапуск агента при входе; default = `persona != null` |
 | `terminal` | bool? | терминальная колонка: задача переходит в `done` |
 
@@ -148,8 +148,8 @@
 - `create_board`: id — слагифицированное имя (`slugify_board_name`, с транслитерацией кириллицы,
   суффикс `-2`, `-3` при коллизии) — **работает**.
 - `delete_board`: единственную доску удалить нельзя; задачи удалённой доски переезжают на новую активную — **работает**.
-- `save_pipeline_config` пишет только в `boards.json` (активная доска обновляется в SSOT);
-  `pipeline.json` не создаётся и не зеркалится (тест `config/tests.rs:264`) — **работает**.
+- `save_pipeline_config` пишет только в `boards.json` (активная доска обновляется в SSOT) — **работает**.
+
 - Задачи привязаны к доске полем `board_id` (пустое нормализуется в `"development"`).
 
 ### 2.4 `config.json` — **работает**
@@ -231,7 +231,7 @@ ID монотонные `max+1`, **никогда не переиспользу�
 
 1. `board_id` пустой → активная доска. ID — `CVH-NNN` (max+1).
 2. Новая задача стартует **без** `worktreePath`/`branch`. Дальше — on_enter колонки `stage_id`
-   (поиск колонки: сначала доска `board_id`, потом `pipeline.json`):
+   (поиск колонки по доске `board_id`):
    - `trigger_column_on_enter_script` — поле `onEnterScript`, cwd = worktree-если-есть иначе корень, best-effort;
    - `hooks.on_enter`: `"builtin:create_worktree"` → только builtin ниже; иначе shell-хук
      (primary-путь, иначе fallback `.cvh/agents/<persona>/hooks/<basename>`; отсутствие файла — пропуск);
@@ -246,7 +246,7 @@ ID монотонные `max+1`, **никогда не переиспользу�
 
 Строгий порядок (колонки ищутся с учётом `board_id` задачи):
 
-1. **on_finish source-колонки** — только shell (`hooks.on_finish`), best-effort: неуспех **не блокирует**
+1. **on_leave source-колонки** — shell-скрипт выхода (`hooks.on_leave`, с фолбэками на `hooks.on_finish` и `hooks.on_exit`), best-effort: неуспех **не блокирует**
    переход, stdout пишет `worktree/branch` через тот же протокол. Builtin здесь нет.
 2. **Gatekeeper sensor** target-колонки (`gatekeeperSensor`, выполняется в worktree-или-корне) —
    неуспех **блокирует** переход с ошибкой. Таймаут сенсора 300с.
@@ -264,13 +264,13 @@ ID монотонные `max+1`, **никогда не переиспользу�
 
 - Steer-логика: пустое `description` + непустой `prompt` → становится описанием;
   иначе описание не мутируется, а `prompt` уходит отдельным сообщением `[USER STEER]: ...`.
-- Колонка ищется по доске задачи → `pipeline.json` → заглушка. Нет `persona` → `"developer"`.
+- Колонка ищется по доске задачи → заглушка. Нет `persona` → `"developer"`.
 - **Worktree fallback**: путь пуст или отсутствует на диске → агент работает **в корне репо**
   (создавать worktree здесь запрещено, в лог — WARN). Агент уведомляется маркером, дописанным к описанию:
   `\n\n[HOOK] worktree: <path> — твой изолированный workdir, работаешь тут.` — только если worktree есть.
 - Модель: `task.model` → `llm_settings.model` → `agents/<role>/setting.model` → `col.modelOverride` →
   `project.defaultModel` → хардкод `gemini-3.8-flash-high`.
-  Температура: `llm_settings` → `agent setting` → `column`. `baseUrl`: `llm_settings` → проект → `http://127.0.0.1:8045/v1`.
+  Температура: `llm_settings` → `agent setting` → `column`. `baseUrl`: `llm_settings` → проект → `https://opencode.ai/inference/go/openai/v1`.
 - Статус `running` пишется в SQLite SSOT + событие `agent:status`.
 - Финиш: парсинг вердикта **по вхождению верхнего регистра** в финальном ответе:
   `CHANGES_REQUESTED` / `APPROVED_WITH_CAVEATS` / `APPROVED`. Дальше — иерархия сабтасок:
@@ -313,9 +313,9 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 
 ### 4.1 Single Authoritative Layer — **работает**
 
-`effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? true`.
+`effective(tool, stage) = stage_override[stage][tool] ?? true`.
 - Если на этапе колонки явно задан оверрайд (`true` или `false`), это решение является **окончательным** (Single Authoritative Layer).
-- Если оверрайд для данного тула отсутствует, в силу вступает значение из `global_enabled`.
+
 - Для иерархии субагентов (`subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`) действует мастер-свитч стадии `subagent`: если он `false`, всё семейство блокируется.
 - Алиасы SWE-bench нормализуются до проверки: `bash → execute_command`, `str_replace → edit_file` (`normalize_tool_name`).
 
@@ -411,6 +411,25 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 - `ContextGauge` (фронт) считает токены клиентской эвристикой по ленте + телеметрии и кнопкой
   `⚡ Компактировать` дергает `compact_context`; дополнительно фронт сам испаряет старые tool-логи
   (`evaporateClientToolLogs` в `drawerStore`) — это уже про рендер, не про LLM-контекст.
+
+### 5.4 Реальный SSE-стриминг (`llm/client.rs`) и машина состояний задач (`domain/state.rs`) — **работает**
+
+- **SSE Streaming Client (`src-tauri/src/llm/client.rs`)**:
+  - Универсальный асинхронный клиент на базе `reqwest::Client` (таймаут соединения 15с, TCP keepalive 30с) и `eventsource-stream`.
+  - Поддерживает два формата эндпоинтов: стандартный `/chat/completions` и семантический `/responses` (автоопределение через `uses_responses_api`).
+  - **Детерминированный Prefix Caching**: инструменты в запросе автоматически сортируются по имени в алфавитном порядке (`tools.sort_by(...)`), гарантируя стабильный хэш префикса в провайдере.
+  - **Устойчивость к разрывам соединения**: автоматический цикл повтора с экспоненциальной задержкой (5с → до 30с) при HTTP 5xx или сетевых таймаутах; частичный текст и незавершенные мысли текущей попытки очищаются перед повтором, уже выполненные тулы сохраняются.
+  - **Типы потоковых чанков (`StreamChunk`)**: `AttemptStart { id }`, `Thought(String)`, `Content(String)`, `ToolCall`, `ToolCallChunk`, `Usage`, `Error(String)`, `Done`. Чанки передаются через канал `tokio::sync::mpsc::Sender<StreamChunk>` непосредственно в `react_engine`.
+
+- **Доменная машина состояний задач (`src-tauri/src/domain/state.rs`)**:
+  - Строгий алгебраический тип данных (ADT) `TaskState`:
+    - `TaskState::Idle`: карточка покоится в колонке, агент не запущен.
+    - `TaskState::Running { model }`: агент активно выполняет задачу с валидированным непустым идентификатором модели.
+    - `TaskState::WaitingSubtask { subtask_id }`: задача заблокирована в ожидании завершения дочерней подзадачи `subtask_id`.
+    - `TaskState::WaitingSubagent`: задача ожидает ответа фонового субагента.
+    - `TaskState::Done { verdict }`: задача завершена в терминальной стадии (с опциональным вердиктом ревью/ретро).
+  - **Дисциплина Parse-Don't-Validate**: недопустимые состояния (например, `Done` с ожиданием подзадачи или `Running` без модели) структурно непредставимы в кодовой базе и отклоняются на границе входа через `StateError`.
+  - **Чистые переходы (`can_transition_to`)**: строгие правила перехода между состояниями защищают от гонок Lost Update при параллельных вызовах IPC.
 
 ---
 
@@ -551,12 +570,12 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 ### Шаг 0. Открой проект в CVH
 
 Открой корень репо → скаффолд (§1). Проверь: `.cvh/config.json` (имя/endpoint),
-`.cvh/boards.json` (3 колонки `backlog → dev → ready`; `pipeline.json` не создаётся),
+`.cvh/boards.json` (3 колонки `backlog → dev → ready`),
 `.cvh/harness.db` (SQLite SSOT задач; `tasks.json` не пишется),
 `.cvh/settings/tool-policy.json`, `.gitignore` (есть `.cvh/worktrees/`).
 Если открываешь не git-репо — у `backlog` не будет builtin-хука: добавь позже вручную (§3.1).
 
-### Шаг 1. Доска(и): `boards.json` (SSOT; `pipeline.json` deprecated)
+### Шаг 1. Доска(и): `boards.json` (SSOT)
 
 1. Создай доски под свои контуры (§7) — `create_board` или правкой JSON.
 2. Соблюди инвариант: порядок стадий сохраняется как задан, первая маркируется `is_intake`, последняя — `terminal`, id уникальны (иначе ошибка сохранения).
@@ -625,7 +644,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 | 4 | Надежда на `column.allowedTools` как enforcement | gate его не смотрит | права — в `tool-policy.json` + `setting` |
 | 5 | Имя тула `my-tool` / `MyTool` | `save_custom_tool` отклонит (только `a-z0-9_`) | переименуй |
 | 6 | `{args}` одинарные в `command` | подстановки нет (код ищет `{{args}}`) | двойные скобки |
-| 8 | Правка `pipeline.json` при активных досках | файл deprecated, бэкенд его не создаёт и не читает как SSOT | правь `boards.json`/доску в UI |
+
 | 9 | `wipLimit` как лимит | фронт-only поле, бэкенд не знает | контролируй руками |
 | 10 | Ожидание автозаписи `tasks-history.json`/knowledge-graph | код не пишет (задумано) | веди вручную/хуком |
 | 11 | Стадия без worktree у задачи | агент тихо работает в корне (WARN в лог) | проверяй worktree после создания |
@@ -645,7 +664,7 @@ custom tools CRUD + исполнение `{{args}}`; `execute_hook` env/инте
 системник (персона + rules по алфавиту + runtime mandate, без внешних skills/монолитов — намеренно); полный стек инструментов
 с параметрами; `todo_write` (persist + событие); spill (>500 строк / >64KB; >2000 строк / >128KB для `read_file`);
 ACID-транзакции диалогов в SQLite WAL `harness.db`; `normalize_pipeline_columns`;
-boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT (`pipeline.json` deprecated, не создаётся);
+boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT;
 Cortex tree/read/save; Git Diff и Image Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
 `ContextGauge`+телеметрия; `localStorage`-бэкап задач и монотонные ID.
 
@@ -660,7 +679,7 @@ Cortex tree/read/save; Git Diff и Image Diff; drawer/телеметрия/steer
 (Все основные вехи дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и SQLite WAL леджера памяти переведены в статус «работает»).
 системник (персона + rules по алфавиту + mandate, без внешних skills/монолитов — намеренно); 10 стандартных тулов
 с параметрами; `todo_write` (persist + событие); spill; 3-tier диалогов; `normalize_pipeline_columns`;
-boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT (`pipeline.json` deprecated, не создаётся);
+boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` — единственный SSOT;
 Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
 `ContextGauge`+телеметрия; `localStorage`-бэкап задач и монотонные ID.
 

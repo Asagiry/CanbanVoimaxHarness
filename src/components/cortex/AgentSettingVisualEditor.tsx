@@ -2,224 +2,30 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from '../../stores/languageStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
-import {
-  Bot,
-  Brain,
-  Maximize2,
-  AlertTriangle,
-  Code2,
-  Palette,
-  Check,
-} from 'lucide-react';
+import { AlertTriangle, Code2 } from 'lucide-react';
 import type { ReasoningEffort } from '../../types';
-import { REASONING_EFFORTS, normalizeReasoningEffort } from '../../types';
-import type { TranslationKey } from '../../i18n/types';
 import {
-  catalogModelOptions,
-  type CatalogModelOption,
-  type Provider,
-} from '../../stores/settings/providers';
-
-const REASONING_EFFORT_LABELS: Record<ReasoningEffort, TranslationKey> = {
-  off: 'ruleEditor.reasoningOff',
-  low: 'ruleEditor.reasoningLow',
-  medium: 'ruleEditor.reasoningMedium',
-  high: 'ruleEditor.reasoningHigh',
-};
-import AgentIcon from '../common/AgentIcon';
-import {
-  AGENT_PALETTE,
-  AGENT_ICONS,
   getDeterministicAgentColor,
   getDeterministicAgentIcon,
-  getRoleBadgeStyle,
   isAllowedAgentColor,
 } from '../../lib/agentPalette';
+import {
+  parseSettingJson,
+  serializeSetting,
+  buildDynamicModelOptions,
+  type ParsedSetting,
+  CustomizationSection,
+  ModelParametersSection,
+  ContextLimitsSection,
+} from './settingEditor';
+
+export * from './settingEditor';
 
 export interface AgentSettingVisualEditorProps {
   content: string;
   role?: string;
   onChange: (newContent: string) => void;
   onSwitchToCode?: () => void;
-}
-
-export interface ParsedSetting {
-  model: string | null;
-  reasoningEffort: ReasoningEffort;
-  contextWindow: number;
-  maxTokens: number;
-  hasAllowedTools: boolean;
-  allowedToolsKey?: string;
-  allowedTools?: unknown;
-  icon?: string;
-  color?: string;
-  rawExtra: Record<string, unknown>;
-}
-
-const CONTEXT_CHIPS = [
-  { value: 128000, label: '128K' },
-  { value: 256000, label: '256K' },
-  { value: 384000, label: '384K' },
-];
-
-const MAX_TOKENS_CHIPS = [
-  { value: 4096, label: '4K' },
-  { value: 8192, label: '8K' },
-  { value: 16384, label: '16K' },
-  { value: 65536, label: '64K' },
-];
-
-export function buildDynamicModelOptions(
-  providers: Provider[],
-  settingsModel?: string | null,
-): CatalogModelOption[] {
-  const catalog = catalogModelOptions(providers);
-  const seen = new Set(catalog.map((o) => o.id));
-  const extra: CatalogModelOption[] = [];
-  if (settingsModel && typeof settingsModel === 'string') {
-    const trimmed = settingsModel.trim();
-    if (trimmed && trimmed !== 'inherit' && !seen.has(trimmed)) {
-      extra.push({ id: trimmed, label: trimmed });
-    }
-  }
-  const sorted = [...catalog].sort((a, b) => {
-    const byProvider = (a.providerName ?? '').localeCompare(b.providerName ?? '', undefined, {
-      sensitivity: 'base',
-    });
-    if (byProvider !== 0) return byProvider;
-    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
-  });
-  return [{ id: 'inherit', label: 'inherit' }, ...sorted, ...extra];
-}
-
-export function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string | null } {
-  try {
-    const trimmed = raw.trim();
-    const obj = trimmed ? JSON.parse(trimmed) : {};
-    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
-      throw new Error('Ожидался JSON объект {...}');
-    }
-
-    const rawModel = obj.model;
-    const model =
-      rawModel === undefined || rawModel === null || rawModel === '' || rawModel === 'inherit'
-        ? 'inherit'
-        : String(rawModel);
-
-    // `"off"` (absent/unknown) = default: omitted from the LLM payload.
-    const reasoningEffort: ReasoningEffort =
-      normalizeReasoningEffort(obj.reasoningEffort ?? obj.reasoning_effort) ?? 'off';
-
-    const rawCw = obj.contextWindow ?? obj.context_window;
-    const contextWindow =
-      typeof rawCw === 'number' && !isNaN(rawCw) && rawCw > 0 ? Math.round(rawCw) : 200000;
-
-    const rawMt = obj.maxTokens ?? obj.max_tokens;
-    const maxTokens =
-      typeof rawMt === 'number' && !isNaN(rawMt) && rawMt > 0 ? Math.round(rawMt) : 8192;
-
-    const hasAllowedTools = 'allowedTools' in obj || 'allowed_tools' in obj;
-    const allowedToolsKey = 'allowedTools' in obj ? 'allowedTools' : ('allowed_tools' in obj ? 'allowed_tools' : undefined);
-    const allowedTools = hasAllowedTools
-      ? (obj.allowedTools !== undefined ? obj.allowedTools : obj.allowed_tools)
-      : undefined;
-
-    const icon = typeof obj.icon === 'string' && obj.icon.trim() ? obj.icon.trim() : undefined;
-    const color = typeof obj.color === 'string' && obj.color.trim() ? obj.color.trim() : undefined;
-
-    const rawExtra: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(obj)) {
-      if (
-        ![
-          'model',
-          'temperature',
-          'reasoningEffort',
-          'reasoning_effort',
-          'contextWindow',
-          'context_window',
-          'maxTokens',
-          'max_tokens',
-          'allowedTools',
-          'allowed_tools',
-          'icon',
-          'color',
-        ].includes(key)
-      ) {
-        rawExtra[key] = val;
-      }
-    }
-
-    return {
-      parsed: {
-        model,
-        reasoningEffort,
-        contextWindow,
-        maxTokens,
-        hasAllowedTools,
-        allowedToolsKey,
-        allowedTools,
-        icon,
-        color,
-        rawExtra,
-      },
-      error: null,
-    };
-  } catch (err) {
-    return {
-      parsed: {
-        model: 'inherit',
-        reasoningEffort: 'off',
-        contextWindow: 200000,
-        maxTokens: 8192,
-        hasAllowedTools: false,
-        allowedToolsKey: undefined,
-        allowedTools: undefined,
-        icon: undefined,
-        color: undefined,
-        rawExtra: {},
-      },
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
-export function serializeSetting(parsed: ParsedSetting): string {
-  const output: Record<string, unknown> = {};
-
-  if (parsed.rawExtra._comment) {
-    output._comment = parsed.rawExtra._comment;
-  }
-
-  // Model: если inherit или пусто — пишем 'inherit'
-  output.model =
-    !parsed.model || parsed.model === 'inherit' ? 'inherit' : parsed.model.trim();
-
-  // `off` stays absent (backwards-compat: default null/off ⇒ no field).
-  if (parsed.reasoningEffort && parsed.reasoningEffort !== 'off') {
-    output.reasoningEffort = parsed.reasoningEffort;
-  }
-  output.contextWindow = parsed.contextWindow;
-  output.maxTokens = parsed.maxTokens;
-
-  // Сохраняем исходное значение allowedTools, если оно уже присутствовало в файле, не навязывая изменений
-  if (parsed.hasAllowedTools) {
-    output[parsed.allowedToolsKey || 'allowedTools'] = parsed.allowedTools;
-  }
-
-  if (parsed.icon) {
-    output.icon = parsed.icon;
-  }
-  if (parsed.color) {
-    output.color = parsed.color;
-  }
-
-  for (const [key, val] of Object.entries(parsed.rawExtra)) {
-    if (key !== '_comment') {
-      output[key] = val;
-    }
-  }
-
-  return JSON.stringify(output, null, 2);
 }
 
 export default function AgentSettingVisualEditor({
@@ -269,7 +75,6 @@ export default function AgentSettingVisualEditor({
   });
   const [rawExtra, setRawExtra] = useState<Record<string, unknown>>({});
 
-  // Синхронизация при изменении внешнего content
   useEffect(() => {
     if (content === lastEmittedRef.current) return;
 
@@ -296,8 +101,6 @@ export default function AgentSettingVisualEditor({
     lastEmittedRef.current = content;
   }, [content, assignedPersona, role]);
 
-
-  // Функция эмиссии изменений в родительский activeFile.content
   const emitChanges = (
     nextModel: string,
     nextReasoning: ReasoningEffort,
@@ -392,327 +195,29 @@ export default function AgentSettingVisualEditor({
     );
   }
 
-  const isModelInherit = !model || model === 'inherit';
-
   return (
     <div className="w-full h-full overflow-y-auto px-5 py-4 space-y-5 font-sans select-none text-[#171717] dark:text-[#f4f4f5]">
-      {/* СЕКЦИЯ 1: КАСТОМИЗАЦИЯ АГЕНТА (ИКОНКА И ЦВЕТ) */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
-          <div className="flex items-center space-x-2">
-            <Palette className="h-4 w-4" style={{ color }} />
-            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
-              {t('ruleEditor.customizationSection')}
-            </h2>
-          </div>
-
-          {/* Live Preview бейдж */}
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
-              {t('ruleEditor.previewLabel')}:
-            </span>
-            <div
-              className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium border transition-colors shadow-2xs"
-              style={getRoleBadgeStyle(role, color)}
-            >
-              <AgentIcon name={icon} className="h-3.5 w-3.5 shrink-0" style={{ color }} />
-              <span className="truncate max-w-[120px]">{role || 'agent'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Палитра цветов */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
-              <span>{t('ruleEditor.colorLabel')}</span>
-            </label>
-            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33]">
-              {color}
-            </span>
-          </div>
-
-          <div className="p-2.5 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] space-y-2">
-            <div className="flex flex-wrap gap-2 items-center">
-              {AGENT_PALETTE.map((c) => {
-                const isSelected = color.toLowerCase() === c.toLowerCase();
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => handleColorChange(c)}
-                    aria-label={c}
-                    className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-2xs ${
-                      isSelected
-                        ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f4f4f5]'
-                        : 'hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: c }}
-                  >
-                    {isSelected && <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" />}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[10px] font-sans text-[#8f8f8f] dark:text-[#71717a] leading-tight">
-              {t('cortex.colorNotice')}
-            </p>
-          </div>
-        </div>
-
-        {/* Сетка SVG иконок */}
-        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
-              <span>{t('ruleEditor.iconLabel')}</span>
-            </label>
-            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33]">
-              [{icon}]
-            </span>
-          </div>
-
-          <div className="p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114]">
-            <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5 max-h-36 overflow-y-auto p-1">
-              {AGENT_ICONS.map((ic) => {
-                const isSelected = icon === ic;
-                return (
-                  <button
-                    key={ic}
-                    type="button"
-                    onClick={() => handleIconChange(ic)}
-                    aria-label={ic}
-                    className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#f4f4f5] dark:bg-[#232328] border-2 border-[#171717] dark:border-[#f4f4f5] shadow-2xs'
-                        : 'hover:bg-[#f9f9fb] dark:hover:bg-[#1e1e23] border border-transparent text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
-                    }`}
-                  >
-                    <AgentIcon
-                      name={ic}
-                      className="h-4 w-4"
-                      style={{ color: isSelected ? color : undefined }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* СЕКЦИЯ 2: МОДЕЛЬ */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
-          <Bot className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
-          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
-            {t('ruleEditor.modelSection')}
-          </h2>
-        </div>
-
-        {/* Выбор модели */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
-              <span>{t('ruleEditor.modelLabel')}</span>
-              {isModelInherit && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] dark:text-[#71717a]">
-                  {t('ruleEditor.modelInherit')}
-                </span>
-              )}
-            </label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                list="model-options"
-                value={model === 'inherit' ? '' : model}
-                onChange={(e) => handleModelChange(e.target.value || 'inherit')}
-                placeholder={t('ruleEditor.modelPlaceholder')}
-                className="w-full px-3 py-1.5 rounded-md border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs focus:outline-hidden focus:border-[#6366f1] dark:focus:border-[#818cf8] transition"
-              />
-              <datalist id="model-options">
-                {dynamicModels.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </div>
-
-            {model !== 'inherit' && (
-              <button
-                type="button"
-                onClick={() => handleModelChange('inherit')}
-                className="px-2.5 py-1.5 rounded-md text-xs font-mono border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
-              >
-                Сбросить
-              </button>
-            )}
-          </div>
-
-          {/* Быстрые бейджи модели */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {dynamicModelOptions.map((option) => {
-              const isSelected =
-                option.id === 'inherit'
-                  ? isModelInherit
-                  : model.toLowerCase() === option.id.toLowerCase();
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => handleModelChange(option.id)}
-                  title={option.id}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer flex items-center space-x-1 border ${
-                    isSelected
-                      ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                      : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
-                  }`}
-                >
-                  <span>{option.providerName ? `${option.providerName} / ${option.label}` : option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Effort рассуждений */}
-        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
-              <Brain className="h-3.5 w-3.5 text-[#6366f1]" />
-              <span>{t('ruleEditor.reasoningLabel')}</span>
-            </label>
-            <span className="font-mono text-xs font-bold tabular-nums px-2 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]">
-              {t(REASONING_EFFORT_LABELS[reasoningEffort])}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {REASONING_EFFORTS.map((effort) => {
-              const isActive = reasoningEffort === effort;
-              return (
-                <button
-                  key={effort}
-                  type="button"
-                  onClick={() => handleReasoningEffortChange(effort)}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
-                    isActive
-                      ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                      : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
-                  }`}
-                >
-                  {t(REASONING_EFFORT_LABELS[effort])}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* СЕКЦИЯ 3: ЛИМИТЫ КОНТЕКСТА И ТОКЕНОВ */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
-          <Maximize2 className="h-4 w-4 text-[#10b981] dark:text-[#34d399]" />
-          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
-            {t('ruleEditor.limitsSection')}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Размер контекстного окна */}
-          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#212126] bg-white dark:bg-[#111114]">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5]">
-                {t('ruleEditor.contextWindowLabel')}
-              </label>
-              <span className="font-mono text-xs font-semibold tabular-nums text-[#6366f1] dark:text-[#818cf8]">
-                {contextWindow.toLocaleString()}
-              </span>
-            </div>
-
-            <input
-              type="number"
-              min="1000"
-              max="2000000"
-              step="1000"
-              value={contextWindow}
-              onChange={(e) => handleContextWindowChange(parseInt(e.target.value, 10) || 128000)}
-              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
-            />
-
-            {/* Быстрые чипы */}
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {CONTEXT_CHIPS.map((chip) => {
-                const isActive = contextWindow === chip.value;
-                return (
-                  <button
-                    key={chip.value}
-                    type="button"
-                    onClick={() => handleContextWindowChange(chip.value)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono transition cursor-pointer border ${
-                      isActive
-                        ? 'border-[#10b981] bg-[#10b981]/10 text-[#059669] dark:text-[#34d399] font-bold'
-                        : 'border-[#ebebeb] dark:border-[#2c2c33] bg-[#f9f9fb] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8]'
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans leading-tight pt-1">
-              {t('ruleEditor.contextWindowHint')}
-            </p>
-          </div>
-
-          {/* Максимально токенов вывода */}
-          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#212126] bg-white dark:bg-[#111114]">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5]">
-                {t('ruleEditor.maxTokensLabel')}
-              </label>
-              <span className="font-mono text-xs font-semibold tabular-nums text-[#10b981] dark:text-[#34d399]">
-                {maxTokens.toLocaleString()}
-              </span>
-            </div>
-
-            <input
-              type="number"
-              min="256"
-              max="131072"
-              step="512"
-              value={maxTokens}
-              onChange={(e) => handleMaxTokensChange(parseInt(e.target.value, 10) || 4096)}
-              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
-            />
-
-            {/* Быстрые чипы */}
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {MAX_TOKENS_CHIPS.map((chip) => {
-                const isActive = maxTokens === chip.value;
-                return (
-                  <button
-                    key={chip.value}
-                    type="button"
-                    onClick={() => handleMaxTokensChange(chip.value)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono transition cursor-pointer border ${
-                      isActive
-                        ? 'border-[#10b981] bg-[#10b981]/10 text-[#059669] dark:text-[#34d399] font-bold'
-                        : 'border-[#ebebeb] dark:border-[#2c2c33] bg-[#f9f9fb] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8]'
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans leading-tight pt-1">
-              {t('ruleEditor.maxTokensHint')}
-            </p>
-          </div>
-        </div>
-      </section>
+      <CustomizationSection
+        role={role}
+        icon={icon}
+        color={color}
+        onIconChange={handleIconChange}
+        onColorChange={handleColorChange}
+      />
+      <ModelParametersSection
+        model={model}
+        reasoningEffort={reasoningEffort}
+        dynamicModelOptions={dynamicModelOptions}
+        dynamicModels={dynamicModels}
+        onModelChange={handleModelChange}
+        onReasoningEffortChange={handleReasoningEffortChange}
+      />
+      <ContextLimitsSection
+        contextWindow={contextWindow}
+        maxTokens={maxTokens}
+        onContextWindowChange={handleContextWindowChange}
+        onMaxTokensChange={handleMaxTokensChange}
+      />
     </div>
   );
 }

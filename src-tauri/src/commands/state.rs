@@ -57,7 +57,7 @@ impl AppState {
         self.repo_root
             .read()
             .map(|r| r.clone())
-            .unwrap_or_else(|_| discover_project_root())
+            .unwrap_or_else(|p| p.into_inner().clone())
     }
 
     pub fn get_project_root(&self) -> PathBuf {
@@ -74,14 +74,13 @@ impl AppState {
         let mut guard = self
             .repo_root
             .write()
-            .map_err(|e| format!("Failed to acquire write lock on repo_root: {}", e))?;
+            .unwrap_or_else(|p| p.into_inner());
         *guard = new_root.clone();
 
         // Dynamically update the SQLite connection pool for the new workspace root
         if let Ok(pool) = crate::db::get_db_pool(&new_root) {
-            if let Ok(mut pool_guard) = self.db_pool.write() {
-                *pool_guard = Some(pool);
-            }
+            let mut pool_guard = self.db_pool.write().unwrap_or_else(|p| p.into_inner());
+            *pool_guard = Some(pool);
         }
         Ok(())
     }
@@ -92,21 +91,22 @@ impl AppState {
 
     /// Returns the underlying r2d2 connection pool, initializing it if absent.
     pub fn get_db_pool(&self) -> Result<DbPool, rusqlite::Error> {
-        if let Ok(guard) = self.db_pool.read() {
+        {
+            let guard = self.db_pool.read().unwrap_or_else(|p| p.into_inner());
             if let Some(ref pool) = *guard {
                 return Ok(pool.clone());
             }
         }
         let pool = crate::db::get_db_pool(&self.get_root())?;
-        if let Ok(mut guard) = self.db_pool.write() {
-            *guard = Some(pool.clone());
-        }
+        let mut guard = self.db_pool.write().unwrap_or_else(|p| p.into_inner());
+        *guard = Some(pool.clone());
         Ok(pool)
     }
 
     /// Retrieves an active connection from the AppState connection pool or falls back to root.
     pub fn get_db_connection(&self) -> Result<DbConnection, rusqlite::Error> {
-        if let Ok(guard) = self.db_pool.read() {
+        {
+            let guard = self.db_pool.read().unwrap_or_else(|p| p.into_inner());
             if let Some(ref pool) = *guard {
                 if let Ok(conn) = pool.get() {
                     return Ok(conn);
@@ -138,21 +138,17 @@ impl AppState {
 
     pub fn register_active_agent(&self, root: &std::path::Path, task_id: &str, handle: ActiveAgentHandle) {
         let key = Self::agent_key(root, task_id);
-        if let Ok(mut map) = self.active_agents.lock() {
-            map.insert(key, handle);
-        }
+        let mut map = self.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        map.insert(key, handle);
     }
 
     pub fn remove_active_agent(&self, root: &std::path::Path, task_id: &str) -> Option<ActiveAgentHandle> {
         let key = Self::agent_key(root, task_id);
-        if let Ok(mut map) = self.active_agents.lock() {
-            if let Some(h) = map.remove(&key) {
-                return Some(h);
-            }
-            map.remove(task_id.trim())
-        } else {
-            None
+        let mut map = self.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(h) = map.remove(&key) {
+            return Some(h);
         }
+        map.remove(task_id.trim())
     }
 
     pub fn remove_active_agent_if_same(
@@ -162,17 +158,16 @@ impl AppState {
         expected_abort_flag: &Arc<AtomicBool>,
     ) -> bool {
         let key = Self::agent_key(root, task_id);
-        if let Ok(mut map) = self.active_agents.lock() {
-            if let Some(entry) = map.get(&key) {
-                if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
-                    map.remove(&key);
-                    return true;
-                }
-            } else if let Some(entry) = map.get(task_id.trim()) {
-                if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
-                    map.remove(task_id.trim());
-                    return true;
-                }
+        let mut map = self.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(entry) = map.get(&key) {
+            if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
+                map.remove(&key);
+                return true;
+            }
+        } else if let Some(entry) = map.get(task_id.trim()) {
+            if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
+                map.remove(task_id.trim());
+                return true;
             }
         }
         false
@@ -180,14 +175,11 @@ impl AppState {
 
     pub fn get_active_agent(&self, root: &std::path::Path, task_id: &str) -> Option<ActiveAgentHandle> {
         let key = Self::agent_key(root, task_id);
-        if let Ok(map) = self.active_agents.lock() {
-            if let Some(h) = map.get(&key) {
-                return Some(h.clone());
-            }
-            map.get(task_id.trim()).cloned()
-        } else {
-            None
+        let map = self.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(h) = map.get(&key) {
+            return Some(h.clone());
         }
+        map.get(task_id.trim()).cloned()
     }
 
     pub fn is_agent_active_in_map(
@@ -230,11 +222,8 @@ impl AppState {
     }
 
     pub fn is_agent_active(&self, root: &std::path::Path, task_id: &str) -> bool {
-        if let Ok(map) = self.active_agents.lock() {
-            Self::is_agent_active_in_map(&map, root, task_id)
-        } else {
-            false
-        }
+        let map = self.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        Self::is_agent_active_in_map(&map, root, task_id)
     }
 
     pub fn get_or_create_agent_context(
@@ -255,7 +244,7 @@ impl AppState {
         task_id: &str,
     ) -> Option<Arc<Mutex<crate::agent::compactor::AgentContextState>>> {
         let key = Self::agent_key(root, task_id);
-        let map = self.agent_contexts.lock().ok()?;
+        let map = self.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
         map.get(&key).cloned().or_else(|| map.get(task_id.trim()).cloned())
     }
 
@@ -265,7 +254,7 @@ impl AppState {
         task_id: &str,
     ) -> Option<Arc<Mutex<crate::agent::compactor::AgentContextState>>> {
         let key = Self::agent_key(root, task_id);
-        let mut map = self.agent_contexts.lock().ok()?;
+        let mut map = self.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
         map.remove(&key).or_else(|| map.remove(task_id.trim()))
     }
 }

@@ -7,7 +7,7 @@
 [![Rust 2021](https://img.shields.io/badge/Rust-2021%20Edition-black?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-574%20PASS%20(100%25)-success?style=flat-square)](#-key-architectural-highlights)
+[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-960%20PASS%20(100%25)-success?style=flat-square)](#-key-architectural-highlights)
 [![Clean Architecture](https://img.shields.io/badge/Clean%20Architecture-9.7%2F10-blueviolet?style=flat-square)](#6-clean-architecture-9710--type-safe-domain-layer)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
@@ -112,9 +112,9 @@ Every thought chunk, streaming token, tool call, and duration metric is persiste
 
 ### 4. 🔀 Multi-Board Topologies & Dynamic Routing
 CVH adapts to project scope through first-class multi-board topologies defined in `.cvh/boards.json`:
-- **Lean Agile Kanban (3 Stages)**: Quick fixes and rapid prototyping (`backlog` → `dev` → `ready`).
-- **Canonical Engineering Pipeline (5 Stages)**: Mission-critical development (`backlog` → `dev` → `review` → `retro` → `ready`).
-- **Domain Pipelines**: Specialized boards for 3D modeling, asset creation, or security auditing.
+- **Canonical Engineering Pipeline (3 Stages)**: Standard development flow (`backlog` → `dev` → `ready`).
+- **Extended Multi-Stage Pipelines**: Mission-critical workflows with specialized review and retro gates (`backlog` → `dev` → `review` → `retro` → `ready`).
+- **Domain Pipelines**: Specialized boards for 3D modeling (`concept` → `modeling` → `texturing` → `ready`), asset creation, or security auditing.
 - Automatic routing parses structured verdicts (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`), advancing verified tasks or returning rejected cards to development with injected audit feedback.
 
 ### 5. 📊 Live Telemetry & Honest Diagnostics
@@ -127,7 +127,7 @@ CVH delivers deep observability into agent execution velocity and token economic
 
 ### 6. 🏛️ Clean Architecture 9.7/10 & Type-Safe Domain Layer
 Engineered to strict Clean Architecture and Single-Responsibility principles (Uncle Bob `ub-mode`):
-- **NASA Test Shield: 574 PASS (100%)**: Comprehensive automated test shield consisting of 574 passing tests (297 Vitest unit tests across 24 suites + 277 Rust core tests), guaranteeing zero regressions.
+- **NASA Test Shield: 960 PASS (100%)**: Comprehensive automated test shield consisting of 960 passing tests (601 Vitest unit tests across 50 suites + 359 Rust core tests), guaranteeing zero regressions.
 - **Type-Safe Nominal Branded Types**: `TaskId`, `StageId`, `BoardId`, and `TaskState` prevent primitive obsession across Rust core (`src-tauri/src/domain/`) and React frontend (`src/types/domain.ts`).
 - **R2D2 SQLite WAL Connection Pooling**: Multi-threaded connection pooling with WAL mode and specialized repository pattern (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`), eliminating database lock contention.
 - **Decoupled ReActEngine<Driver>**: Generic agent execution engine (`react_engine.rs`) parameterized by `AgentSessionDriver`, sharing SSE streaming and telemetry logic between root tasks and child subagents with zero duplication.
@@ -138,13 +138,12 @@ Engineered to strict Clean Architecture and Single-Responsibility principles (Un
 
 ## 🛡️ Zero-Waste Token Engineering & Security Matrix
 
-### Two-Tier Zero-Trust Tool Policy Matrix
+### Single Authoritative Layer Tool Policy Matrix
 Security is enforced with ironclad Single Authoritative Layer resolution:
 ```text
-effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? true
+effective(tool, stage) = stage_override[stage][tool] ?? true
 ```
-- **Level A (Global Switches)**: Defined in `.cvh/settings/tool-policy.json` as global defaults.
-- **Level B (Stage Overrides)**: Single Authoritative Layer per pipeline column (e.g. Code Review stage disables code-mutation tools; explicit stage configuration takes precedence).
+- **Stage Overrides (`stageOverrides`)**: Single Authoritative Layer per pipeline column (e.g. Code Review stage disables code-mutation tools; explicit stage configuration takes precedence).
 - **Direct JSON Schema Editor (`toolCustomSchemas`)**: The Global Registry in `.cvh/settings/tool-policy.json` supports direct customization of tool schemas (`toolCustomSchemas`). Architects and developers can tailor parameter descriptions, add domain-specific constraints, or specialize instructions without modifying core Rust engine code.
 - **English Tool Schemas**: Tool names, descriptions, and parameter definitions use English. Token counts depend on the model's tokenizer; schema language alone does not guarantee a cache hit rate.
 - **Zero-Trust Request Schema Stripping**: Disabled tools are completely purged from the JSON tool schema sent to the LLM. This saves **~2,400+ prompt tokens per inference step** and completely eliminates tool hallucination vectors.
@@ -257,18 +256,18 @@ Automatically runs dependency installation, frontend production build, and nativ
 
 ### Verification Commands (Ground Truth Sensors)
 ```bash
-pnpm test                          # Vitest suite (297 tests / 24 suites)
+pnpm test                          # Vitest suite (601 tests / 50 suites)
 pnpm lint                          # oxlint --deny-warnings
 pnpm exec tsc --noEmit             # TypeScript strict check
-cargo test                         # Rust core tests (277 tests)
+cargo test                         # Rust core tests (359 tests)
 cargo clippy                       # Rust lints (-D warnings in CI)
 ```
 
 ### LLM Defaults
-- **Provider**: Antigravity Proxy (`http://127.0.0.1:8045/v1`)
-- **Model**: `gemini-3.8-flash-high`
+- **Provider**: OpenCode Go (`https://opencode.ai/inference/go/openai/v1`)
+- **Model**: `crouton-alpha-free`
 - **Compactor model**: `inherit` (follows the active model)
-- Supported providers: Antigravity Proxy, Anthropic, DeepSeek, Ollama (see `src-tauri/src/config/providers.rs`)
+- Supported providers: OpenCode Go, Anthropic, OpenAI, DeepSeek, Ollama (see `src-tauri/src/config/providers.rs`)
 
 ### Version & Stack
 - **Version**: `0.1.0` (`package.json`, `src-tauri/Cargo.toml`)
@@ -305,7 +304,7 @@ CanbanVoimaxHarness/
 │
 ├── .cvh/                      # Project Harness Control Plane Configuration
 │   ├── harness.db             # Runtime artifact: SQLite DB (R2D2 WAL mode; gitignored)
-│   ├── boards.json            # Multi-board definitions & active board (single SSOT; pipeline.json deprecated)
+│   ├── boards.json            # Multi-board definitions & active board (single SSOT)
 │   ├── config.json            # Harness configuration
 │   ├── rules/                 # Global architectural rules & navigation maps
 │   ├── agents/                # Modular persona definitions (<role>/persona.md, setting, rules/)
@@ -339,7 +338,6 @@ CanbanVoimaxHarness/
 │   ├── nsis-hooks.nsh         # NSIS installer hooks (Windows)
 │   ├── capabilities/          # Tauri capabilities (default.json)
 │   ├── icons/                 # App icons (png, ico, icns)
-│   ├── tests/                 # Rust integration tests (if present)
 │   ├── src/
 │   │   ├── main.rs            # Desktop entrypoint & crash handler
 │   │   ├── lib.rs             # Tauri plugin & IPC handler registration
@@ -348,76 +346,92 @@ CanbanVoimaxHarness/
 │   │   ├── udf.rs             # Custom SQLite user-defined functions
 │   │   ├── domain/            # Nominal Branded Types & Core Business Invariants
 │   │   │   ├── ids.rs         # TaskId, StageId, BoardId branded types
-│   │   │   └── state.rs       # TaskState state-machine & valid transitions
+│   │   │   ├── state.rs       # TaskState state-machine ADT & valid transitions
+│   │   │   └── state_serde.rs # Custom TaskState Serde serialization
 │   │   ├── db/                # R2D2 SQLite Persistence Layer (.cvh/harness.db)
 │   │   │   ├── pool.rs        # R2D2 pool factory (WAL mode, busy_timeout=5s)
-│   │   │   ├── task_repo.rs   # Task CRUD & query repository
-│   │   │   ├── dialog_repo.rs # Dialogue upsert & streaming chunks repository
+│   │   │   ├── migrations.rs  # Automated SQLite schema migrations
+│   │   │   ├── task_repo/     # Decomposed task repository (task_query, upsert, delete, sequence, todos)
+│   │   │   ├── dialog_repo/   # Decomposed dialogue repository (dialog_query, mutation, tools)
 │   │   │   ├── context_repo.rs # Hidden SQLite context snapshot repository
 │   │   │   └── telemetry_repo.rs # Token usage & performance metrics repository
 │   │   ├── config/            # Harness Configuration & Scaffold Subsystem
 │   │   │   ├── models.rs      # Data structures (BoardDef, PipelineConfig, etc.)
 │   │   │   ├── providers.rs   # LLM provider catalog & boundary guards
-│   │   │   ├── tool_policy.rs # Two-level tool policy matrix enforcement
+│   │   │   ├── tool_policy.rs # Single-authoritative tool policy matrix
 │   │   │   ├── discovery.rs   # Multi-tier workspace root discovery
 │   │   │   ├── scaffold.rs    # Fresh-project scaffolding & auto-gitignore
-│   │   │   └── io.rs          # Atomic disk reads/writes
-│   │   ├── git/               # Native worktree & branch manager (mod.rs, cvh_sync.rs)
-│   │   ├── hooks.rs           # Stage transition script runner (.bat/.sh)
-│   │   ├── agent.rs           # Agent lifecycle, priming & custom tool executor
-│   │   ├── agent/             # Modular Agent Execution Subsystems
-│   │   │   ├── react_engine.rs  # Generic ReActEngine<Driver> loop & stream consumer
+│   │   │   ├── io.rs          # Atomic disk reads/writes
+│   │   │   ├── pipeline.rs    # Pipeline defaults & template stage builders
+│   │   │   ├── projects.rs    # Workspace & project configuration
+│   │   │   ├── agent_settings.rs # Persona settings & context limit models
+│   │   │   └── prompts/       # Modular prompt templates (roles.rs, rules.rs)
+│   │   ├── git/               # Native worktree & branch manager (mod.rs, cvh_sync.rs, cvh_save.rs)
+│   │   ├── hooks/             # Stage transition script runner (process.rs, runner.rs, sensor.rs)
+│   │   ├── agent.rs           # Public agent facade
+│   │   ├── agent/             # Modular Agent Execution Subsystems (all <=500 lines)
+│   │   │   ├── engine.rs      # Core agent turn loop & context drivers
+│   │   │   ├── prompts.rs     # Dynamic prompt assembly & rule compilation
+│   │   │   ├── spill.rs       # Output spill threshold management (>500 lines / >64KB)
+│   │   │   ├── subagent_*.rs  # Subagent runtime, turn, setup, synth, exec, retry
+│   │   │   ├── react_engine/  # Generic ReActEngine<Driver> loop & stream consumers
 │   │   │   ├── session_registry.rs # Active and background subagent session registry
-│   │   │   ├── compactor.rs     # Typed ToolCallSummaryExtractor (CC=1)
-│   │   │   ├── sanitizer.rs     # Unclosed tool call sanitization
-│   │   │   ├── telemetry.rs     # Non-decaying TPS/RPM telemetry
-│   │   │   ├── text_match.rs    # Resilient 5-tier fuzzy edit matching
-│   │   │   ├── tool_schemas.rs  # LLM tool definitions & JSON schemas
-│   │   │   └── tools/           # Modular tool execution implementations
-│   │   ├── commands/          # Tauri IPC Command Handlers
+│   │   │   ├── compactor/     # Decomposed compactor (tokens, extractor, evaporation, multi_tier, report)
+│   │   │   ├── text_match/    # 5-tier fuzzy text replacement & diff mismatch diagnostics
+│   │   │   ├── tool_schemas.rs # LLM tool definitions & JSON schemas
+│   │   │   └── tools/         # Modular tool executors (file_ops, command, web, subagent/, tasks/)
+│   │   ├── commands/          # Tauri IPC Command Handlers (all <=500 lines)
 │   │   │   ├── mod.rs         # IPC command module router
 │   │   │   ├── state.rs       # Central application state container (AppState)
 │   │   │   ├── tasks.rs       # Task command routing
-│   │   │   ├── tasks/         # Modular task pipelines (transitions, lifecycle, runner, storage, healing)
+│   │   │   ├── tasks/         # Decomposed task pipelines (transitions/, lifecycle/, runner/, transition_hooks/, timing.rs)
 │   │   │   ├── boards.rs      # Board management commands
-│   │   │   ├── dialogs.rs     # Dialogue history & streaming commands
+│   │   │   ├── personas/      # Persona management commands (crud.rs, meta.rs)
+│   │   │   ├── dialogs/       # Dialogue history & streaming commands (activity.rs, subagents.rs)
 │   │   │   ├── cortex.rs      # Persona & rules editor commands
-│   │   │   ├── git.rs         # Worktree & diff commands
+│   │   │   ├── git/           # Worktree & diff commands (commands.rs, diff_parser.rs, worktree.rs)
+│   │   │   ├── cvh_git.rs     # CVH Git state & repository sync commands
 │   │   │   ├── llm.rs         # LLM configuration commands
 │   │   │   ├── notifications.rs # Native notification commands
 │   │   │   ├── projects.rs    # Workspace and project management commands
 │   │   │   └── tools.rs       # Tool policy & execution commands
 │   │   └── llm/               # Universal SSE streaming client & model registry
+│   │       ├── client.rs      # Streaming client & connection recovery
+│   │       ├── usage.rs       # Normalized token usage accumulation
+│   │       └── responses_event.rs # SSE event payload parser
 │   ├── Cargo.toml             # Rust dependencies (Tauri v2, Tokio, Rusqlite, R2D2)
 │   └── tauri.conf.json        # Tauri v2 bundle and window configuration
 │
-└── src/                       # React 19 Tactical Frontend (Modular Architecture)
+└── src/                       # React 19 Tactical Frontend (Modular Architecture, all <=350 lines)
     ├── components/
-    │   ├── board/             # Kanban board, BoardTabsHeader & column interactions
+    │   ├── board/             # Kanban board, BoardTabsHeader, StageContextMenu (stageMenu/) & DND hooks
     │   │   └── modals/        # CreateColumnModal, CreateTaskModal, ImageLightboxModal
-    │   ├── card/              # Modular KanbanCard (~256 lines), badges & comparators
-    │   ├── drawer/            # AgentConsoleDrawer
-    │   │   ├── tools/         # Tool execution cards (Command, FileOps, Search, Web, Todo, Subagent)
-    │   │   ├── stream/        # Stream cards (Thought, Steer, SubagentActivity, Markdown)
-    │   │   └── diff/          # Diff viewer (ImageDiffViewer, DiffFileList)
-    │   ├── cortex/            # Cortex Explorer, Persona & Rule visual editors
+    │   ├── card/              # Modular KanbanCard, widgets, cardFamily.ts, cardModel.ts, comparators
+    │   ├── drawer/            # AgentConsoleDrawer (extracted hooks: useDrawerTaskState, useUnifiedActivities, useAgentExecution)
+    │   │   ├── steer/         # DrawerSteerBar, SteerImageBar, SteerModelMenu, steer hooks
+    │   │   ├── subagents/     # SubagentsSidebar, BoardSubtaskCard, InProcessSubagentCard, resize hooks
+    │   │   ├── diff/          # Diff viewer (DiffFileList, GitDiffSidebar & diff/sidebar/, ImageDiffViewer & diff/image/)
+    │   │   ├── stream/        # Stream cards (Thought, Steer, SubagentActivity, Markdown, TerminalResponse)
+    │   │   └── tools/         # Tool execution cards (fileOps/, subagent/, Command, Search, Web, Todo)
+    │   ├── cortex/            # Cortex Explorer, DirtyDot, CvhSaveButton, AgentSettingVisualEditor (settingEditor/)
     │   ├── layout/            # Topbar navigation & WindowControls
-    │   ├── common/            # AgentIcon, Logo, PersonaSelect, RuntimeRuleIcon
+    │   ├── common/            # AgentIcon, Logo, PersonaSelect, RuntimeRuleIcon, HookIcon, BrandFileIcons
     │   ├── splash/            # SplashScreen bootstrap loader
-    │   └── settings/          # Pipeline, tool policy & LLM config modals
+    │   └── settings/          # Pipeline, tool policy (tool-policy/) & LLM provider config modals (providers/)
     ├── hooks/                 # UI hooks (useUiZoom, useContextMenuPosition)
-    ├── stores/                # Zustand reactive stores (boardStore, drawerStore, cortexStore, settingsStore, toolPolicyStore, slices/)
+    ├── stores/                # Zustand reactive stores (boardStore, drawerStore, cortexStore, settingsStore, toolPolicyStore, languageStore, projectStore)
     │   ├── board/             # Board store slices, normalizers & helpers
-    │   ├── drawer/            # Drawer store slices (stream, activity, subagents)
-    │   ├── cortex/            # Cortex store slices (cortexStoreSlice, helpers, listeners)
-    │   └── slices/            # Shared store slices (tasksCrud, taskTimers, taskHooks, taskQuestions)
+    │   ├── drawer/            # Drawer store slices (stream, activity, subagents, drafts)
+    │   ├── cortex/            # Cortex store slices (cortexStoreSlice, cortexGitSave, fileOps, templates, sync)
+    │   └── slices/            # Shared store slices (tasks/ [core, create, move, mutate], taskTimers, taskHooks, taskQuestions)
     ├── services/              # Pure decoupled services
-    │   ├── tauriEventGateway.ts # Strongly typed IPC event gateway (zero listen<any>)
+    │   ├── tauriEventGateway.ts # Strongly typed IPC event gateway facade
+    │   ├── gateway/           # Decomposed event gateway (agentEventRouter, taskEventRouter, textBuffer, helpers)
     │   ├── notificationService.ts # Desktop notifications dispatcher
     │   └── notificationFormatter.ts # Notification message formatting
     ├── types/
-    │   ├── domain.ts          # Nominal branded types (TaskId, StageId, BoardId)
-    │   └── index.ts           # Type barrel exports
+    │   ├── domain.ts          # Nominal branded types (TaskId, StageId, BoardId, ProviderId, TaskState)
+    │   └── index.ts           # Type barrel exports (ReasoningEffort, normalizeReasoningEffort)
     ├── lib/                   # Shared utilities (agentPalette, columnIcons, imageCompression, logger, slug)
     │   └── markdown/          # Extracted markdown AST parser & token helpers
     ├── i18n/                  # Modular localization (ru.ts, en.ts, types.ts)

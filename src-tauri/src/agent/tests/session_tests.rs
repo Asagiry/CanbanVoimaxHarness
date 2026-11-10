@@ -650,9 +650,16 @@ use std::sync::Arc;
         let mut is_dup_2 = false;
         let mut reused_id_2 = None;
         {
-            let sessions = SUBAGENT_SESSIONS.lock().await;
-            for (sid, sess) in sessions.iter() {
-                let info = sess.retry_info.lock().await;
+            let candidates: Vec<(String, Arc<tokio::sync::Mutex<SubagentRetryInfo>>)> = {
+                let sessions = SUBAGENT_SESSIONS.lock().await;
+                sessions
+                    .iter()
+                    .filter(|(sid, _)| sid.starts_with(parent_id) || sid.starts_with(&format!("{}.", parent_id)))
+                    .map(|(sid, sess)| (sid.clone(), Arc::clone(&sess.retry_info)))
+                    .collect()
+            };
+            for (sid, retry_info_lock) in candidates {
+                let info = retry_info_lock.lock().await;
                 if info.parent_task_id == parent_id
                     && (info.status == "running" || info.status == "finished")
                     && info.role.eq_ignore_ascii_case("architect")
@@ -947,6 +954,126 @@ use std::sync::Arc;
             .and_then(|v| v.as_str())
             .unwrap_or("general");
         assert_eq!(extracted_fallback, "developer");
+    }
+
+    #[tokio::test]
+    async fn test_adversarial_subagent_list_lock_hierarchy() {
+        let (tx, _rx) = oneshot::channel::<String>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let base = std::path::PathBuf::from("target").join(format!("cvh_test_sublist_adv_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&base).await;
+        let policy = ToolPolicyConfig::default();
+
+        let ctx = OwnedToolContext {
+            repo_root: base.clone(),
+            worktree_dir: base.clone(),
+            stage_id: Some("dev".to_string()),
+            role: Some("developer".to_string()),
+            abort_handle: flag.clone(),
+            tool_policy: policy,
+            task_id: Some("CVH-STRESS-1".to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: Some("call_stress_1".to_string()),
+        };
+
+        let sid = "CVH-STRESS-1.sub-call_stress_1".to_string();
+        let retry_info = SubagentRetryInfo {
+            parent_task_id: "CVH-STRESS-1".to_string(),
+            subagent_id: sid.clone(),
+            tool_call_id: Some("call_stress_1".to_string()),
+            title: "Stress subagent".to_string(),
+            role: "developer".to_string(),
+            prompt: "Stress prompt".to_string(),
+            requested_tools: None,
+            ctx: ctx.clone(),
+            status: "running".to_string(),
+            created_at: chrono::Utc::now().timestamp_millis(),
+            last_error: None,
+            report: None,
+            is_bg: true,
+            duration_ms: None,
+            steps: 0,
+        };
+
+        let session = SubagentSession::new(Some(tx), retry_info);
+        let retry_info_lock = Arc::clone(&session.retry_info);
+
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sid.clone(), session);
+        }
+
+        // Simulate concurrent holder of retry_info (e.g. background update or model switch)
+        let (holder_acquired_tx, holder_acquired_rx) = oneshot::channel::<()>();
+        let (release_tx, release_rx) = oneshot::channel::<()>();
+
+        let holder_handle = tokio::spawn(async move {
+            let _guard = retry_info_lock.lock().await;
+            let _ = holder_acquired_tx.send(());
+            let _ = release_rx.await;
+        });
+
+        // Wait until holder holds retry_info
+        holder_acquired_rx.await.unwrap();
+
+        let base_for_task = base.clone();
+        let flag_for_task = Arc::clone(&flag);
+        // Now run subagent_list in a background task
+        let list_task = tokio::spawn(async move {
+            let policy = ToolPolicyConfig::default();
+            let tool_ctx = ToolContext {
+                repo_root: &base_for_task,
+                worktree_dir: &base_for_task,
+                stage_id: Some("dev"),
+                role: Some("developer"),
+                abort_handle: flag_for_task,
+                tool_policy: &policy,
+                task_id: Some("CVH-STRESS-1"),
+                agent_allowed_tools: None,
+                app_handle: None,
+                base_url: None,
+                api_key: None,
+                model: None,
+                temperature: None,
+                reasoning_effort: None,
+                call_id: None,
+            };
+            execute_tool(&tool_ctx, "subagent_list", &serde_json::json!({})).await
+        });
+
+        // Give subagent_list a moment to enter execute_subagent_list and attempt to lock retry_info
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // INVARIANT CHECK: SUBAGENT_SESSIONS must NOT be blocked by subagent_list while waiting on retry_info!
+        // Another concurrent task must be able to lock SUBAGENT_SESSIONS immediately.
+        let can_acquire_sessions = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            async {
+                let _guard = SUBAGENT_SESSIONS.lock().await;
+            },
+        ).await;
+
+        // Cleanup
+        let _ = release_tx.send(());
+        let _ = holder_handle.await;
+        let _ = list_task.await;
+
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.remove(&sid);
+        }
+        let _ = tokio::fs::remove_dir_all(&base).await;
+
+        assert!(
+            can_acquire_sessions.is_ok(),
+            "DEADLOCK RISK: SUBAGENT_SESSIONS was held across .await on retry_info! Global map was blocked."
+        );
     }
 
 

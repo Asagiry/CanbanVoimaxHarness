@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   AlertCircle,
-  Image as ImageIcon,
-  ZoomIn,
-  ZoomOut,
-  X,
   Loader2,
   Sliders,
   Columns,
@@ -13,19 +8,27 @@ import {
 } from 'lucide-react';
 import { GitImageDiff } from '../../../types';
 import { useTranslation } from '../../../stores/languageStore';
-import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import { formatBytes } from './utils';
+import {
+  ImageViewMode,
+  ImageDimensions,
+  LightboxState,
+  ImageDiffTwoUp,
+  ImageDiffSplit,
+  ImageDiffOnion,
+  ImageDiffSingle,
+  ImageDiffLightbox,
+} from './image';
+
+export * from './image';
 
 export interface ImageDiffViewerProps {
   taskId: string;
   filePath: string;
 }
 
-export type ImageViewMode = '2up' | 'split' | 'onion' | 'new' | 'old';
-
 export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
   const { t } = useTranslation();
-  const { zoom } = useUiZoom();
   const [data, setData] = useState<GitImageDiff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +36,9 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [onionOpacity, setOnionOpacity] = useState(50);
-  const [currentDims, setCurrentDims] = useState<{ width: number; height: number } | null>(null);
-  const [prevDims, setPrevDims] = useState<{ width: number; height: number } | null>(null);
-  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
-  const [lightboxZoom, setLightboxZoom] = useState(false);
+  const [currentDims, setCurrentDims] = useState<ImageDimensions | null>(null);
+  const [prevDims, setPrevDims] = useState<ImageDimensions | null>(null);
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -86,19 +88,6 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
     };
   }, [taskId, filePath]);
 
-  // Keyboard shortcut (Escape) to close lightbox
-  useEffect(() => {
-    if (!lightbox) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setLightbox(null);
-        setLightboxZoom(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightbox]);
-
   // Drag interaction for Split / Swipe comparison
   useEffect(() => {
     if (!isDraggingSplit) return;
@@ -145,14 +134,6 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
   const hasBoth = Boolean(data.currentDataUrl && data.previousDataUrl);
   const isDeleted = !data.currentDataUrl && Boolean(data.previousDataUrl);
   const isAdded = Boolean(data.currentDataUrl) && !data.previousDataUrl;
-
-  const checkerboardClasses =
-    'relative flex items-center justify-center p-2 rounded overflow-hidden select-none ' +
-    'bg-[#f8fafc] dark:bg-[#090d16] ' +
-    '[background-image:linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] ' +
-    'dark:[background-image:linear-gradient(45deg,#1c2128_25%,transparent_25%),linear-gradient(-45deg,#1c2128_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1c2128_75%),linear-gradient(-45deg,transparent_75%,#1c2128_75%)] ' +
-    '[background-size:16px_16px] [background-position:0_0,0_8px,8px_-8px,-8px_0px] border border-[#e5e7eb] dark:border-[#212126]';
-
   const bytesDelta =
     data.currentBytes && data.previousBytes ? data.currentBytes - data.previousBytes : null;
 
@@ -262,319 +243,49 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
 
       {/* Main Diff Content Container */}
       {hasBoth && viewMode === '2up' ? (
-        <div className="grid grid-cols-2 gap-2 p-2.5">
-          {/* Old / Previous */}
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between text-[10px] px-0.5">
-              <span className="text-[#b91c1c] dark:text-[#ff7b72] font-semibold">
-                {t('gitDiff.imageOld')}
-              </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
-                {data.previousBytes && <span>{formatBytes(data.previousBytes)}</span>}
-                {prevDims && <span>{prevDims.width}&times;{prevDims.height}</span>}
-              </div>
-            </div>
-            <div
-              className={checkerboardClasses + ' cursor-zoom-in group min-h-[140px]'}
-              onClick={() => setLightbox({ url: data.previousDataUrl!, title: filePath + ' (' + t('gitDiff.imageOld') + ')' })}
-              title={t('gitDiff.imageClickToZoom')}
-            >
-              <img
-                src={data.previousDataUrl!}
-                alt="Previous version"
-                className="max-h-[220px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                onLoad={(e) => setPrevDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-          </div>
-
-          {/* New / Current */}
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between text-[10px] px-0.5">
-              <span className="text-[#15803d] dark:text-[#7ee787] font-semibold">
-                {t('gitDiff.imageNew')}
-              </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
-                {data.currentBytes && <span>{formatBytes(data.currentBytes)}</span>}
-                {currentDims && <span>{currentDims.width}&times;{currentDims.height}</span>}
-              </div>
-            </div>
-            <div
-              className={checkerboardClasses + ' cursor-zoom-in group min-h-[140px]'}
-              onClick={() => setLightbox({ url: data.currentDataUrl!, title: filePath + ' (' + t('gitDiff.imageNew') + ')' })}
-              title={t('gitDiff.imageClickToZoom')}
-            >
-              <img
-                src={data.currentDataUrl!}
-                alt="Current version"
-                className="max-h-[220px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                onLoad={(e) => setCurrentDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-          </div>
-        </div>
+        <ImageDiffTwoUp
+          data={data}
+          filePath={filePath}
+          prevDims={prevDims}
+          currentDims={currentDims}
+          setPrevDims={setPrevDims}
+          setCurrentDims={setCurrentDims}
+          setLightbox={setLightbox}
+        />
       ) : hasBoth && viewMode === 'split' ? (
-        /* Split / Swipe Mode with Slider */
-        <div className="p-2.5 flex flex-col space-y-2">
-          <div className="flex items-center justify-between text-[10px] px-0.5">
-            <span className="text-[#b91c1c] dark:text-[#ff7b72] font-semibold">
-              {t('gitDiff.imageOld')} ({splitPercent}%)
-            </span>
-            <span className="text-[#15803d] dark:text-[#7ee787] font-semibold">
-              {t('gitDiff.imageNew')} ({100 - splitPercent}%)
-            </span>
-          </div>
-
-          {/* Interactive Split Viewer Stage */}
-          <div
-            ref={splitContainerRef}
-            className={checkerboardClasses + ' min-h-[180px] max-h-[340px] relative overflow-hidden select-none cursor-ew-resize group'}
-            onMouseDown={() => setIsDraggingSplit(true)}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              if (rect.width > 0) {
-                const ratio = ((e.clientX - rect.left) / rect.width) * 100;
-                setSplitPercent(Math.round(ratio));
-              }
-            }}
-          >
-            {/* Base layer: Old Image */}
-            <img
-              src={data.previousDataUrl!}
-              alt="Previous version"
-              className="max-h-[300px] max-w-full object-contain pointer-events-none"
-              onLoad={(e) => setPrevDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-            />
-
-            {/* Top clipped layer: New Image */}
-            <div
-              className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none"
-              style={{ clipPath: 'inset(0 0 0 ' + splitPercent + '%)' }}
-            >
-              <img
-                src={data.currentDataUrl!}
-                alt="Current version"
-                className="max-h-[300px] max-w-full object-contain"
-                onLoad={(e) => setCurrentDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-
-            {/* Split divider vertical line with handle */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-amber-500 shadow-md flex items-center justify-center pointer-events-none transition-none"
-              style={{ left: splitPercent + '%' }}
-            >
-              <div className="w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center shadow-lg transform -translate-x-1/2 select-none text-[9px] font-bold">
-                &harr;
-              </div>
-            </div>
-          </div>
-
-          {/* Precision Swipe Slider Control */}
-          <div className="flex items-center space-x-2 px-1">
-            <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] font-semibold">{t('gitDiff.imageOld')}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={splitPercent}
-              onChange={(e) => setSplitPercent(parseInt(e.target.value, 10))}
-              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#232328] rounded-lg appearance-none cursor-pointer accent-amber-500"
-            />
-            <span className="text-[10px] text-[#15803d] dark:text-[#7ee787] font-semibold">{t('gitDiff.imageNew')}</span>
-          </div>
-        </div>
+        <ImageDiffSplit
+          data={data}
+          splitPercent={splitPercent}
+          setSplitPercent={setSplitPercent}
+          setIsDraggingSplit={setIsDraggingSplit}
+          splitContainerRef={splitContainerRef}
+          setPrevDims={setPrevDims}
+          setCurrentDims={setCurrentDims}
+        />
       ) : hasBoth && viewMode === 'onion' ? (
-        /* Onion Skin Mode with Opacity Slider */
-        <div className="p-2.5 flex flex-col space-y-2">
-          <div className="flex items-center justify-between text-[10px] px-0.5">
-            <span className="text-[#8f8f8f] dark:text-[#71717a]">
-              {t('gitDiff.imageOld')}: {100 - onionOpacity}%
-            </span>
-            <span className="text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
-              {onionOpacity}% {t('gitDiff.imageNew')}
-            </span>
-          </div>
-
-          {/* Onion Stage: Stacked Images */}
-          <div className={checkerboardClasses + ' min-h-[180px] max-h-[340px] relative overflow-hidden select-none'}>
-            {/* Bottom Layer: Old */}
-            <img
-              src={data.previousDataUrl!}
-              alt="Previous version"
-              className="max-h-[300px] max-w-full object-contain"
-              onLoad={(e) => setPrevDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-            />
-
-            {/* Top Layer: New with adjustable opacity */}
-            <div
-              className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-75"
-              style={{ opacity: onionOpacity / 100 }}
-            >
-              <img
-                src={data.currentDataUrl!}
-                alt="Current version"
-                className="max-h-[300px] max-w-full object-contain"
-                onLoad={(e) => setCurrentDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-          </div>
-
-          {/* Precision Opacity Slider Control */}
-          <div className="flex items-center space-x-2 px-1">
-            <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] font-semibold">{t('gitDiff.imageOld')}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={onionOpacity}
-              onChange={(e) => setOnionOpacity(parseInt(e.target.value, 10))}
-              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#232328] rounded-lg appearance-none cursor-pointer accent-amber-500"
-            />
-            <span className="text-[10px] text-[#15803d] dark:text-[#7ee787] font-semibold">{t('gitDiff.imageNew')}</span>
-          </div>
-        </div>
+        <ImageDiffOnion
+          data={data}
+          onionOpacity={onionOpacity}
+          setOnionOpacity={setOnionOpacity}
+          setPrevDims={setPrevDims}
+          setCurrentDims={setCurrentDims}
+        />
       ) : (
-        /* Single View Mode (New or Old) */
-        <div className="p-2.5 flex flex-col space-y-1">
-          {(() => {
-            const isShowingNew = viewMode === 'new' || isAdded;
-            const activeUrl = isShowingNew ? data.currentDataUrl : data.previousDataUrl;
-            const activeBytes = isShowingNew ? data.currentBytes : data.previousBytes;
-            const activeDims = isShowingNew ? currentDims : prevDims;
-
-            if (!activeUrl) {
-              return (
-                <div className="p-4 text-center text-[#8f8f8f] dark:text-[#71717a] text-xs">
-                  {t('gitDiff.imageNoPreview')}
-                </div>
-              );
-            }
-
-            return (
-              <>
-                <div className="flex items-center justify-between text-[10px] px-0.5">
-                  <span
-                    className={'font-semibold ' +
-                      (isShowingNew
-                        ? 'text-[#15803d] dark:text-[#7ee787]'
-                        : 'text-[#b91c1c] dark:text-[#ff7b72]')}
-                  >
-                    {isShowingNew ? t('gitDiff.imageNew') : t('gitDiff.imageOld')}
-                  </span>
-                  <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
-                    {activeBytes && <span>{formatBytes(activeBytes)}</span>}
-                    {activeDims && <span>{activeDims.width}&times;{activeDims.height} px</span>}
-                  </div>
-                </div>
-                <div
-                  className={checkerboardClasses + ' cursor-zoom-in group min-h-[160px]'}
-                  onClick={() =>
-                    setLightbox({
-                      url: activeUrl,
-                      title: filePath + ' (' + (isShowingNew ? t('gitDiff.imageNew') : t('gitDiff.imageOld')) + ')',
-                    })
-                  }
-                  title={t('gitDiff.imageClickToZoom')}
-                >
-                  <img
-                    src={activeUrl}
-                    alt={filePath}
-                    className="max-h-[300px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                    onLoad={(e) => {
-                      const dims = {
-                        width: e.currentTarget.naturalWidth,
-                        height: e.currentTarget.naturalHeight,
-                      };
-                      if (isShowingNew) setCurrentDims(dims);
-                      else setPrevDims(dims);
-                    }}
-                  />
-                </div>
-              </>
-            );
-          })()}
-        </div>
+        <ImageDiffSingle
+          data={data}
+          filePath={filePath}
+          viewMode={viewMode}
+          isAdded={isAdded}
+          currentDims={currentDims}
+          prevDims={prevDims}
+          setCurrentDims={setCurrentDims}
+          setPrevDims={setPrevDims}
+          setLightbox={setLightbox}
+        />
       )}
 
-      {/* Lightbox Modal (Hoisted via createPortal per .cvh/rules/) */}
-      {lightbox &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={getZoomOverlayStyle(zoom)}
-            className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col animate-in fade-in duration-150"
-            onClick={() => {
-              setLightbox(null);
-              setLightboxZoom(false);
-            }}
-          >
-            {/* Lightbox Toolbar */}
-            <div
-              className="flex items-center justify-between px-4 py-3 bg-[#111114]/95 border-b border-[#2c2c33] select-none text-white z-10 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center space-x-2.5 min-w-0 mr-4">
-                <ImageIcon className="h-4 w-4 text-[#71717a] shrink-0" />
-                <span className="font-mono text-xs font-semibold truncate text-[#f4f4f5]">
-                  {lightbox.title}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setLightboxZoom((prev) => !prev)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#232328] hover:bg-[#2c2c33] text-xs font-mono text-[#f4f4f5] transition cursor-pointer"
-                >
-                  {lightboxZoom ? (
-                    <ZoomOut className="h-3.5 w-3.5" />
-                  ) : (
-                    <ZoomIn className="h-3.5 w-3.5" />
-                  )}
-                  <span>{lightboxZoom ? '100%' : 'Fit'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLightbox(null);
-                    setLightboxZoom(false);
-                  }}
-                  className="p-1 rounded bg-[#232328] hover:bg-[#2c2c33] text-[#71717a] hover:text-[#f4f4f5] transition cursor-pointer"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Lightbox Image Stage with Checkerboard */}
-            <div
-              className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-0"
-              onClick={() => {
-                setLightbox(null);
-                setLightboxZoom(false);
-              }}
-            >
-              <div
-                className={checkerboardClasses + ' shadow-2xl max-w-full max-h-full cursor-default'}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <img
-                  src={lightbox.url}
-                  alt={lightbox.title}
-                  className={'transition-all duration-150 ' +
-                    (lightboxZoom
-                      ? 'max-w-none'
-                      : 'max-h-[82vh] max-w-[85vw] object-contain')}
-                />
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      {/* Lightbox Modal */}
+      <ImageDiffLightbox lightbox={lightbox} onClose={() => setLightbox(null)} />
     </div>
   );
 }

@@ -226,7 +226,7 @@ use std::sync::Arc;
             "activation:",
             ".cvh/boards.json {activeBoardId",
             "Pipeline is a virtual view of the active board",
-            ".cvh/settings/tool-policy.json {globalEnabled, stageOverrides}",
+            ".cvh/settings/tool-policy.json {stageOverrides}",
             ".cvh/agents/<role>.md",
             ".cvh/tools/<tool>.json",
             ".cvh/hooks/",
@@ -335,6 +335,7 @@ use std::sync::Arc;
             vec![
                 "anti-sycophancy",
                 "antislop",
+                "architecture",
                 "backend",
                 "backend_agent_map",
                 "backend_config_map",
@@ -362,6 +363,7 @@ use std::sync::Arc;
             vec![
                 "anti-sycophancy",
                 "antislop",
+                "architecture",
                 "backend-invariants",
                 "backend_agent_map",
                 "backend_config_map",
@@ -391,6 +393,7 @@ use std::sync::Arc;
             vec![
                 "anti-sycophancy",
                 "antislop",
+                "architecture",
                 "backend_agent_map",
                 "backend_config_map",
                 "backend_map",
@@ -418,6 +421,7 @@ use std::sync::Arc;
                 "agents",
                 "anti-sycophancy",
                 "antislop",
+                "architecture",
                 "backend_agent_map",
                 "backend_config_map",
                 "backend_map",

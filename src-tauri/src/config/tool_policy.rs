@@ -84,10 +84,11 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("load_rule".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
 
-        // Retro stage: audit and ledger logging enabled; search, fetch, subagent, todo enabled; edit/task-creation disabled
+        // Retro stage: audit, rule editing, and ledger logging enabled; search, fetch, subagent, todo, edit, write enabled; task-creation disabled
         let mut retro_map = HashMap::new();
         retro_map.insert("read_file".to_string(), true);
         retro_map.insert("execute_command".to_string(), true);
+        retro_map.insert("edit_file".to_string(), true);
         retro_map.insert("write_file".to_string(), true);
         retro_map.insert("glob".to_string(), true);
         retro_map.insert("grep".to_string(), true);

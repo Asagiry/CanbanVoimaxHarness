@@ -199,7 +199,7 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://127.0.0.1:8045/v1"
+              placeholder="https://api.openai.com/v1"
               className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] px-2.5 py-1.5 text-xs font-mono text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114]"
             />
           </div>

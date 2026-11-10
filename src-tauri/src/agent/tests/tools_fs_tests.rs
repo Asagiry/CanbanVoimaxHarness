@@ -126,7 +126,7 @@ line 2 again"
             .join(format!("cvh_crlf_test_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base).await.expect("test dirs");
 
-        let policy_json = r#"{"globalEnabled":{"edit_file":true,"read_file":true,"write_file":true}}"#;
+        let policy_json = r#"{"stageOverrides":{"dev":{"edit_file":true,"read_file":true,"write_file":true}}}"#;
         let tool_policy: ToolPolicyConfig = serde_json::from_str(policy_json).unwrap();
         let abort_flag = Arc::new(AtomicBool::new(false));
 

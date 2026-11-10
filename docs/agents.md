@@ -124,18 +124,6 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
 ### 3.1 Единый источник правды: `.cvh/settings/tool-policy.json`
 ```json
 {
-  "globalEnabled": {
-    "execute_command": true,
-    "read_file": true,
-    "edit_file": true,
-    "write_file": true,
-    "glob": true,
-    "grep": true,
-    "web_search": true,
-    "web_fetch": true,
-    "subagent": true,
-    "todo_write": true
-  },
   "stageOverrides": {
     "dev": {
       "execute_command": true,
@@ -180,10 +168,9 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
 ### 3.2 Принцип работы Single Authoritative Layer
 Решение о доступности инструмента принимается функцией `is_tool_allowed`:
 ```rust
-effective = stage_overrides[stage][tool] ?? global_enabled[tool] ?? true
+effective = stage_overrides[stage][tool] ?? true
 ```
 - Если для этапа явно задан оверрайд (`true` или `false`), это решение является окончательным (Single Authoritative Layer).
-- Если запись для стадии отсутствует, значение наследуется из `global_enabled`.
 - Для семейства субагентов мастер-переключатель `subagent` на стадии управляет доступностью всего семейства.
 - Алиасы автоматически нормализуются: `bash` → `execute_command`, `str_replace` → `edit_file`.
 

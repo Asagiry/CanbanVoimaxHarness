@@ -16,8 +16,8 @@
    - Любые файловые и терминальные инструменты исполняются строго внутри изолированной рабочей директории задачи (`CVH_WORKTREE_PATH`).
    - Исходное дерево репозитория защищено от случайных коллизий и неконсистентных состояний.
 3. **Матрица политик: Single Authoritative Layer (Tool Policy Matrix, § 2.5)**:
-   - Доступность инструментов рассчитывается по принципу Single Authoritative Layer: `effective(tool, stage) = stageOverrides[stage][tool] ?? globalEnabled[tool] ?? true`.
-   - Явный оверрайд этапа (`true` или `false`) является окончательным и имеет приоритет над глобальной настройкой.
+   - Доступность инструментов рассчитывается по принципу Single Authoritative Layer: `effective(tool, stage) = stageOverrides[stage][tool] ?? true`.
+   - Явный оверрайд этапа (`true` или `false`) является окончательным (Single Authoritative Layer).
    - Запрещенные инструменты вырезаются из JSON-схемы запроса к LLM (**Zero-Trust Request Stripping**), устраняя галлюцинации и экономя до 2 500+ токенов на шаг инференса.
 4. **Контекстный спиллинг больших выводов (Output Spilling, § 2.8 & § 2.33)**:
    - Выводы консольных команд, превышающие 500 строк или 64 КБ (и чтения файлов >2 000 строк или 128 КБ), автоматически сбрасываются в `.cvh/spill/<timestamp>-<tool>.log`.
@@ -106,14 +106,6 @@
 
 ```json
 {
-  "globalEnabled": {
-    "read_file": true,
-    "edit_file": true,
-    "write_file": true,
-    "execute_command": true,
-    "create_task": false,
-    "complete_task": false
-  },
   "stageOverrides": {
     "dev": {
       "edit_file": true,
@@ -130,9 +122,8 @@
 ```
 
 - **Формула вычисления прав**:
-  `effective(tool, stage) = stageOverrides[stage][tool] ?? globalEnabled[tool] ?? true`
-- Явный оверрайд этапа (`true` или `false`) является окончательным и имеет приоритет над `globalEnabled`.
-- Если тул не указан в `stageOverrides`, используется значение по умолчанию из `globalEnabled`.
+  `effective(tool, stage) = stageOverrides[stage][tool] ?? true`
+- Явный оверрайд этапа (`true` или `false`) является окончательным (Single Authoritative Layer).
 - Для семейства субагентов мастер-переключатель `subagent` на этапе контролирует доступность `subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`.
 
 ---

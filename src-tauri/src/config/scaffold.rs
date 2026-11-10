@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use crate::config::discovery::{is_app_own_directory, is_binary_or_target_dir};
-use crate::config::io::{atomic_write_file, load_boards_config};
+use crate::config::io::atomic_write_file;
 use crate::config::models::*;
 use crate::config::tool_policy::{tool_policy_path, ToolPolicyConfig};
 
@@ -135,7 +135,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
             "description": format!("CanbanVoimaxHarness Workspace for {}", project_name),
             "activePipeline": "default-engineering",
             "defaultModel": "crouton-alpha-free",
-            "apiBaseUrl": "http://127.0.0.1:8045/v1"
+            "apiBaseUrl": "https://opencode.ai/inference/go/openai/v1"
         });
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
@@ -143,15 +143,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     // 2. boards.json (single source of truth for boards and stages)
     let boards_path = cvh_dir.join("boards.json");
     if !boards_path.exists() {
-        let initial_stages = if cvh_dir.join("pipeline.json").exists() {
-            load_boards_config(repo_root)
-                .await
-                .ok()
-                .and_then(|cfg| cfg.boards.into_iter().next().map(|b| b.stages))
-                .unwrap_or_else(get_canonical_board_stages)
-        } else {
-            get_canonical_board_stages()
-        };
+        let initial_stages = get_canonical_board_stages();
         let default_board = BoardDef {
             id: "development".to_string(),
             name: "cvh-board".to_string(),

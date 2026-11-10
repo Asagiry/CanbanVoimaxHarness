@@ -4,27 +4,31 @@ import ContextGauge from './ContextGauge';
 import EffortSelector from './EffortSelector';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
-import { useCortexStore } from '../../stores/cortexStore';
-import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import AgentIcon from '../common/AgentIcon';
-import { getSubagentOrderMap, formatSubagentRoleDisplay } from './subagentHelpers';
-import { compressImageFile } from '../../lib/imageCompression';
+import { formatSubagentRoleDisplay } from './subagentHelpers';
 import {
   ArrowUp,
   Plus,
-  ChevronDown,
   Square,
   Play,
 } from 'lucide-react';
+import {
+  AttachedImage,
+  SteerImageBar,
+  SteerModelMenu,
+  useSteerModelResolution,
+  useSteerImages,
+} from './steer';
+
+export * from './steer';
 
 export interface DrawerSteerBarProps {
   task: KanbanTask;
   isRunning: boolean;
   turns: number;
-  onSendPrompt: (promptText: string, attachedImages: Array<{ id: string; name: string; dataUrl: string }>) => Promise<boolean> | boolean | void;
+  onSendPrompt: (promptText: string, attachedImages: AttachedImage[]) => Promise<boolean> | boolean | void;
   onAbortAgent: () => Promise<void> | void;
   isToolAllowed: (toolName: string, stageId?: string) => boolean;
   selectableModels: string[];
@@ -44,124 +48,47 @@ export default function DrawerSteerBar({
   onSelectEffort,
 }: DrawerSteerBarProps) {
   const [interactiveInput, setInteractiveInput] = useState('');
-  const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
-  const [isDragOverChat, setIsDragOverChat] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const { t, language } = useTranslation();
-  const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
+  const {
+    activeSubagentId,
+    activeSubagentRole,
+    subagentNumber,
+    isBoardSubtask,
+    activePersona,
+    effectiveGaugeTaskId,
+    effectiveGaugePersona,
+    effectiveLimit,
+    matchedPersona,
+    modelId,
+    providerModelLabel,
+    personaEffort,
+    subConfig,
+    groupedModels,
+  } = useSteerModelResolution(task, selectableModels);
+
   const draftKey = activeSubagentId
     ? (activeSubagentId.includes(':sub:') ? activeSubagentId : `${task?.id}:sub:${activeSubagentId}`)
     : task?.id;
-  const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
-  const storeSubagents = useDrawerStore((s) => s.subagents);
-  const subagentConfigs = useDrawerStore((s) => s.subagentConfigs);
-  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
-  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
 
-  const boardTasks = useBoardStore((s) => s.tasks);
-  const subagentNumber = React.useMemo(() => {
-    if (!activeSubagentId || !task?.id) return null;
-    const map = getSubagentOrderMap(task.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
-    return map.get(activeSubagentId) ?? (toolIdToSubagentId[activeSubagentId] ? map.get(toolIdToSubagentId[activeSubagentId]) : null) ?? 1;
-  }, [activeSubagentId, task?.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
-
-  const isBoardSubtask = React.useMemo(() => {
-    if (!activeSubagentId) return false;
-    return boardTasks.some((t) => t.id === activeSubagentId);
-  }, [activeSubagentId, boardTasks]);
-
-  const boards = useBoardStore((s) => s.boards) ?? [];
-  const columns = useBoardStore((s) => s.columns) ?? [];
-  const taskBoard = boards.find((b) => b.id === task.boardId);
-  const boardCols = taskBoard?.columns && taskBoard.columns.length > 0 ? taskBoard.columns : columns;
-  const taskColumn = boardCols.find((c) => c.id === task.stageId) || columns.find((c) => c.id === task.stageId);
-
-  const workingCols = boardCols.filter(
-    (c) => !c.isIntake && c.id !== 'backlog' && !c.terminal && c.id !== 'ready' && c.id !== 'done'
-  );
-  const firstStagePersona = workingCols[0]?.persona;
-  const defaultWorkingPersona = firstStagePersona || 'general';
-
-  const isTerminalTask = Boolean(taskColumn?.terminal || task.stageId === 'ready' || task.stageId === 'done');
-  const effectivePersonaCandidate = (!task.parentId && (isTerminalTask || !taskColumn?.persona))
-    ? (firstStagePersona || task.persona)
-    : (task.persona || taskColumn?.persona);
-  const taskPersona = effectivePersonaCandidate || defaultWorkingPersona;
-  const activePersona = activeSubagentRole || taskPersona;
-  const effectiveGaugeTaskId = activeSubagentId || task.id;
-  const effectiveGaugePersona = activeSubagentId ? (activeSubagentRole || 'general') : activePersona;
-
-  const agentPersonas = useCortexStore((s) => s.agentPersonas);
-  const matchedPersona = agentPersonas.find(
-    (p) => p.role.toLowerCase() === activePersona.toLowerCase()
-  );
-
-  const parentMatchedPersona = agentPersonas.find(
-    (p) => p.role.toLowerCase() === taskPersona.toLowerCase()
-  );
-
-  const effectiveLimit = matchedPersona?.contextWindow || parentMatchedPersona?.contextWindow || 128000;
-
-  // --- Provider / Model label (screenshot format: "OpenCode Go / Crouton Alpha Free Max") ---
-  // Honest display = what the backend will actually dispatch:
-  // explicit pair (task.providerId + task.model) > per-persona setting >
-  // hardcoded fallback. The global flat `settings.model` is display-only
-  // legacy and would lie (it still says beam-free while the planner
-  // dispatches crouton), so it is NOT in this chain — same rule the
-  // backend resolver uses (pair > agent setting > col > project > crouton).
-  const providers = useSettingsStore((s) => s.providers) ?? [];
-  const defaultModel = useSettingsStore.getState().settings?.model || (useSettingsStore.getState() as any).model || 'default';
-  const activeBoardSubtask = isBoardSubtask ? boardTasks.find((t) => t.id === activeSubagentId) : undefined;
-  const resolvedSubId = activeSubagentId ? (toolIdToSubagentId[activeSubagentId] || activeSubagentId) : null;
-  const subConfig = activeSubagentId
-    ? activeBoardSubtask
-      ? {
-          model: activeBoardSubtask.model,
-          providerId: activeBoardSubtask.providerId ?? undefined,
-          reasoningEffort: activeBoardSubtask.reasoningEffort as ReasoningEffort | undefined,
-        }
-      : (subagentConfigs?.[activeSubagentId] || (resolvedSubId ? subagentConfigs?.[resolvedSubId] : undefined))
-    : undefined;
-
-  const modelId = activeSubagentId
-    ? (subConfig?.model || matchedPersona?.model || task.model || defaultModel)
-    : (task.model || matchedPersona?.model || defaultModel);
-
-  const pairProvider = activeSubagentId
-    ? ((subConfig?.providerId ? providers.find((p) => p.id === subConfig.providerId) : undefined) ||
-        (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
-        (task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
-        providers.find((p) => p.models.some((m) => m.id === modelId)) ||
-        null)
-    : ((task.providerId ? providers.find((p) => p.id === task.providerId) : undefined) ||
-        (matchedPersona?.providerId ? providers.find((p) => p.id === matchedPersona.providerId) : undefined) ||
-        providers.find((p) => p.models.some((m) => m.id === modelId)) ||
-        null);
-
-  const modelDisplay =
-    pairProvider?.models.find((m) => m.id === modelId)?.displayName ||
-    modelId;
-  const providerModelLabel = pairProvider
-    ? `${pairProvider.name} / ${modelDisplay}`
-    : modelDisplay;
-  const personaEffort = matchedPersona?.reasoningEffort || null;
-
-  const groupedModels = React.useMemo(() => {
-    const flat = providers.flatMap((p) => p.models.map((m) => ({
-      providerName: p.name,
-      providerId: p.id,
-      id: m.id,
-      displayName: m.displayName || m.id,
-      label: `${p.name} / ${m.displayName || m.id}`,
-    })));
-    if (flat.length === 0 && (selectableModels?.length ?? 0) > 0) {
-      return (selectableModels ?? []).map((id) => ({ providerName: '', providerId: '', id, displayName: id, label: id }));
-    }
-    return flat;
-  }, [providers, selectableModels]);
+  const {
+    attachedImages,
+    setAttachedImages,
+    isDragOverChat,
+    chatFileInputRef,
+    handleRemoveImage,
+    handleChatFileSelect,
+    handleChatDragOver,
+    handleChatDragLeave,
+    handleChatDrop,
+    handleChatPaste,
+  } = useSteerImages({
+    draftKey,
+    interactiveInput,
+    textareaRef,
+  });
 
   // Restore draft when switching tasks or subagents
   useEffect(() => {
@@ -192,113 +119,6 @@ export default function DrawerSteerBar({
         text: newVal,
         images: attachedImages,
       });
-    }
-  };
-
-  const handleRemoveImage = (imageId: string) => {
-    setAttachedImages((prev) => {
-      const next = prev.filter((i) => i.id !== imageId);
-      if (draftKey) {
-        const currentText = textareaRef.current ? textareaRef.current.value : interactiveInput;
-        useDrawerStore.getState().setTaskDraft(draftKey, {
-          text: currentText,
-          images: next,
-        });
-      }
-      return next;
-    });
-  };
-
-  const handleAddChatImages = async (files: FileList | File[]) => {
-    const validFiles = Array.from(files).filter(
-      (f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
-    );
-    if (validFiles.length === 0) return;
-
-    try {
-      const results = await Promise.all(
-        validFiles.map(async (file) => {
-          try {
-            const dataUrl = await compressImageFile(file, 1568, 0.85);
-            return {
-              id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              name: file.name,
-              dataUrl,
-            };
-          } catch (err) {
-            console.error('[DrawerSteerBar] Failed to process image:', file.name, err);
-            return null;
-          }
-        })
-      );
-
-      const successful = results.filter((item): item is { id: string; name: string; dataUrl: string } => item !== null);
-      if (successful.length > 0) {
-        setAttachedImages((prev) => {
-          const next = [...prev, ...successful];
-          if (draftKey) {
-            const currentText = textareaRef.current ? textareaRef.current.value : interactiveInput;
-            useDrawerStore.getState().setTaskDraft(draftKey, {
-              text: currentText,
-              images: next,
-            });
-          }
-          return next;
-        });
-      }
-    } catch (err) {
-      console.error('[DrawerSteerBar] Error handling images:', err);
-    }
-  };
-
-  const handleChatFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleAddChatImages(e.target.files);
-    }
-    e.target.value = '';
-  };
-
-  const handleChatDragOver = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragOverChat(true);
-    }
-  };
-
-  const handleChatDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOverChat(false);
-  };
-
-  const handleChatDrop = (e: React.DragEvent) => {
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragOverChat(false);
-      handleAddChatImages(e.dataTransfer.files);
-    }
-  };
-
-  const handleChatPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    const pastedFiles: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) {
-          pastedFiles.push(file);
-        }
-      }
-    }
-
-    if (pastedFiles.length > 0) {
-      e.preventDefault();
-      handleAddChatImages(pastedFiles);
     }
   };
 
@@ -349,36 +169,8 @@ export default function DrawerSteerBar({
             isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40 dark:bg-blue-950/40' : ''
           }`}
         >
-
-
           {/* Attached Images Thumbnail Preview Bar */}
-          {attachedImages.length > 0 && (
-            <div className="flex items-center gap-2 mb-2.5 pb-1 overflow-x-auto select-none">
-              {attachedImages.map((img) => (
-                <div
-                  key={img.id}
-                  className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b]"
-                >
-                  <img
-                    src={img.dataUrl}
-                    alt={img.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(img.id)}
-                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#17171b]/90 hover:bg-white dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] flex items-center justify-center text-xs leading-none transition cursor-pointer"
-                    aria-label={t('drawer.removeImage')}
-                  >
-                    ×
-                  </button>
-                  <div className="absolute inset-x-0 bottom-0 bg-white/90 dark:bg-[#17171b]/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] dark:text-[#71717a] truncate text-center border-t border-[#ebebeb] dark:border-[#2c2c33]">
-                    {img.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <SteerImageBar attachedImages={attachedImages} onRemoveImage={handleRemoveImage} />
 
           {/* Multiline auto-resizing textarea */}
           <textarea
@@ -400,7 +192,6 @@ export default function DrawerSteerBar({
           <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] dark:border-[#212126] select-none">
             {/* Left Toolbar Items */}
             <div className="flex items-center space-x-2">
-              {/* Round "+" Button */}
               <button
                 type="button"
                 onClick={() => chatFileInputRef.current?.click()}
@@ -410,7 +201,6 @@ export default function DrawerSteerBar({
                 <Plus className="h-4 w-4 block shrink-0" />
               </button>
 
-              {/* Hidden File Input for "+" Button */}
               <input
                 ref={chatFileInputRef}
                 type="file"
@@ -420,12 +210,10 @@ export default function DrawerSteerBar({
                 onChange={handleChatFileSelect}
               />
 
-              {/* Compact TaskTodoWidget pill & overlay popover */}
               {(Boolean(activeSubagentId) || isToolAllowed('todo_write', task.stageId) || (task.todos && task.todos.length > 0)) && (
                 <TaskTodoWidget task={task} align="left" />
               )}
 
-              {/* Sleek Subagent Badge or Active Agent Badge */}
               {activeSubagentId ? (
                 <div className="flex items-center space-x-1 shrink-0">
                   <span
@@ -448,47 +236,25 @@ export default function DrawerSteerBar({
 
             {/* Right Toolbar Items */}
             <div className="flex items-center space-x-2">
-              {/* Provider / Model selector (screenshot format: "OpenCode Go / Crouton Alpha Free Max") */}
-              <div className="relative flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                  className="px-3 py-1.5 rounded-full bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#e4e4e7] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-[13px] border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer flex items-center gap-1.5 max-w-[280px] font-sans"
-                  aria-label={t('drawer.taskModel', { model: modelId })}
-                >
-                  <span className="truncate">{providerModelLabel}</span>
-                  <ChevronDown className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
-                </button>
-                <EffortSelector
-                  taskEffort={activeSubagentId ? (subConfig?.reasoningEffort ?? task.reasoningEffort) : task.reasoningEffort}
-                  personaEffort={personaEffort}
-                  onSelectEffort={onSelectEffort}
-                  onOpen={() => setIsModelMenuOpen(false)}
-                />
-                {isModelMenuOpen && (
-                  <div className="absolute bottom-full right-0 mb-2 w-64 rounded-xl bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shadow-lg p-1.5 z-30 text-xs max-h-60 overflow-y-auto">
-                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#71717a] text-[10px] uppercase font-sans">{t('drawer.selectModel')}</div>
-                    {groupedModels.map((m) => (
-                      <button
-                        key={`${m.providerId}-${m.id}`}
-                        type="button"
-                        onClick={() => {
-                          onSelectPair(m.providerId, m.id);
-                          setIsModelMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between cursor-pointer font-sans ${
-                          modelId === m.id ? 'bg-[#f4f4f5] dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5]' : 'text-[#4d4d4d] dark:text-[#a1a1aa] hover:bg-[#f9f9f9] dark:hover:bg-[#232328]'
-                        }`}
-                      >
-                        <span className="truncate">{m.label}</span>
-                        {modelId === m.id && <span className="text-emerald-600 dark:text-emerald-400 shrink-0 ml-1">✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <SteerModelMenu
+                modelId={modelId}
+                providerModelLabel={providerModelLabel}
+                groupedModels={groupedModels}
+                isOpen={isModelMenuOpen}
+                onToggle={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                onSelectPair={(providerId, modId) => {
+                  onSelectPair(providerId, modId);
+                  setIsModelMenuOpen(false);
+                }}
+              />
+              <EffortSelector
+                taskEffort={activeSubagentId ? (subConfig?.reasoningEffort ?? task.reasoningEffort) : task.reasoningEffort}
+                personaEffort={personaEffort}
+                onSelectEffort={onSelectEffort}
+                onOpen={() => setIsModelMenuOpen(false)}
+              />
 
-              {/* Action Button: Abort when running, Send when idle and has content, Play/Continue when idle and empty */}
+              {/* Action Button */}
               {isRunning ? (
                 <button
                   type="button"
@@ -524,7 +290,7 @@ export default function DrawerSteerBar({
           </div>
         </div>
 
-        {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) */}
+        {/* Elegant Telemetry Status Line */}
         <div className="flex items-center justify-center">
           <ContextGauge taskId={effectiveGaugeTaskId} persona={effectiveGaugePersona} turns={turns} contextWindow={effectiveLimit} />
         </div>

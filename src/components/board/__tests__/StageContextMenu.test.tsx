@@ -314,19 +314,19 @@ describe('StageContextMenu: Agent Assignment and On Enter / On Leave Hooks', () 
         stateSetters
       );
 
-      // Find the leave script button in the main menu children
+      // Find the leave script trigger in the main menu
       const menuDiv = node as React.ReactElement<any>;
       const childrenList = React.Children.toArray(menuDiv.props.children);
-      const mainFrag = childrenList.find((c: any) => c && c.props && c.props.children) as React.ReactElement<any>;
-      const buttons = React.Children.toArray(mainFrag.props.children);
-
-      const leaveButton = buttons.find((btn: any) => {
-        const html = renderToString(btn);
-        return html.includes('Скрипт выхода');
-      }) as React.ReactElement<any>;
-
-      expect(leaveButton).toBeDefined();
-      leaveButton.props.onClick();
+      const mainMenuElem = childrenList.find((c: any) => c?.props?.onOpenLeaveScript) as React.ReactElement<any>;
+      if (mainMenuElem?.props?.onOpenLeaveScript) {
+        expect(mainMenuElem.props.onOpenLeaveScript).toBeDefined();
+        mainMenuElem.props.onOpenLeaveScript();
+      } else {
+        const buttons = React.Children.toArray(mainMenuElem?.props?.children);
+        const leaveButton = buttons.find((btn: any) => renderToString(btn).includes('Скрипт выхода')) as any;
+        expect(leaveButton).toBeDefined();
+        leaveButton.props.onClick();
+      }
 
       expect(capturedMode).toBe('script');
       expect(capturedScriptType).toBe('on_leave');
@@ -354,16 +354,16 @@ describe('StageContextMenu: Agent Assignment and On Enter / On Leave Hooks', () 
 
       const menuDiv = node as React.ReactElement<any>;
       const childrenList = React.Children.toArray(menuDiv.props.children);
-      const mainFrag = childrenList.find((c: any) => c && c.props && c.props.children) as React.ReactElement<any>;
-      const buttons = React.Children.toArray(mainFrag.props.children);
-
-      const enterButton = buttons.find((btn: any) => {
-        const html = renderToString(btn);
-        return html.includes('Скрипт входа');
-      }) as React.ReactElement<any>;
-
-      expect(enterButton).toBeDefined();
-      enterButton.props.onClick();
+      const mainMenuElem = childrenList.find((c: any) => c?.props?.onOpenEnterScript) as React.ReactElement<any>;
+      if (mainMenuElem?.props?.onOpenEnterScript) {
+        expect(mainMenuElem.props.onOpenEnterScript).toBeDefined();
+        mainMenuElem.props.onOpenEnterScript();
+      } else {
+        const buttons = React.Children.toArray(mainMenuElem?.props?.children);
+        const enterButton = buttons.find((btn: any) => renderToString(btn).includes('Скрипт входа')) as any;
+        expect(enterButton).toBeDefined();
+        enterButton.props.onClick();
+      }
 
       expect(capturedMode).toBe('script');
       expect(capturedScriptType).toBe('on_enter');

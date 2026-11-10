@@ -350,8 +350,7 @@ export const ru = {
   'toolPolicy.tabGlobal': 'Глобальный реестр',
   'toolPolicy.tabCustom': 'Кастомные CLI тулы',
   'toolPolicy.toolsHeading': 'Инструменты',
-  'toolPolicy.globalEnabled': 'Глобально включен',
-  'toolPolicy.globalDisabled': 'Глобально отключен',
+
   'toolPolicy.savePolicies': 'Сохранить политики',
   'toolPolicy.saving': 'Сохранение...',
   'toolPolicy.saved': 'Политики сохранены',

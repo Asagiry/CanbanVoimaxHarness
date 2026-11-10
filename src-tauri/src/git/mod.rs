@@ -321,7 +321,7 @@ mod tests {
         write_file(&src_cvh.join("tasks.json"), r#"[]"#);
         write_file(
             &src_cvh.join("settings").join("tool-policy.json"),
-            r#"{"globalEnabled":{}}"#,
+            r#"{"stageOverrides":{}}"#,
         );
         write_file(&src_cvh.join("agents").join("dev.md"), "# dev live");
         write_file(&src_cvh.join("agents").join("reviewer.md"), "# reviewer live");
@@ -374,7 +374,7 @@ mod tests {
         assert!(!dst_cvh.join("tasks.json").exists(), "tasks.json must not be synced to worktrees");
         assert_eq!(
             read_str(&dst_cvh.join("settings").join("tool-policy.json")),
-            r#"{"globalEnabled":{}}"#
+            r#"{"stageOverrides":{}}"#
         );
         assert_eq!(read_str(&dst_cvh.join("agents").join("dev.md")), "# dev live");
         assert_eq!(
@@ -451,7 +451,7 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(
             read_str(&dst_cvh.join("settings").join("tool-policy.json")),
-            r#"{"globalEnabled":{}}"#
+            r#"{"stageOverrides":{}}"#
         );
 
         // Missing-source sync is a tolerated no-op, not a crash.

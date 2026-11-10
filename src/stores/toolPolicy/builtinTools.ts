@@ -1,0 +1,282 @@
+import { ToolMeta } from './toolPolicyTypes';
+
+export const BUILTIN_TOOLS: ToolMeta[] = [
+  {
+    id: 'create_task',
+    name: 'create_task',
+    label: 'Создать задачу',
+    description: 'Decompose requirements and create a new task card on the Kanban board.',
+    category: 'orchestration',
+    tokenWeight: 260,
+    aliases: ['create_tasks'],
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Concise imperative task title.' },
+        description: { type: 'string', description: 'Detailed technical requirements, acceptance criteria, and file targets.' },
+        column_id: { type: 'string', description: "Target column ID (defaults to 'backlog')." },
+        board_id: { type: 'string', description: "Target board ID (defaults to current task's board)." },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Task tags.' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Task priority: low, medium, high.' },
+        is_subtask: { type: 'boolean', description: 'Whether to create this as a subtask of the current task. Default is false (standalone root task).' },
+        parent_id: { type: 'string', description: 'Explicit parent task ID if creating a subtask.' },
+      },
+      required: ['title', 'description'],
+    },
+  },
+  {
+    id: 'complete_task',
+    name: 'complete_task',
+    label: 'Завершить задачу',
+    description: 'Complete task and transition it to the terminal column (ready/done). Records APPROVED verdict and final handover summary.',
+    category: 'orchestration',
+    tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: "ID of task to complete (e.g. 'CVH-001'). If omitted, completes the current task." },
+        summary: { type: 'string', description: 'Comprehensive summary of completed work, changes, and verification proof.' },
+      },
+      required: ['summary'],
+    },
+  },
+  {
+    id: 'question',
+    name: 'question',
+    label: 'Вопрос пользователю',
+    description: 'Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop).',
+    category: 'interactive',
+    aliases: ['ask_user'],
+    tokenWeight: 240,
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The specific question to ask the user.' },
+        options: {
+          type: 'array',
+          description: "Predefined choices for the user. If recommended, append '(Recommended)' to label.",
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Short option label' },
+              description: { type: 'string', description: 'Clarifying subtitle or tradeoff' },
+            },
+            required: ['label'],
+          },
+        },
+        multiple: { type: 'boolean', description: 'Whether multiple options can be chosen' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    id: 'advance_task',
+    name: 'advance_task',
+    label: 'Передать этап',
+    description: 'Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.',
+    category: 'workflow',
+    tokenWeight: 220,
+    aliases: ['move_task', 'move_task_stage', 'advance_stage', 'next_stage'],
+    parameters: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Comprehensive summary of modifications, sensor results, and verification proof.' },
+        stage_id: { type: 'string', description: "Target pipeline stage ID (e.g. 'review', 'retro', 'ready'). Defaults to sequential next stage." },
+      },
+    },
+  },
+  {
+    id: 'reject_task',
+    name: 'reject_task',
+    label: 'Вернуть на доработку',
+    description: 'Reject task and return it to the previous pipeline stage with feedback. Requires specific reasons and actionable change requests.',
+    category: 'workflow',
+    tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Rejection rationale: failing sensors, bugs, or required fixes.' },
+      },
+      required: ['reason'],
+    },
+  },
+  {
+    id: 'execute_command',
+    name: 'execute_command',
+    label: 'Команды терминала',
+    description: 'Execute a shell command inside the isolated worktree with piped stdout/stderr.',
+    category: 'system',
+    tokenWeight: 320,
+    aliases: ['bash'],
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: "Command string to run (e.g. 'cargo check', 'git status')." },
+        timeout_seconds: { type: 'integer', description: 'Execution timeout in seconds (default: 60).' },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    id: 'read_file',
+    name: 'read_file',
+    label: 'Чтение файла',
+    description: 'Read UTF-8 text file contents with line numbers from the isolated worktree.',
+    category: 'fs',
+    tokenWeight: 260,
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        offset: { type: 'integer', description: '1-based starting line number (default: 1).' },
+        limit: { type: 'integer', description: 'Maximum number of lines to return (default: 200).' },
+      },
+      required: ['file_path'],
+    },
+  },
+  {
+    id: 'edit_file',
+    name: 'edit_file',
+    label: 'Целевое редактирование',
+    description: 'Targeted text replacement in an existing file inside the isolated worktree.',
+    category: 'fs',
+    tokenWeight: 310,
+    aliases: ['str_replace'],
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        old_string: { type: 'string', description: "Existing text substring to replace (or 'old_str')." },
+        new_string: { type: 'string', description: "Replacement text substring (or 'new_str')." },
+        replace_all: { type: 'boolean', description: 'Replace all occurrences (default: false).' },
+      },
+      required: ['file_path', 'old_string', 'new_string'],
+    },
+  },
+  {
+    id: 'write_file',
+    name: 'write_file',
+    label: 'Запись файла',
+    description: 'Write complete UTF-8 content to a file inside the isolated worktree.',
+    category: 'fs',
+    tokenWeight: 260,
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        content: { type: 'string', description: 'Complete file text content to write.' },
+      },
+      required: ['file_path', 'content'],
+    },
+  },
+  {
+    id: 'glob',
+    name: 'glob',
+    label: 'Поиск по маске',
+    description: 'Find files matching a glob pattern inside the isolated worktree.',
+    category: 'fs',
+    tokenWeight: 240,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: "Glob pattern (e.g. '**/*.rs', 'src/**/*.ts')." },
+        path: { type: 'string', description: "Subdirectory to search in (default: '.')." },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
+    id: 'grep',
+    name: 'grep',
+    label: 'Поиск по тексту',
+    description: 'Search file contents line by line with a Rust regular expression inside the isolated worktree. Use | for alternatives; returns at most 200 matching lines.',
+    category: 'fs',
+    tokenWeight: 250,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Rust regex: foo|bar, ^prefix, [A-Z]+, or (?i)name for case-insensitive search. No look-around or backreferences.' },
+        path: { type: 'string', description: "Directory or file to search (default: '.')." },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
+    id: 'web_search',
+    name: 'web_search',
+    label: 'Поиск в сети',
+    description: 'Perform a web search using DuckDuckGo to discover external documentation, APIs, and error solutions.',
+    category: 'web',
+    tokenWeight: 290,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query terms.' },
+        limit: { type: 'integer', description: 'Maximum number of results to return (default: 5).' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    id: 'web_fetch',
+    name: 'web_fetch',
+    label: 'Загрузка веб-страниц',
+    description: 'Fetch a URL over HTTP/HTTPS and return cleaned Markdown content.',
+    category: 'web',
+    tokenWeight: 280,
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The target HTTP or HTTPS URL.' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    id: 'load_rule',
+    name: 'load_rule',
+    label: 'Загрузка правил',
+    description: 'Dynamically load a modular project standard, architectural invariant, or tech guideline by topic.',
+    category: 'system',
+    tokenWeight: 180,
+    parameters: {
+      type: 'object',
+      properties: {
+        rule: { type: 'string', description: 'Modular rule topic to load dynamically.' },
+      },
+      required: ['rule'],
+    },
+  },
+  {
+    id: 'list_tasks',
+    name: 'list_tasks',
+    label: 'Реестр задач',
+    description: 'Retrieve a compact registry of recent Kanban board tasks for analysis, retrospectives, or quality audits.',
+    category: 'workflow',
+    tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Maximum number of tasks to return (default: 20, max: 50).' },
+        stage_id: { type: 'string', description: "Optional filter by stage or column ID (e.g. 'ready', 'dev')." },
+        query: { type: 'string', description: 'Optional text search query across title, id, or handover summary.' },
+      },
+    },
+  },
+  {
+    id: 'get_task_history',
+    name: 'get_task_history',
+    label: 'История задачи',
+    description: 'Retrieve step-by-step execution chronology of a task (original requirements, tool invocations, exit codes, verdict, and final response) for quality audit.',
+    category: 'workflow',
+    tokenWeight: 280,
+    parameters: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: "Task ID (e.g. 'CVH-042' or 'CVH-042.1')." },
+        include_tool_outputs: { type: 'boolean', description: 'If true, includes trimmed tool outputs (default: false).' },
+      },
+      required: ['task_id'],
+    },
+  },
+];

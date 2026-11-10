@@ -53,11 +53,11 @@ interface SettingsStoreState {
 }
 
 const DEFAULT_SETTINGS: LlmSettingsState = {
-  provider: 'Antigravity Proxy',
-  gatewayUrl: 'http://127.0.0.1:8045/v1',
-  baseUrl: 'http://127.0.0.1:8045/v1',
+  provider: 'OpenCode Go',
+  gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
+  baseUrl: 'https://opencode.ai/inference/go/openai/v1',
   apiKey: '',
-  model: 'gemini-3.8-flash-high',
+  model: 'crouton-alpha-free',
   compactorModel: 'inherit',
 };
 

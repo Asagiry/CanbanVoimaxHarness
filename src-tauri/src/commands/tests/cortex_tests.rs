@@ -424,7 +424,6 @@ use std::path::PathBuf;
         let loaded_pipe = crate::config::load_pipeline_config(&base).await.expect("load pipeline");
         let pipe_dev_col = loaded_pipe.stages.iter().find(|c| c.id == "dev").unwrap();
         assert_eq!(pipe_dev_col.persona.as_deref(), Some("agent-b"));
-        assert!(!base.join(".cvh").join("pipeline.json").exists());
 
         // Delete agent-b and verify references reset to None
         delete_agent_persona_file(&base, "agent-b").await.expect("delete agent-b");

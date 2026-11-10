@@ -48,7 +48,7 @@ pub fn resolve_safe_path(worktree_dir: &Path, rel_path: &str) -> Result<PathBuf>
 pub async fn emit_file_change_events(ctx: &ToolContext<'_>, rel_path: &str) {
     if let Some(app) = &ctx.app_handle {
         let norm = rel_path.replace('\\', "/");
-        if norm.ends_with("boards.json") || norm.ends_with("pipeline.json") {
+        if norm.ends_with("boards.json") {
             if let Ok(bc) = crate::config::load_boards_config(ctx.repo_root).await {
                 let _ = app.emit(
                     "boards:updated",

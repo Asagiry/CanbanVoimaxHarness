@@ -205,7 +205,7 @@ pub async fn set_active_project(
             description: None,
             active_pipeline: None,
             default_model: Some("crouton-alpha-free".to_string()),
-            api_base_url: Some("http://127.0.0.1:8045/v1".to_string()),
+            api_base_url: Some("https://opencode.ai/inference/go/openai/v1".to_string()),
             tool_permissions: None,
             providers: HashMap::new(),
         },

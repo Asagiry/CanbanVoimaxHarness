@@ -108,17 +108,6 @@ pub async fn save_cortex_file(
         if let Ok(pipe) = load_pipeline_config(&root).await {
             let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
         }
-    } else if norm_path.ends_with("pipeline.json") {
-        // Legacy trigger: pipeline.json is no longer written by the backend (boards.json is the single SSOT).
-        if let Ok(pipe) = load_pipeline_config(&root).await {
-            let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
-        }
-        if let Ok(bc) = load_boards_config(&root).await {
-            let _ = app.emit(
-                "boards:updated",
-                serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
-            );
-        }
     } else if norm_path.contains(".cvh/agents") || norm_path.contains("/agents/") {
         let list = list_agent_personas_in(&root).await;
         let _ = app.emit("agent:personas_updated", &list);

@@ -261,7 +261,6 @@ use std::path::{Path, PathBuf};
         scaffold_cvh_project(&base_dir).await.expect("Scaffold failed");
 
         let cvh = base_dir.join(".cvh");
-        assert!(!cvh.join("pipeline.json").exists(), "pipeline.json must not be created");
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.stages.len(), 3, "minimal scaffold must have exactly 3 columns");
         assert_eq!(pipe.stages[0].id, "backlog");
@@ -619,7 +618,6 @@ use std::path::{Path, PathBuf};
 
         // Verify boards.json exists
         assert!(base_dir.join(".cvh").join("boards.json").exists());
-        assert!(!base_dir.join(".cvh").join("pipeline.json").exists(), "pipeline.json must not be created");
         // Verify load_pipeline returns active board (normalized with mandatory backlog and ready)
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.title, "3D Моделирование");
@@ -634,43 +632,13 @@ use std::path::{Path, PathBuf};
     }
 
     #[tokio::test]
-    async fn test_boards_config_migrates_from_legacy_pipeline() {
-        // boards.json missing → single-board config derived from legacy pipeline.json
-        // columns (one-time migration: no files are moved or deleted).
-        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_boards_fb_{}", uuid::Uuid::new_v4()));
+    async fn test_boards_config_missing_returns_default() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_boards_missing_{}", uuid::Uuid::new_v4()));
         let cvh = base_dir.join(".cvh");
         tokio::fs::create_dir_all(&cvh).await.expect("test dir");
 
-        let pipeline_only = serde_json::json!({
-            "id": "custom-engineering",
-            "title": "Мой пайплайн",
-            "columns": [
-                {
-                    "id": "col1",
-                    "title": "Стадия 1",
-                    "color": "#64748b",
-                    "icon": "Inbox",
-                    "persona": null,
-                    "contextWindow": 128000,
-                    "modelOverride": null,
-                    "reasoningEffort": null,
-                    "temperature": null,
-                    "gatekeeperSensor": null,
-                    "allowedTools": null,
-                    "hooks": {},
-                    "autoRun": null,
-                    "terminal": null
-                }
-            ]
-        });
-
-        atomic_write_file(&cvh.join("pipeline.json"), &serde_json::to_string_pretty(&pipeline_only).unwrap()).await.unwrap();
-
-        let boards_cfg = load_boards_config(&base_dir).await.expect("load boards from pipeline fallback");
-        assert_eq!(boards_cfg.active_board_id, "development");
-        assert_eq!(boards_cfg.boards.len(), 1);
-        assert_eq!(boards_cfg.boards[0].name, "Мой пайплайн");
-        assert_eq!(boards_cfg.boards[0].stages.len(), 1);
+        let boards_cfg = load_boards_config(&base_dir).await.expect("load default boards");
+        assert_eq!(boards_cfg, default_boards_config());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
@@ -802,7 +770,6 @@ use std::path::{Path, PathBuf};
         assert!(cvh.join("agents").is_dir());
         assert!(cvh.join("config.json").is_file());
         assert!(cvh.join("boards.json").is_file());
-        assert!(!cvh.join("pipeline.json").exists());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }

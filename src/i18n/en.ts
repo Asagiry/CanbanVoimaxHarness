@@ -348,8 +348,7 @@ export const en = {
   'toolPolicy.tabGlobal': 'Global Registry',
   'toolPolicy.tabCustom': 'Custom CLI Tools',
   'toolPolicy.toolsHeading': 'Tools',
-  'toolPolicy.globalEnabled': 'Globally Enabled',
-  'toolPolicy.globalDisabled': 'Globally Disabled',
+
   'toolPolicy.savePolicies': 'Save Policies',
   'toolPolicy.saving': 'Saving...',
   'toolPolicy.saved': 'Policies Saved',

@@ -100,8 +100,8 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
             description: 'Основной источник в `scaffold.rs`',
           },
           {
-            label: 'Сохранить `pipeline.json`',
-            description: 'Устаревший легаси конфиг',
+            label: 'Сохранить старый конфиг',
+            description: 'Устаревший конфиг',
           },
         ],
         multiple: false,

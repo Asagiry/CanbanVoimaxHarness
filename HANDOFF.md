@@ -74,7 +74,7 @@
   - Актуализированы флагманские навигационные карты `backend_map.md` (включен `agent.rs`, IPC команды, facades, 277 тестов) и `frontend_map.md` (38 файлов, устранены фантомные cortex-слайсы, актуализирован размер `KanbanCard.tsx`).
   - Ликвидированы нарушения Gate 1: устранены прямые импорты `{ listen }` вне шлюза `tauriEventGateway.ts` в `AgentConsoleDrawer.tsx`, `GitDiffSidebar.tsx`, `useContextGaugeMetrics.ts`, `subagentListeners.ts`.
   - Удалены дубликаты правил в `.cvh/agents/` (`review-checklist.md`, `rules-sync.md`, `ponytail.md`).
-  - Исправлены права инструментов в `tool-policy.json` (`retro.edit_file = true`, отключены subagents для `review`/`reviewer`) и `pipeline.json` (`execute_command` для retro, тулы для `nastroyka.dev`).
+  - Исправлены права инструментов в `tool-policy.json` (`retro.edit_file = true`, отключены subagents для `review`/`reviewer`) и `boards.json` (`execute_command` для retro, тулы для `nastroyka.dev`).
   - Синхронизированы вызовы `load_rule` в `persona.md` (`planner`, `developer`, `retro`, `reviewer`).
   - Очищена документация: удалены мусорные директории `docs/ecc/` и `docs/skills/`, удален дублирующий `docs/IDEAS.md`, идеи объединены в корневой `IDEAS.md`, перемещен `GOAL-CLEAN-CODE-REFACTORING.md` в `docs/archive/`.
   - Хуки `on_enter_ready.bat/.sh` сохранены (файлы существуют в `.cvh/hooks/`), в `gatekeeper_sensor.bat` добавлена проверка Vitest и Oxlint.

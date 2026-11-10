@@ -38,7 +38,6 @@ use std::path::PathBuf;
             PathBuf::from("target").join(format!("cvh_scaffold_git_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(with_git.join(".git")).await.expect("git dir");
         crate::config::scaffold_cvh_project(&with_git).await.expect("scaffold");
-        assert!(!with_git.join(".cvh").join("pipeline.json").exists());
         let raw = tokio::fs::read_to_string(with_git.join(".cvh").join("boards.json"))
             .await
             .expect("read boards");

@@ -1,9 +1,24 @@
 use super::*;
-use crate::config::{BoardDef, BoardsConfig, PipelineColumn};
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
+#[allow(unused_imports)]
+pub(crate) use crate::config::{
+    agent_allows_tool, is_tool_allowed, load_agent_setting, load_tool_policies,
+    BoardDef, BoardsConfig, PipelineColumn, ToolPolicyConfig,
+};
+pub(crate) use crate::db::ActivityItem;
+pub(crate) use crate::hooks::kill_process_tree;
+pub(crate) use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, Role, StreamChunk, ToolDefinition};
+pub(crate) use anyhow::{bail, Context, Result};
+pub(crate) use tauri::{AppHandle, Emitter, Manager};
+pub(crate) use serde::{Deserialize, Serialize};
+pub(crate) use std::collections::HashMap;
+pub(crate) use std::path::{Path, PathBuf};
+pub(crate) use std::process::Stdio;
+pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
+pub(crate) use std::sync::{Arc, LazyLock, Mutex};
+pub(crate) use std::time::Duration;
+pub(crate) use tokio::io::AsyncReadExt;
+pub(crate) use tokio::process::Command;
+pub(crate) use tokio::sync::{mpsc, oneshot};
 
 pub(crate) fn make_test_board(_base: &Path) -> (BoardsConfig, Vec<PipelineColumn>) {
     let b_cols = vec![

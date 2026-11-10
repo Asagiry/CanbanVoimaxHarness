@@ -151,18 +151,22 @@ In ECC, workflows are triggered via slash commands. In CVH, slash commands map d
 
 ## 🚀 Progressive Disclosure Engine Roadmap for CVH
 
-### Phase 1: Agile Stability (Current State)
-- Single agile development stage with unified `cvh-dev` persona.
-- 200,000-token capacity ceiling with State-Preserving Context Compactor.
-- 2-Tier Tool Policy Matrix ensuring zero-trust schema stripping.
-- Reliable, repeatable task completion across isolated native Git worktrees.
+### Phase 1: Agile Stability & JIT Rule Discovery (Current State)
+- Single agile development stage with unified `cvh-dev` persona and specialized multi-persona roles (`developer`, `planner`, `reviewer`, `retro`).
+- Dynamic on-demand rule loading via `load_rule("<topic>")` and frontmatter description discovery.
+- Alphabetical compilation of configured `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md` into system prompts.
+- State-preserving dynamic context compaction with zero-LLM output evaporation.
+- Single-authoritative tool policy matrix ensuring zero-trust tool schema stripping.
+- Reliable, deterministic task completion across isolated native Git worktrees.
 
-### Phase 2: Context-Aware Dynamic Rule Mounting
+### Phase 2: Context-Aware Dynamic Rule Mounting (Forward Blueprint — Future Milestone)
+> *Status: Conceptual Blueprint.* File-extension-based automatic rule injection is a forward design pattern; current production relies on JIT `load_rule` and alphabetical compilation.
 - Implementation of file watcher and stage hooks that inspect target worktree files.
 - Dynamic injection of `stack-rust.md` or `stack-typescript.md` into the turn prompt only when corresponding files are opened or edited.
 - Preservation of lean baseline prompts (<2,000 tokens) with **>95% KV prompt cache hit rates**.
 
-### Phase 3: Multi-Persona Board Orchestration
+### Phase 3: Multi-Persona Board Orchestration (Forward Blueprint — Future Milestone)
+> *Status: Conceptual Blueprint.* Autonomous inter-board subtask dispatch is a forward design pattern; current production uses manual or verdict-driven stage advancement.
 - Seamless multi-column pipeline activation: `backlog` (Architect) → `dev` (Developer) → `review` (Security & Code Reviewer) → `ready` (Clean Merge & Teardown).
 - Automatic subtask dispatch with specialized role prompts from this reference catalog.
 - Zero manual prompt engineering required from the developer.
@@ -170,4 +174,4 @@ In ECC, workflows are triggered via slash commands. In CVH, slash commands map d
 ---
 
 *Document Author: CanbanVoimaxHarness Systems Architecture Working Group*  
-*Status: Authoritative Reference Blueprint for Future Progressive Disclosure Modules.*
+*Status: Authoritative Forward Reference Blueprint for Progressive Disclosure Modules.*
