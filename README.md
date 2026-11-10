@@ -7,7 +7,7 @@
 [![Rust 2021](https://img.shields.io/badge/Rust-2021%20Edition-black?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-960%20PASS%20(100%25)-success?style=flat-square)](#-key-architectural-highlights)
+[![Test Suite](https://img.shields.io/badge/Test%20Suite-100%25%20PASS-success?style=flat-square)](#-key-architectural-highlights)
 [![Clean Architecture](https://img.shields.io/badge/Clean%20Architecture-9.7%2F10-blueviolet?style=flat-square)](#6-clean-architecture-9710--type-safe-domain-layer)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
@@ -127,7 +127,7 @@ CVH delivers deep observability into agent execution velocity and token economic
 
 ### 6. 🏛️ Clean Architecture 9.7/10 & Type-Safe Domain Layer
 Engineered to strict Clean Architecture and Single-Responsibility principles (Uncle Bob `ub-mode`):
-- **NASA Test Shield: 960 PASS (100%)**: Comprehensive automated test shield consisting of 960 passing tests (601 Vitest unit tests across 50 suites + 359 Rust core tests), guaranteeing zero regressions.
+- **Automated Test Suite (Vitest + Cargo Test)**: Comprehensive automated verification across frontend Vitest unit tests and Rust backend core tests, guaranteeing zero regressions.
 - **Type-Safe Nominal Branded Types**: `TaskId`, `StageId`, `BoardId`, and `TaskState` prevent primitive obsession across Rust core (`src-tauri/src/domain/`) and React frontend (`src/types/domain.ts`).
 - **R2D2 SQLite WAL Connection Pooling**: Multi-threaded connection pooling with WAL mode and specialized repository pattern (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`), eliminating database lock contention.
 - **Decoupled ReActEngine<Driver>**: Generic agent execution engine (`react_engine.rs`) parameterized by `AgentSessionDriver`, sharing SSE streaming and telemetry logic between root tasks and child subagents with zero duplication.
@@ -256,10 +256,10 @@ Automatically runs dependency installation, frontend production build, and nativ
 
 ### Verification Commands (Ground Truth Sensors)
 ```bash
-pnpm test                          # Vitest suite (601 tests / 50 suites)
+pnpm test                          # Vitest frontend unit & store suite
 pnpm lint                          # oxlint --deny-warnings
 pnpm exec tsc --noEmit             # TypeScript strict check
-cargo test                         # Rust core tests (359 tests)
+cargo test                         # Rust backend unit & concurrency tests
 cargo clippy                       # Rust lints (-D warnings in CI)
 ```
 
@@ -402,7 +402,7 @@ CanbanVoimaxHarness/
 │   ├── Cargo.toml             # Rust dependencies (Tauri v2, Tokio, Rusqlite, R2D2)
 │   └── tauri.conf.json        # Tauri v2 bundle and window configuration
 │
-└── src/                       # React 19 Tactical Frontend (Modular Architecture, all <=350 lines)
+└── src/                       # React 19 Tactical Frontend (Modular Slice Architecture)
     ├── components/
     │   ├── board/             # Kanban board, BoardTabsHeader, StageContextMenu (stageMenu/) & DND hooks
     │   │   └── modals/        # CreateColumnModal, CreateTaskModal, ImageLightboxModal

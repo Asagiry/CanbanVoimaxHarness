@@ -93,7 +93,7 @@
 
 ### 2.2 Колонки досок (`boards.json`, SSOT) — **работает**
 
-Полная схема колонки (`PipelineColumn`, `config.rs`):
+Полная схема колонки (`PipelineColumn`, `src-tauri/src/config/`):
 
 | Поле | Тип | Назначение |
 |---|---|---|
@@ -217,7 +217,7 @@ ID монотонные `max+1`, **никогда не переиспользу�
 ### 2.9 `harness.db` (SQLite), `spill/`, `worktrees/` — **работает**
 
 - Диалоги и активность задач — SQLite база данных `.cvh/harness.db` с WAL-журналированием (таблица `dialog_items` с композитным индексом по `task_id, created_at`).
-  Операции `save_task_activity` / `load_task_activity` / `clear_task_activity` (с обратно совместимыми алиасами `save_task_dialog` / `load_task_dialog` / `clear_task_dialog`) выполняются атомарно в транзакциях (`src-tauri/src/db.rs`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
+  Операции `save_task_activity` / `load_task_activity` / `clear_task_activity` (с обратно совместимыми алиасами `save_task_dialog` / `load_task_dialog` / `clear_task_dialog`) выполняются атомарно в транзакциях (`src-tauri/src/db/`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
 - `spill/` — см. §5 (порог 500 строк / 64 КБ; 2000 строк / 128 КБ для `read_file`; 5000 строк / 256 КБ для субагентов, `HEAD 20 + TAIL 20`) — **работает**.
 - `worktrees/` — git worktrees задач; в `.gitignore` (скаффолд дописывает `.cvh/llm.json`, `llm.json`, `.cvh/worktrees/`) — **работает**.
   Удаление — `cleanup_task_worktree` (worktree + ветка `feat/<slug>`, best-effort) — **работает**;
@@ -560,7 +560,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 > Файлы `.agents/tasks-history.json` / `.agents/knowledge-graph.json` в репозитории существуют,
 > автопополнения из кода нет — ведите их вручную или своим хуком/тулом, пока не реализовано.
 > Архитектурные концепции графа памяти / SQLite WAL ledger и двухколоночного Live Diff — **работает**:
-> SQLite диалоги сохраняются в `.cvh/harness.db` с WAL-журналированием (`db.rs`), Cortex API активен,
+> SQLite диалоги сохраняются в `.cvh/harness.db` с WAL-журналированием (`src-tauri/src/db/`), Cortex API активен,
 > а двухколоночный Live Diff (`GitDiffSidebar`) полностью интегрирован в карточки и панель drawer.
 
 ---

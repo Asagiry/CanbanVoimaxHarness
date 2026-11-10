@@ -1,6 +1,6 @@
 # HANDOFF & ARCHITECTURAL BACKLOG (CanbanVoimaxHarness)
 > **Дата обновления**: Актуализация V3
-> **Текущий статус**: Задачи **CVH-041** – **CVH-043**, **CVH-046** – **CVH-049**, **CVH-037** выполнены. NASA Test Shield: **574 теста (100% PASS)**.
+> **Текущий статус**: Задачи **CVH-041** – **CVH-043**, **CVH-046** – **CVH-049**, **CVH-037** выполнены. Весь тестовый щит (Vitest + Rust Cargo) стабильно проходит на 100%.
 
 ---
 
@@ -78,7 +78,7 @@
   - Синхронизированы вызовы `load_rule` в `persona.md` (`planner`, `developer`, `retro`, `reviewer`).
   - Очищена документация: удалены мусорные директории `docs/ecc/` и `docs/skills/`, удален дублирующий `docs/IDEAS.md`, идеи объединены в корневой `IDEAS.md`, перемещен `GOAL-CLEAN-CODE-REFACTORING.md` в `docs/archive/`.
   - Хуки `on_enter_ready.bat/.sh` сохранены (файлы существуют в `.cvh/hooks/`), в `gatekeeper_sensor.bat` добавлена проверка Vitest и Oxlint.
-  - Актуализирован `README.md`: бейджи NASA Test Shield (574 теста), single authoritative layer, каталог инструментов, порог спиллинга субагентов 5000 строк / 256 КБ, раздел сборки релиза в 1 клик.
+  - Актуализирован `README.md`: бейджи Test Suite, single authoritative layer, каталог инструментов, порог спиллинга субагентов 5000 строк / 256 КБ, раздел сборки релиза в 1 клик.
 - **CVH-041**: Устранение дублирования конфигурации досок, единый SSOT в `.cvh/boards.json`, авто-миграции.
 - **CVH-042**: Исправление порядка миграций SQLite, атомарное выделение монотонных номеров задач с учетом веток git.
 - **CVH-043**: Введение централизованного реестра сессий `AgentSessionRegistry` на бэкенде, системный ивент `agent:session_status`, Zustand-стор `agentSessionStore` на фронтенде.

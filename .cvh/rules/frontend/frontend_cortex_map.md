@@ -32,7 +32,6 @@ Cortex inspects and edits agent personas (`.cvh/agents/<role>/persona.md`), role
 | `src/stores/cortex/cortexSync.ts` | Stage-to-column synchronization (`syncStagesFromColumnsAction`) and persona CRUD/color/icon IPC sync. |
 | `src/stores/cortex/cortexHelpers.ts` | Path resolution (`cortexAgentDir`), rule/hook/setting/persona templates, command tokenization, and script path extraction. |
 | `src/stores/cortex/cortexConstants.ts` | `DEFAULT_CORTEX_STAGES` fallback tree and recognized `SCRIPT_EXTENSIONS`. |
-| `src/stores/cortex/cortexListeners.ts` | DEPRECATED stub (`export {}`; Tauri events centralized in `src/services/tauriEventGateway.ts`). |
 | `src/stores/cortex/types.ts` | `AgentPersonaInfo`, `CortexHookMoment`, `CortexHookExt`, and Cortex slice state/action contracts. |
 | `src/stores/cortex/index.ts` | Barrel re-exports for Cortex store types, constants, helpers, and slices. |
 

@@ -71,7 +71,7 @@ When `cvh-dev` configures a project, it must NOT merely generate column JSON con
   - *Contrastive Diff Self-Audit*: Prior to handoff, the developer executes `git diff` and line-by-line scrutinizes every change. Stray `console.log`, temporary dump files, and formatting churn are eradicated.
 * **Anti-Mock-Slop & Genuine Verification Mandate**:
   - Authoring superficial, brittle synthetic mocks (`mockImplementation(...)` chains simulating entire ecosystems) is **STRICTLY PROHIBITED**. Superficial mocks consume excessive token budgets and create false confidence over broken abstractions.
-  - Genuine, deterministic verification of core domain invariants, nominal branded types, state machines, and reactive stores (`pnpm test`, `cargo test`) is encouraged and enforced as part of the NASA Ground Truth Verification Shield (948 tests: 589 Vitest / 50 suites + 359 Rust).
+  - Genuine, deterministic verification of core domain invariants, nominal branded types, state machines, and reactive stores (`pnpm test`, `cargo test`) is encouraged and enforced as part of the Ground Truth Verification Shield (`pnpm test` + `cargo test`).
   - Pre-flight verification relies on **Live Ground Truth Sensors**:
     1. Automated Test Suites (`pnpm test`, `cargo test`).
     2. Compiler & Typecheck Sensors (`pnpm exec tsc --noEmit`, `cargo check`).
