@@ -71,10 +71,10 @@ export function useContextGaugeMetrics({
   const textCache = useRef(createTextCharsCache());
 
   const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens, isEstimate } = useMemo(() => {
-    const thoughtsArr = thoughts ?? [];
     const outputsArr = outputs ?? [];
     const toolsArr = tools ?? [];
-    const textChars = computeIncrementalTextChars(thoughtsArr, outputsArr, textCache.current);
+    // Context gauge tracks input/dialogue capacity, excluding ephemeral thinking stream chunks.
+    const textChars = computeIncrementalTextChars([], outputsArr, textCache.current);
     return computeTokenBreakdown({
       taskId,
       persona,
@@ -82,16 +82,15 @@ export function useContextGaugeMetrics({
       resolvedCompactTokens,
       tokenOverride,
       telemetry,
-      streamedTurnTokens,
       textChars,
-      thoughtsLen: thoughtsArr.length,
+      thoughtsLen: 0,
       outputsLen: outputsArr.length,
       tools: toolsArr,
       feedLen: feed?.length ?? 0,
     });
   }, [
     taskId, persona, currentEstimatedTokens, resolvedCompactTokens, tokenOverride,
-    telemetry, streamedTurnTokens, thoughts, outputs, tools, feed,
+    telemetry, outputs, tools, feed,
   ]);
 
   const {

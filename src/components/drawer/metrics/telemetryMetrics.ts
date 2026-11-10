@@ -162,15 +162,17 @@ export function computeTokenDisplaySummary(params: {
     telemetrySummary?.totalCachedTokens ?? 0,
     cumulativeInputTokens
   );
-  const cumulativeOutputTokensTotal = telemetrySummary?.totalOutputTokens ?? 0;
+  const liveStreamOutput = streamedTurnTokens > 0 ? streamedTurnTokens : 0;
+  const cumulativeOutputTokensTotal = (telemetrySummary?.totalOutputTokens ?? 0) + liveStreamOutput;
   const cumulativeTotalTokens =
-    telemetrySummary?.totalTokens ?? cumulativeInputTokens + cumulativeOutputTokensTotal;
+    (telemetrySummary?.totalTokens ?? cumulativeInputTokens + (telemetrySummary?.totalOutputTokens ?? 0)) +
+    liveStreamOutput;
   const cumulativeUncachedInput = Math.max(0, cumulativeInputTokens - cumulativeCachedTokens);
   const cumulativeCacheHitRate =
     telemetrySummary?.cacheHitRate ??
     (cumulativeInputTokens > 0 ? (cumulativeCachedTokens / cumulativeInputTokens) * 100 : 0);
   const cumulativeTurnCount = telemetrySummary?.turnCount ?? 0;
-  const hasCumulative = cumulativeTotalTokens > 0;
+  const hasCumulative = (telemetrySummary?.totalTokens ?? 0) > 0 || cumulativeInputTokens > 0;
 
   return {
     cacheHitRate: hasCumulative ? cumulativeCacheHitRate : safeCacheHitRate,

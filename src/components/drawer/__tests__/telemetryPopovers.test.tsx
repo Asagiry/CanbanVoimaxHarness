@@ -12,6 +12,9 @@ import {
 import { SessionStatsPopover } from '../SessionStatsPopover';
 import { TokenUsagePopover } from '../TokenUsagePopover';
 import ContextGauge from '../ContextGauge';
+import { computeTokenBreakdown } from '../metrics/tokenMetrics';
+import { computeTokenDisplaySummary } from '../metrics/telemetryMetrics';
+import { useDrawerStore } from '../../../stores/drawerStore';
 
 // Mock Tauri invoke and event APIs
 vi.mock('@tauri-apps/api/core', () => ({
@@ -236,5 +239,62 @@ describe('ContextGauge Component UI Invariants', () => {
     // (Excluding internal ContextPopover progress segments if any)
     const statusBarMatches = html.match(/class="[^"]*select-none[^"]*"[^>]*title=/);
     expect(statusBarMatches).toBeNull();
+  });
+
+  it('keeps context fill based on inputTokens while streaming output ticks live in Token usage', () => {
+    const breakdown = computeTokenBreakdown({
+      taskId: 'CVH-073',
+      telemetry: {
+        inputTokens: 70000,
+        outputTokens: 0,
+        cacheReadTokens: 65000,
+        cacheCreationTokens: 0,
+        cacheHitRate: 93,
+        durationMs: 0,
+        tps: 0,
+        systemTokens: 3234,
+        toolTokens: 3005,
+      },
+      textChars: 50000,
+      thoughtsLen: 0,
+      outputsLen: 1,
+      tools: [],
+      feedLen: 5,
+    });
+    expect(breakdown.totalUsedTokens).toBe(70000);
+
+    const summary = computeTokenDisplaySummary({
+      telemetrySummary: {
+        totalInputTokens: 1067814,
+        totalCachedTokens: 995584,
+        totalOutputTokens: 126128,
+        totalTokens: 1193942,
+        cacheHitRate: 93.2,
+        turnCount: 28,
+      },
+      totalUsedTokens: breakdown.totalUsedTokens,
+      streamedTurnTokens: 450,
+      cumulativeOutputTokens: 126128,
+      safeCacheHitRate: 93,
+    });
+    expect(summary.outputTokens).toBe(126578);
+    expect(summary.totalTokens).toBe(1194392);
+    expect(summary.uncachedInput).toBe(72230);
+    expect(summary.cachedInput).toBe(995584);
+
+    // setTaskTelemetrySummary clears streamedTurnTokens after turn completes (generationEndTime set)
+    useDrawerStore.setState({
+      streamedTurnTokens: { 'CVH-073': 450 },
+      generationEndTime: { 'CVH-073': Date.now() },
+    });
+    useDrawerStore.getState().setTaskTelemetrySummary('CVH-073', {
+      totalInputTokens: 1067814,
+      totalCachedTokens: 995584,
+      totalOutputTokens: 126600,
+      totalTokens: 1194414,
+      cacheHitRate: 93.2,
+      turnCount: 29,
+    });
+    expect(useDrawerStore.getState().streamedTurnTokens['CVH-073']).toBe(0);
   });
 });

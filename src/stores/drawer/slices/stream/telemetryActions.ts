@@ -47,6 +47,14 @@ export function createStreamTelemetryActions(
           ...state.taskTelemetrySummary,
           [taskId]: summary,
         },
+        ...(state.generationEndTime[taskId] != null && (state.streamedTurnTokens[taskId] ?? 0) > 0
+          ? {
+              streamedTurnTokens: {
+                ...state.streamedTurnTokens,
+                [taskId]: 0,
+              },
+            }
+          : {}),
       }));
     },
 

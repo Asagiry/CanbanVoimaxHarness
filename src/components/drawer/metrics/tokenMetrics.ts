@@ -138,7 +138,6 @@ export interface ComputeTokenBreakdownParams {
   resolvedCompactTokens?: number;
   tokenOverride?: number;
   telemetry?: TaskTelemetry;
-  streamedTurnTokens: number;
   textChars: number;
   thoughtsLen: number;
   outputsLen: number;
@@ -153,7 +152,6 @@ export function computeTokenBreakdown({
   resolvedCompactTokens,
   tokenOverride,
   telemetry,
-  streamedTurnTokens,
   textChars,
   thoughtsLen,
   outputsLen,
@@ -194,9 +192,10 @@ export function computeTokenBreakdown({
   if (currentEstimatedTokens !== undefined) {
     total = currentEstimatedTokens;
   } else if ((telemetry?.inputTokens || 0) > 0) {
-    total = telemetry!.inputTokens + (streamedTurnTokens > 0 ? streamedTurnTokens : 0);
+    // Context window fill represents prompt input tokens (thinking is discarded between turns).
+    total = telemetry!.inputTokens;
   } else if (resolvedCompactTokens !== undefined || tokenOverride !== undefined) {
-    total = (tokenOverride ?? resolvedCompactTokens)! + (streamedTurnTokens > 0 ? streamedTurnTokens : 0);
+    total = (tokenOverride ?? resolvedCompactTokens)!;
   } else {
     total = baseSystem + baseTool + Math.max(100, rawMsgTokens);
   }

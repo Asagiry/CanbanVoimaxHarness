@@ -87,7 +87,7 @@ export function useTelemetrySummarySync(
           if (debounce) clearTimeout(debounce);
           debounce = setTimeout(() => {
             void refreshTelemetrySummary();
-          }, 300);
+          }, 50);
         });
         if (isDisposed) u();
         else unlisten = u;
