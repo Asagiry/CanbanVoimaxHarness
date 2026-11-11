@@ -45,10 +45,14 @@ if not errorlevel 1 (
     git rev-parse --verify HEAD >nul 2>&1
     if not errorlevel 1 (
         set "DIFF_AVAILABLE=1"
-        git diff --name-only main HEAD 2>nul | findstr /b /i "src-tauri/ Cargo.toml Cargo.lock" >nul 2>&1
+        set "MERGE_BASE=main"
+        for /f "tokens=*" %%M in ('git merge-base main HEAD 2^>nul') do (
+            if not "%%M"=="" set "MERGE_BASE=%%M"
+        )
+        git diff --name-only !MERGE_BASE! HEAD 2>nul | findstr /b /i "src-tauri/ Cargo.toml Cargo.lock" >nul 2>&1
         if not errorlevel 1 set "HAS_BACKEND_CHANGES=1"
 
-        git diff --name-only main HEAD 2>nul | findstr /b /i "src/ index.html vite.config. tsconfig package.json pnpm-lock.yaml" >nul 2>&1
+        git diff --name-only !MERGE_BASE! HEAD 2>nul | findstr /b /i "src/ index.html vite.config. tsconfig package.json pnpm-lock.yaml" >nul 2>&1
         if not errorlevel 1 set "HAS_FRONTEND_CHANGES=1"
     )
 )

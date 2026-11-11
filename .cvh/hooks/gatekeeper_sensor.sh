@@ -40,7 +40,8 @@ HAS_FRONTEND_CHANGES=0
 
 if git rev-parse --verify main >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
     DIFF_AVAILABLE=1
-    DIFF_FILES="$(git diff --name-only main HEAD 2>/dev/null || true)"
+    MERGE_BASE="$(git merge-base main HEAD 2>/dev/null || echo "main")"
+    DIFF_FILES="$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)"
     if echo "$DIFF_FILES" | grep -qiE '^(src-tauri/|Cargo\.toml|Cargo\.lock)'; then
         HAS_BACKEND_CHANGES=1
     fi
