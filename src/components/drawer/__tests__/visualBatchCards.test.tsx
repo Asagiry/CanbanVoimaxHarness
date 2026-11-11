@@ -146,7 +146,8 @@ describe('Visual Batch Tool Execution: BatchBadge', () => {
     };
 
     const html = renderToString(<BatchBadge tool={batchTool} />);
-    expect(html).toContain('🔗');
+    expect(html).toContain('lucide-link2');
+    expect(html).not.toContain('🔗');
     expect(html).toContain('Batch 2/4');
     expect(html).toContain('data-testid="batch-step-badge"');
   });
@@ -164,7 +165,8 @@ describe('Visual Batch Tool Execution: BatchBadge', () => {
     };
 
     const html = renderToString(<BatchBadge tool={batchTool} />);
-    expect(html).toContain('🔗');
+    expect(html).toContain('lucide-link2');
+    expect(html).not.toContain('🔗');
     expect(html).toContain('Пакет 2/4');
     expect(html).toContain('data-testid="batch-step-badge"');
   });
@@ -189,7 +191,8 @@ describe('Visual Batch Tool Execution: StatusIndicator', () => {
 
     const html = renderToString(<StatusIndicator tool={skippedTool} />);
     expect(html).toContain('data-testid="batch-skipped-badge"');
-    expect(html).toContain('🚫');
+    expect(html).toContain('lucide-ban');
+    expect(html).not.toContain('🚫');
     expect(htmlRuOrEn(html, 'Пропущено из-за сбоя в пакете', 'Skipped due to batch failure')).toBe(true);
     // Should NOT render generic red X icon
     expect(html).not.toContain('text-rose-600');
@@ -282,7 +285,8 @@ describe('Visual Batch Tool Execution: ToolExecutionCard Integration', () => {
     expect(cmdHtml).toContain('data-testid="batch-step-badge"');
     expect(cmdHtml).toContain('Batch 2/3');
     expect(cmdHtml).toContain('data-testid="batch-skipped-badge"');
-    expect(cmdHtml).toContain('🚫');
+    expect(cmdHtml).toContain('lucide-ban');
+    expect(cmdHtml).not.toContain('🚫');
   });
 
   it('renders queued tool with subtle opacity', () => {

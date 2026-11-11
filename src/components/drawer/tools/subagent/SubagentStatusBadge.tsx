@@ -1,7 +1,8 @@
 import { Check, X, Layers, Zap } from 'lucide-react';
 import AgentIcon from '../../../common/AgentIcon';
+import type { TranslationKey } from '../../../../stores/languageStore';
 
-export function SubagentStatusBadge({ status, t }: { status: string; t: (key: any) => string }) {
+export function SubagentStatusBadge({ status, t }: { status: string; t: (key: TranslationKey) => string }) {
   if (status === 'running') {
     return (
       <div className="flex items-center space-x-1">
@@ -57,8 +58,8 @@ export function SubagentTypeIcon({
   if (isBg) {
     return (
       <div className="relative shrink-0 flex items-center justify-center">
-        <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#111114]" />
+        <Layers className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-cyan-500 ring-1 ring-white dark:ring-[#111114]" />
       </div>
     );
   }

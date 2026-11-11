@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useRef, type InputHTMLAttributes } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useProjectStore, isInvalidProjectPath } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
@@ -16,6 +17,11 @@ import {
 import { useThemeStore } from '../../stores/themeStore';
 import { useTranslation } from '../../stores/languageStore';
 
+type DirectoryInputAttributes = InputHTMLAttributes<HTMLInputElement> & {
+  webkitdirectory?: string;
+  directory?: string;
+};
+
 export default function Topbar() {
   const {
     activeProject,
@@ -24,15 +30,25 @@ export default function Topbar() {
     switchProject,
     removeProjectFromHistory,
     hasActiveProject,
-  } = useProjectStore();
-  const { openSettings } = useSettingsStore();
-  const { openModal: openToolPolicyModal } = useToolPolicyStore();
-  const { theme, toggleThemeWithAnimation } = useThemeStore();
+  } = useProjectStore(
+    useShallow((s) => ({
+      activeProject: s.activeProject,
+      availableProjects: s.availableProjects,
+      openFolder: s.openFolder,
+      switchProject: s.switchProject,
+      removeProjectFromHistory: s.removeProjectFromHistory,
+      hasActiveProject: s.hasActiveProject,
+    }))
+  );
+  const openSettings = useSettingsStore((s) => s.openSettings);
+  const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
+  const { theme, toggleThemeWithAnimation } = useThemeStore(
+    useShallow((s) => ({ theme: s.theme, toggleThemeWithAnimation: s.toggleThemeWithAnimation }))
+  );
   const { language, toggleLanguage, t } = useTranslation();
   const sessions = useAgentSessionStore((s) => s.sessions);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  // Filter and deduplicate valid project tabs
   const validAvailable: typeof availableProjects = [];
   const seenPaths = new Set<string>();
   for (const p of availableProjects) {
@@ -44,7 +60,6 @@ export default function Topbar() {
     }
   }
 
-  // Ensure active project is represented if valid
   if (
     hasActiveProject &&
     !isInvalidProjectPath(activeProject.rootPath) &&
@@ -55,7 +70,6 @@ export default function Topbar() {
 
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    // Do not toggle maximize if double clicking an interactive element
     if (target.closest('button, input, select, textarea, [data-no-drag]')) {
       return;
     }
@@ -63,7 +77,6 @@ export default function Topbar() {
   };
 
   const handleOpenFolderClick = async () => {
-    // 1. Try Tauri native folder dialog
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const selectedPath = await invoke<string | null>('choose_project_folder');
@@ -71,11 +84,10 @@ export default function Topbar() {
         await openFolder(selectedPath);
         return;
       }
-    } catch {
-      // Fallback to web directory input or prompt
+    } catch (err) {
+      console.debug('[Topbar] choose_project_folder unavailable in web mode:', err);
     }
 
-    // 2. Fallback to hidden directory file input
     if (folderInputRef.current) {
       folderInputRef.current.click();
     }
@@ -84,12 +96,19 @@ export default function Topbar() {
   const handleDirectorySelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const firstFile = files[0];
-      // On web, relative path contains the root folder name
-      const path = (firstFile as any).webkitRelativePath || firstFile.name;
+      const firstFile = files[0] as File & { webkitRelativePath?: string };
+      const path = firstFile.webkitRelativePath || firstFile.name;
       const rootFolder = path.split('/')[0] || 'Selected Project';
       await openFolder(rootFolder);
     }
+  };
+
+  const directoryInputProps: DirectoryInputAttributes = {
+    type: 'file',
+    webkitdirectory: 'true',
+    directory: 'true',
+    onChange: handleDirectorySelected,
+    className: 'hidden',
   };
 
   return (
@@ -98,17 +117,7 @@ export default function Topbar() {
       onDoubleClick={handleHeaderDoubleClick}
       className="h-10 w-full flex items-center justify-between pl-3 pr-0 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] select-none text-xs text-[#171717] dark:text-[#f4f4f5] shrink-0 z-40 transition-colors"
     >
-      {/* Hidden Web Directory Picker */}
-      <input
-        ref={folderInputRef}
-        type="file"
-        // @ts-ignore
-        webkitdirectory="true"
-        // @ts-ignore
-        directory="true"
-        onChange={handleDirectorySelected}
-        className="hidden"
-      />
+      <input ref={folderInputRef} {...directoryInputProps} />
 
       {/* Left: Logo + Folder Picker + Project Switcher Tabs */}
       <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden mr-2" data-tauri-drag-region>
@@ -117,6 +126,7 @@ export default function Topbar() {
         </div>
 
         <button
+          type="button"
           data-no-drag
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleOpenFolderClick}
@@ -155,37 +165,43 @@ export default function Topbar() {
                 <div
                   key={project.id || project.rootPath}
                   data-no-drag
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => {
-                    if (isActive) return;
-                    void switchProject(project.rootPath || project.id);
-                  }}
-                  title={project.rootPath || project.name}
-                  className={`group flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs transition cursor-pointer select-none shrink-0 border ${
+                  className={`group flex items-center space-x-1 px-2 py-1 rounded-md text-xs transition select-none shrink-0 border ${
                     isActive
                       ? 'bg-[#f4f4f5] dark:bg-[#232328] border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-medium'
                       : 'border-transparent text-[#666666] dark:text-[#71717a] hover:bg-[#f9f9f9] dark:hover:bg-[#17171b] hover:border-[#ebebeb] dark:hover:border-[#212126] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
-                  {isAgentRunningInProject && (
-                    <span
-                      className="flex items-center space-x-1 shrink-0"
-                      title={`${runningSessionsCount} active agent(s)`}
-                    >
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                      </span>
-                      {runningSessionsCount > 1 && (
-                        <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums leading-none">
-                          {runningSessionsCount}
+                  <button
+                    type="button"
+                    data-no-drag
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      if (isActive) return;
+                      void switchProject(project.rootPath || project.id);
+                    }}
+                    title={project.rootPath || project.name}
+                    className="flex items-center space-x-1.5 cursor-pointer min-w-0"
+                  >
+                    {isAgentRunningInProject && (
+                      <span
+                        className="flex items-center space-x-1 shrink-0"
+                        title={`${runningSessionsCount} active agent(s)`}
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                         </span>
-                      )}
+                        {runningSessionsCount > 1 && (
+                          <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums leading-none">
+                            {runningSessionsCount}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    <span className="max-w-[130px] truncate font-sans text-xs">
+                      {folderName}
                     </span>
-                  )}
-                  <span className="max-w-[130px] truncate font-sans text-xs">
-                    {folderName}
-                  </span>
+                  </button>
                   <button
                     type="button"
                     data-no-drag
@@ -208,9 +224,9 @@ export default function Topbar() {
 
       {/* Right: Modals triggers & Custom Window Controls */}
       <div className="flex items-center h-full space-x-1 shrink-0" data-tauri-drag-region>
-        {/* Settings & Tools Modal Triggers */}
         <div className="flex items-center space-x-1.5 pr-2" data-no-drag>
           <button
+            type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openToolPolicyModal}
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
@@ -219,6 +235,7 @@ export default function Topbar() {
             <Wrench className="h-3.5 w-3.5 block shrink-0" />
           </button>
           <button
+            type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openSettings}
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
@@ -227,7 +244,6 @@ export default function Topbar() {
             <Settings className="h-3.5 w-3.5 block shrink-0" />
           </button>
 
-          {/* Language Switcher Button (EN / RU) */}
           <button
             data-no-drag
             type="button"
@@ -245,8 +261,8 @@ export default function Topbar() {
             </span>
           </button>
 
-          {/* Theme Toggle Button with Circular Wave Animation */}
           <button
+            type="button"
             data-no-drag
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => toggleThemeWithAnimation(e)}
@@ -264,7 +280,7 @@ export default function Topbar() {
               <Moon
                 className={`h-3.5 w-3.5 transition-all duration-300 transform absolute inset-0 ${
                   theme === 'dark'
-                    ? 'rotate-0 scale-100 opacity-100 text-indigo-400'
+                    ? 'rotate-0 scale-100 opacity-100 text-sky-400'
                     : '-rotate-90 scale-0 opacity-0'
                 }`}
               />
@@ -272,10 +288,8 @@ export default function Topbar() {
           </button>
         </div>
 
-        {/* Vertical divider before window controls */}
         <div className="h-4 w-px bg-[#ebebeb] dark:bg-[#212126] mx-1" />
 
-        {/* Shared Frameless Window Controls */}
         <WindowControls />
       </div>
     </header>

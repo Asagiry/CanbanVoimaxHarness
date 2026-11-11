@@ -41,7 +41,7 @@ export default function CvhSaveButton() {
   return (
     <button
       type="button"
-      onClick={() => void saveCvhToGit().catch(() => undefined)}
+      onClick={() => void saveCvhToGit().catch((err) => console.warn('[CvhSaveButton] saveCvhToGit failed:', err))}
       disabled={!hasChanges}
       aria-label={t('cortex.saveToGit')}
       title={title}

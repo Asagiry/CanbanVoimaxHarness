@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Layers, ArrowRight } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -19,7 +20,12 @@ interface PersonaOption {
 }
 
 export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalProps) {
-  const { createBoard, saveBoard } = useBoardStore();
+  const { createBoard, saveBoard } = useBoardStore(
+    useShallow((s) => ({
+      createBoard: s.createBoard,
+      saveBoard: s.saveBoard,
+    })),
+  );
   const { t } = useTranslation();
   const { zoom } = useUiZoom();
   const [boardName, setBoardName] = useState('');
@@ -47,7 +53,8 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
             }));
             setPersonas(mapped);
           }
-        } catch {
+        } catch (err) {
+          console.debug('[CreateBoardModal] list_agent_personas unavailable, using defaults:', err);
           setPersonas([
             { role: 'cvh-dev', isBuiltin: true },
             { role: 'developer', isBuiltin: false },
@@ -62,11 +69,13 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

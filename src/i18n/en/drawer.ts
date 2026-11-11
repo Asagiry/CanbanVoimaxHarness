@@ -130,6 +130,7 @@ export const enDrawer = {
   'gitDiff.filterDeleted': '-Deleted ({count})',
   'gitDiff.noMatchingFiles': 'No files match the filter',
   'gitDiff.resetFilters': 'Reset filters',
+  'gitDiff.loadError': 'Failed to load Git Diff',
 
   // Subagents Sidebar
   'subagents.title': 'Subagents',

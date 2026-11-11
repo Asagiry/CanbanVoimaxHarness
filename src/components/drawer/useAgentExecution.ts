@@ -4,6 +4,12 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useAgentSessionStore } from '../../stores/agentSessionStore';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  return fallback;
+}
+
 export interface UseAgentExecutionProps {
   task: KanbanTask;
   subtasks: KanbanTask[];
@@ -51,9 +57,9 @@ export function useAgentExecution({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('run_agent', { taskId: task.id, prompt: null });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.info('run_agent invoke failed or web mode:', err);
-      const errMsg = err?.message || (typeof err === 'string' ? err : 'Не удалось запустить агента');
+      const errMsg = getErrorMessage(err, 'Не удалось запустить агента');
       setRunError(errMsg);
       updateTask(task.id, { status: 'idle', isTimerRunning: false });
       setActiveAgentTask(task.id, false);
@@ -70,8 +76,8 @@ export function useAgentExecution({
           useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
         try {
           await invoke('abort_agent', { taskId: resolvedSubagentId });
-        } catch (err: any) {
-          abortError = err?.message || (typeof err === 'string' ? err : 'Не удалось остановить сабагента (backend)');
+        } catch (err: unknown) {
+          abortError = getErrorMessage(err, 'Не удалось остановить сабагента (backend)');
         }
         setActiveAgentTask(activeSubagentId, false);
         setActiveAgentTask(resolvedSubagentId, false);
@@ -104,8 +110,8 @@ export function useAgentExecution({
 
       try {
         await invoke('abort_agent', { taskId: task.id });
-      } catch (err: any) {
-        abortError = err?.message || (typeof err === 'string' ? err : 'Не удалось остановить агента (backend)');
+      } catch (err: unknown) {
+        abortError = getErrorMessage(err, 'Не удалось остановить агента (backend)');
       }
       updateTask(task.id, { status: 'paused', isTimerRunning: false });
       setActiveAgentTask(task.id, false);
@@ -170,8 +176,8 @@ export function useAgentExecution({
               providerId: continueProvider,
             });
             return true;
-          } catch (err: any) {
-            const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка перезапуска субагента');
+          } catch (err: unknown) {
+            const errMsg = getErrorMessage(err, 'Ошибка перезапуска субагента');
             setRunError(errMsg);
             setActiveAgentTask(activeSubagentId, false);
             setActiveAgentTask(resolvedSubagentId, false);
@@ -223,8 +229,8 @@ export function useAgentExecution({
           providerId: steerProvider,
         });
         return true;
-      } catch (err: any) {
-        const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды субагенту');
+      } catch (err: unknown) {
+        const errMsg = getErrorMessage(err, 'Ошибка отправки команды субагенту');
         setRunError(errMsg);
         setActiveAgentTask(activeSubagentId, false);
         setActiveAgentTask(resolvedSubagentId, false);
@@ -257,9 +263,9 @@ export function useAgentExecution({
         setActiveAgentTask(targetId, false);
       }
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.info('steer_agent invoke failed or web mode:', err);
-      const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');
+      const errMsg = getErrorMessage(err, 'Ошибка отправки команды агенту');
       setRunError(errMsg);
       if (!targetIsRunning) {
         updateTask(targetId, { status: 'idle', isTimerRunning: false });

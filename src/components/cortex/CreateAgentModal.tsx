@@ -160,7 +160,7 @@ export function CreateAgentModal({
               <span className="truncate">.cvh/agents/{previewRole}/</span>
             </div>
             <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#71717a]">
-              <FileText className="h-3 w-3 shrink-0 text-[#6366f1]" />
+              <FileText className="h-3 w-3 shrink-0 text-[#0284c7]" />
               <span className="truncate">{t('cortex.personaTemplatePreview')}</span>
             </div>
             <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#71717a]">

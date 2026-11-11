@@ -58,7 +58,7 @@ export function ContextPopover({
           {toolDefTokens > 0 && (
             <div
               style={{ width: `${toolPct}%` }}
-              className="h-full bg-[#8b5cf6] transition-all duration-200"
+              className="h-full bg-[#0ea5e9] transition-all duration-200"
               title={`Tool definitions: ~${toolDefTokens.toLocaleString('ru-RU')}`}
             />
           )}
@@ -85,7 +85,7 @@ export function ContextPopover({
 
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#0ea5e9] shrink-0" />
               <span className="text-[#666666] dark:text-[#71717a]">Схемы инструментов</span>
             </div>
             <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] tabular-nums">

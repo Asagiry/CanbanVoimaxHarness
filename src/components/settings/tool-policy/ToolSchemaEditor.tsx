@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   applyShellToExecuteCommandSchema,
   buildDefaultToolSchema,
@@ -17,7 +18,15 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
     resetToolCustomSchema,
     toolSettings,
     setToolSetting,
-  } = useToolPolicyStore();
+  } = useToolPolicyStore(
+    useShallow((s) => ({
+      toolCustomSchemas: s.toolCustomSchemas,
+      setToolCustomSchema: s.setToolCustomSchema,
+      resetToolCustomSchema: s.resetToolCustomSchema,
+      toolSettings: s.toolSettings,
+      setToolSetting: s.setToolSetting,
+    })),
+  );
 
   const isExecuteCommand = tool.id === 'execute_command';
   const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
@@ -42,7 +51,8 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
       try {
         const normalized = normalizeStoredToolSchema(customSchema, defaultSchema);
         return typeof normalized === 'string' ? normalized : JSON.stringify(normalized, null, 2);
-      } catch {
+      } catch (err) {
+        console.debug('[ToolSchemaEditor] normalizeStoredToolSchema failed:', err);
         return typeof customSchema === 'string' ? customSchema : JSON.stringify(customSchema, null, 2);
       }
     }
@@ -69,8 +79,9 @@ export default function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
           setToolCustomSchema('execute_command', updated);
         }
       }
-    } catch {
+    } catch (err) {
       // Draft had syntax error; activeJsonString will update on next valid state
+      console.debug('[ToolSchemaEditor] JSON parse skipped during shell change:', err);
     }
   };
 

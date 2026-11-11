@@ -77,13 +77,27 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
       }
       if (num === undefined || isNaN(num)) num = idx + 1;
 
-      const role = storeSub?.role || boardSub?.persona || (spawnTool?.params as any)?.role || 'general';
-      const rawTitle = storeSub?.title || boardSub?.title || (spawnTool?.params as any)?.title || (spawnTool?.params as any)?.prompt;
+      const spawnParams =
+        spawnTool?.params && typeof spawnTool.params === 'object'
+          ? (spawnTool.params as Record<string, unknown>)
+          : undefined;
+      const paramRole = typeof spawnParams?.role === 'string' ? spawnParams.role : undefined;
+      const paramTitle = typeof spawnParams?.title === 'string' ? spawnParams.title : undefined;
+      const paramPrompt = typeof spawnParams?.prompt === 'string' ? spawnParams.prompt : undefined;
+
+      const role = storeSub?.role || boardSub?.persona || paramRole || 'general';
+      const rawTitle = storeSub?.title || boardSub?.title || paramTitle || paramPrompt;
       const displayTitle = formatSubagentDisplayTitle(rawTitle, language);
 
       let status: 'running' | 'finished' | 'stopped' | 'error' = 'running';
       if (storeSub?.status) {
-        status = storeSub.status as any;
+        status =
+          storeSub.status === 'running' ||
+          storeSub.status === 'finished' ||
+          storeSub.status === 'stopped' ||
+          storeSub.status === 'error'
+            ? storeSub.status
+            : 'running';
       } else if (boardSub?.status) {
         status = boardSub.status === 'done' ? 'finished' : boardSub.status === 'running' ? 'running' : 'finished';
       } else if (tool.status === 'success') {
@@ -123,11 +137,10 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
 
       const isBg = Boolean(storeSub?.isBg || (spawnTool && spawnTool.toolName === 'subagent_bg'));
       const isBoardSubtask = Boolean(boardSub);
-      const spawnPrompt = (spawnTool?.params as any)?.prompt;
       const prompt =
         storeSub?.prompt ||
-        (typeof spawnPrompt === 'string' ? spawnPrompt : '') ||
-        (boardSub as any)?.description ||
+        paramPrompt ||
+        boardSub?.description ||
         '';
 
       return {
@@ -159,9 +172,11 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
 
   return (
     <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] p-3 shadow-xs my-2 select-none transition-all duration-150">
-      <div
+      <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between gap-2.5 cursor-pointer"
+        aria-expanded={isExpanded}
+        className="w-full text-left flex items-center justify-between gap-2.5 cursor-pointer"
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
@@ -191,7 +206,7 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
                 return (
                   <span
                     key={id}
-                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 shrink-0"
                   >
                     {t('subagents.subagentWithNum', { index: num })}
                   </span>
@@ -241,7 +256,7 @@ export function CollectSubagentExecutionCard({ tool, isExpanded: controlledExpan
             />
           </div>
         </div>
-      </div>
+      </button>
 
       {isExpanded && (
         <div className="mt-2.5 pt-2 border-t border-[#f4f4f5] dark:border-[#212126] space-y-1.5">

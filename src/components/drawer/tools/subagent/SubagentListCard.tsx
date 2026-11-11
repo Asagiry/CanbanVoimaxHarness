@@ -4,7 +4,7 @@ import type { SubagentInfo } from '../../../../types';
 import { useDrawerStore } from '../../../../stores/drawerStore';
 import { useBoardStore } from '../../../../stores/boardStore';
 import { useCortexStore } from '../../../../stores/cortexStore';
-import { useTranslation } from '../../../../stores/languageStore';
+import { useTranslation, type Language, type TranslationKey } from '../../../../stores/languageStore';
 import { getRoleBadgeStyle } from '../../../../lib/agentPalette';
 import {
   formatSubagentDisplayTitle,
@@ -32,38 +32,49 @@ export function parseDiscoveredSubagents(
   storeSubagents: Record<string, SubagentInfo[]>,
   orderMap: Map<string, number>,
   toolIdToSubagentId: Record<string, string>,
-  t: (key: any, options?: any) => string
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
 ): DiscoveredSubagent[] {
   const discoveredList: DiscoveredSubagent[] = [];
 
   if (stdout) {
     try {
-      const parsed = JSON.parse(stdout);
+      const parsed: unknown = JSON.parse(stdout);
+      const parsedObj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
       const items = Array.isArray(parsed)
         ? parsed
-        : Array.isArray(parsed?.subagents)
-        ? parsed.subagents
-        : Array.isArray(parsed?.items)
-        ? parsed.items
+        : Array.isArray(parsedObj?.subagents)
+        ? parsedObj.subagents
+        : Array.isArray(parsedObj?.items)
+        ? parsedObj.items
         : null;
 
       if (items) {
-        items.forEach((item: any, idx: number) => {
-          const sid = (item.id || item.subagent_id || `sub-${idx + 1}`) as string;
+        items.forEach((rawItem: unknown, idx: number) => {
+          const item = rawItem && typeof rawItem === 'object' ? (rawItem as Record<string, unknown>) : {};
+          const sid = String(item.id || item.subagent_id || `sub-${idx + 1}`);
           const mappedNum = orderMap.get(sid) ?? orderMap.get(toolIdToSubagentId[sid]) ?? (idx + 1);
+          const promptStr = typeof item.prompt === 'string' ? item.prompt : undefined;
+          const durationMs =
+            typeof item.duration_ms === 'number'
+              ? item.duration_ms
+              : typeof item.durationMs === 'number'
+              ? item.durationMs
+              : undefined;
           discoveredList.push({
             id: sid,
             number: mappedNum,
-            title: (item.title || item.name || item.prompt?.slice(0, 50) || t('subagents.subagentWithNum', { index: mappedNum })) as string,
-            role: (item.role || 'general') as string,
-            status: (item.status || 'finished') as string,
-            durationMs: typeof item.duration_ms === 'number' ? item.duration_ms : typeof item.durationMs === 'number' ? item.durationMs : undefined,
+            title: String(item.title || item.name || promptStr?.slice(0, 50) || t('subagents.subagentWithNum', { index: mappedNum })),
+            role: String(item.role || 'general'),
+            status: String(item.status || 'finished'),
+            durationMs,
             isBg: Boolean(item.is_bg || item.isBg),
-            prompt: typeof item.prompt === 'string' ? item.prompt : undefined,
+            prompt: promptStr,
           });
         });
       }
-    } catch {}
+    } catch (err) {
+      console.debug('[SubagentListCard] stdout JSON parse skipped:', err);
+    }
   }
 
   if (discoveredList.length === 0 && activeTaskId) {
@@ -92,7 +103,7 @@ export function DiscoveredSubagentRow({
   onOpen,
 }: {
   sub: DiscoveredSubagent;
-  language: any;
+  language: Language;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -101,12 +112,16 @@ export function DiscoveredSubagentRow({
     (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
   );
   const roleBadgeStyle = getRoleBadgeStyle(sub.role, persona?.color);
-  const displaySubTitle = formatSubagentDisplayTitle(sub.title || t('subagents.subagentWithNum', { index: sub.number }), language);
+  const displaySubTitle = formatSubagentDisplayTitle(
+    sub.title || t('subagents.subagentWithNum', { index: sub.number }),
+    language
+  );
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onOpen}
-      className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
+      className="w-full text-left group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
     >
       <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
         <SubagentTypeIcon isBg={sub.isBg} />
@@ -134,7 +149,7 @@ export function DiscoveredSubagentRow({
 
         <ChevronRight className="h-3.5 w-3.5 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -165,9 +180,11 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
 
   return (
     <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] p-3 shadow-xs my-2 select-none">
-      <div
+      <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between gap-2.5 cursor-pointer"
+        aria-expanded={isExpanded}
+        className="w-full text-left flex items-center justify-between gap-2.5 cursor-pointer"
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
           <ChevronRight
@@ -176,10 +193,10 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
             }`}
           />
           <div className="relative shrink-0 flex items-center justify-center">
-            <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <Users className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
           </div>
 
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-cyan-200 dark:border-cyan-800/60 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 shrink-0">
             {t('tools.subagent_list.badge')}
           </span>
 
@@ -187,7 +204,7 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
             subagent_list
           </span>
 
-          <span className="inline-flex items-center font-mono text-[11px] text-[#71717a] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] truncate">
+          <span className="inline-flex items-center font-mono text-[11px] text-[#71717a] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] truncate tabular-nums">
             {t('tools.subagent_list.total', { count: discoveredList.length })}
           </span>
         </div>
@@ -224,13 +241,13 @@ export function SubagentListExecutionCard({ tool, isExpanded: controlledExpanded
             </span>
           )}
         </div>
-      </div>
+      </button>
 
       {isExpanded && (discoveredList.length > 0 ? (
         <div className="mt-2.5 pt-2 border-t border-[#f4f4f5] dark:border-[#212126] space-y-1.5">
           {discoveredList.map((sub, idx) => (
             <DiscoveredSubagentRow
-              key={sub.id || idx}
+              key={sub.id || `sub-${idx}`}
               sub={sub}
               language={language}
               onOpen={() => {

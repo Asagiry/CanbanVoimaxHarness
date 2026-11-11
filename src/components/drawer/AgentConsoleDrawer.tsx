@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import ErrorBoundary from '../common/ErrorBoundary';
 import DrawerHeader from './DrawerHeader';
 import DrawerActivityStream from './DrawerActivityStream';
@@ -73,13 +74,19 @@ export default function AgentConsoleDrawer() {
     }
   }, [activeTaskId, setRunError]);
 
-  // Esc key listener to navigate back or close drawer
+  // Esc key listener to navigate back or close drawer (yields to stacked modals/popovers)
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        goBackDrawer();
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (
+        useSettingsStore.getState().isOpen ||
+        useToolPolicyStore.getState().isModalOpen ||
+        useCortexStore.getState().isEditorOpen
+      ) {
+        return;
       }
+      goBackDrawer();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -176,8 +183,8 @@ export default function AgentConsoleDrawer() {
                             status: null,
                             verdict: null,
                           });
-                        } catch {
-                          // ignore in web mode
+                        } catch (err) {
+                          console.debug('[AgentConsoleDrawer] update_task effort skipped in web mode:', err);
                         }
                       })();
                     }
@@ -217,8 +224,8 @@ export default function AgentConsoleDrawer() {
                             status: null,
                             verdict: null,
                           });
-                        } catch {
-                          // ignore in web mode
+                        } catch (err) {
+                          console.debug('[AgentConsoleDrawer] update_task model skipped in web mode:', err);
                         }
                       })();
                     }

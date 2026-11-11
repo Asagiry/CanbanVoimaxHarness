@@ -8,6 +8,7 @@ import {
   parseMarkdownTokens,
   tryExtractTodos,
 } from '../parseMarkdownTokens';
+import { sanitizeMarkdownUrl } from '../sanitizeUrl';
 import type {
   MarkdownTableToken,
   MarkdownTaskItemToken,
@@ -401,10 +402,16 @@ describe('Horizontal Separators (HR) & Headings', () => {
     });
   });
 
-  describe('Escaped Newline Normalization', () => {
-    it('normalizes literal \\n strings into actual line breaks when no real newlines exist', () => {
+  describe('Escaped Newline Normalization & Windows Path Safety', () => {
+    it('does NOT mangle literal \\n in single-line strings like Windows paths or regexes by default', () => {
+      const winPath = 'Check C:\\new\\notes\\file.txt and regex /\\n/';
+      const tokens = parseMarkdownTokens(winPath);
+      expect(tokens).toEqual([{ type: 'paragraph', text: winPath }]);
+    });
+
+    it('normalizes literal \\n only when normalizeEscapedNewlines option is enabled', () => {
       const escaped = 'First line\\nSecond line\\n### Heading in escaped';
-      const tokens = parseMarkdownTokens(escaped);
+      const tokens = parseMarkdownTokens(escaped, { normalizeEscapedNewlines: true });
       expect(tokens.length).toBeGreaterThanOrEqual(3);
       expect(tokens[0]).toEqual({ type: 'paragraph', text: 'First line' });
       expect(tokens[1]).toEqual({ type: 'paragraph', text: 'Second line' });
@@ -413,10 +420,32 @@ describe('Horizontal Separators (HR) & Headings', () => {
 
     it('preserves existing real newlines without altering literal \\n', () => {
       const mixed = 'Line one\nLine two with \\n escaped';
-      const tokens = parseMarkdownTokens(mixed);
+      const tokens = parseMarkdownTokens(mixed, { normalizeEscapedNewlines: true });
       expect(tokens).toHaveLength(2);
       expect(tokens[0]).toEqual({ type: 'paragraph', text: 'Line one' });
       expect(tokens[1]).toEqual({ type: 'paragraph', text: 'Line two with \\n escaped' });
+    });
+  });
+
+  describe('URL Sanitization', () => {
+    it('blocks dangerous link schemes including obfuscated control chars', () => {
+      expect(sanitizeMarkdownUrl('javascript:alert(1)')).toBe('#');
+      expect(sanitizeMarkdownUrl('  java\tscript:alert(1)')).toBe('#');
+      expect(sanitizeMarkdownUrl('vbscript:msgbox(1)')).toBe('#');
+      expect(sanitizeMarkdownUrl('data:text/html,<script>alert(1)</script>')).toBe('#');
+      expect(sanitizeMarkdownUrl('https://example.com/docs')).toBe('https://example.com/docs');
+      expect(sanitizeMarkdownUrl('/local/path')).toBe('/local/path');
+    });
+
+    it('validates image URLs strictly and rejects SVG/HTML data URLs', () => {
+      expect(sanitizeMarkdownUrl('data:image/svg+xml;base64,PHN2Zz4=', { allowDataImage: true })).toBe('');
+      expect(sanitizeMarkdownUrl('javascript:alert(1)', { allowDataImage: true })).toBe('');
+      expect(sanitizeMarkdownUrl('data:image/png;base64,iVBORw0KGgo=', { allowDataImage: true })).toBe(
+        'data:image/png;base64,iVBORw0KGgo='
+      );
+      expect(sanitizeMarkdownUrl('https://cdn.example.com/pic.png', { allowDataImage: true })).toBe(
+        'https://cdn.example.com/pic.png'
+      );
     });
   });
 });

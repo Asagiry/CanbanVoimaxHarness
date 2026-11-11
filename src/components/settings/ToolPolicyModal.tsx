@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   useToolPolicyStore,
   AVAILABLE_TOOLS,
@@ -35,11 +36,23 @@ export default function ToolPolicyModal() {
     toolSettings,
     toolDescriptions,
     toolCustomSchemas,
-  } = useToolPolicyStore();
+  } = useToolPolicyStore(
+    useShallow((s) => ({
+      isModalOpen: s.isModalOpen,
+      closeModal: s.closeModal,
+      setStageTool: s.setStageTool,
+      isToolAllowed: s.isToolAllowed,
+      toolSettings: s.toolSettings,
+      toolDescriptions: s.toolDescriptions,
+      toolCustomSchemas: s.toolCustomSchemas,
+    }))
+  );
   const executeShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
   const { t } = useTranslation();
-  const { agentPersonas, loadAgentPersonas } = useCortexStore();
-  const { columns } = useBoardStore();
+  const { agentPersonas, loadAgentPersonas } = useCortexStore(
+    useShallow((s) => ({ agentPersonas: s.agentPersonas, loadAgentPersonas: s.loadAgentPersonas }))
+  );
+  const columns = useBoardStore((s) => s.columns);
 
   const agents = useMemo(() => buildAgentMatrix(agentPersonas, columns), [agentPersonas, columns]);
 
@@ -72,6 +85,19 @@ export default function ToolPolicyModal() {
       void loadAgentPersonas();
     }
   }, [isModalOpen, loadCustomTools, loadAgentPersonas]);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isModalOpen, closeModal]);
 
   const handleDeleteCustomTool = async (name: string) => {
     if (!window.confirm(t('toolPolicy.deleteToolConfirm', { name }))) return;
@@ -118,14 +144,14 @@ export default function ToolPolicyModal() {
                         <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
                           <AgentIcon
                             name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
-                            className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f4f4f5]'}`}
+                            className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-sky-600 dark:text-sky-400' : 'text-[#171717] dark:text-[#f4f4f5]'}`}
                           />
                           <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f4f4f5]" title={agent.role}>
                             {agent.role}
                           </span>
                         </div>
                         {agent.isBuiltin && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
                             {t('toolPolicy.builtin')}
                           </span>
                         )}
@@ -172,11 +198,11 @@ export default function ToolPolicyModal() {
                                         </span>
                                         {isToolSchemaCustomized(tool, toolCustomSchemas[tool.id], executeShell) ? (
                                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono leading-none bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                            Кастомная схема
+                                            {t('toolPolicy.customSchema')}
                                           </span>
                                         ) : toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description ? (
                                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono leading-none bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                            Кастомное описание
+                                            {t('toolPolicy.customDescription')}
                                           </span>
                                         ) : null}
                                       </div>

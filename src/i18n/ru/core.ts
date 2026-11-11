@@ -101,6 +101,8 @@ export const ruCore = {
   'board.newAgentRoleHint': 'Роль: {role}',
   'board.autoColor': 'Цвет авто',
   'board.autoColorTitle': 'Цвет колонки подберется автоматически',
+  'board.autoReset': 'Авто',
+  'board.iconLabel': 'Иконка',
   'board.loadMore': 'Загрузить еще ({nextCount} из {remaining})',
   'board.totalTasks': 'Всего задач: {count}',
   'board.columnPinnedTitle': 'Колонка закреплена. Правая кнопка — действия с колонкой',

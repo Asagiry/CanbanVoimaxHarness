@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { MarkdownContent } from './stream';
 import { useTranslation } from '../../stores/languageStore';
@@ -29,11 +29,19 @@ function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
   }, []);
 
   // Extract metadata from activity.tool if present
-  const toolData = activity.tool as any;
-  const count = toolData?.compactedCount ?? 8;
-  const savedTokens = toolData?.savedTokens ?? 2450;
+  const toolData =
+    activity.tool && typeof activity.tool === 'object'
+      ? (activity.tool as unknown as Record<string, unknown>)
+      : undefined;
+  const count = typeof toolData?.compactedCount === 'number' ? toolData.compactedCount : 8;
+  const savedTokens =
+    typeof toolData?.savedTokens === 'number' || typeof toolData?.savedTokens === 'string'
+      ? toolData.savedTokens
+      : 2450;
+  const compactorModel = typeof toolData?.compactorModel === 'string' ? toolData.compactorModel : undefined;
+  const locale = language === 'ru' ? 'ru-RU' : 'en-US';
   const formattedTokens = typeof savedTokens === 'number'
-    ? savedTokens.toLocaleString('ru-RU')
+    ? savedTokens.toLocaleString(locale)
     : String(savedTokens);
 
   const pluralMsg =
@@ -50,10 +58,11 @@ function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
       ? 'message'
       : 'messages';
 
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopy = () => {
     if (activity.content) {
-      navigator.clipboard.writeText(activity.content);
+      navigator.clipboard?.writeText(activity.content).catch((err) => {
+        console.debug('[CompactedContextCard] clipboard write failed:', err);
+      });
       setCopied(true);
       if (copiedTimeoutRef.current) {
         clearTimeout(copiedTimeoutRef.current);
@@ -69,12 +78,16 @@ function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
     <div className="my-2 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] overflow-hidden shadow-xs transition-all">
       {/* Collapsed State: Clean hairline paper strip */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer select-none transition-colors ${
+        className={`flex items-center justify-between px-3.5 py-2.5 select-none transition-colors ${
           isExpanded ? 'bg-[#fafafa] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126]' : 'hover:bg-[#f4f4f5] dark:hover:bg-[#17171b]'
         }`}
       >
-        <div className="flex items-center space-x-2 text-[#0d0d0d] dark:text-[#f4f4f5] min-w-0">
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          className="flex items-center space-x-2 text-[#0d0d0d] dark:text-[#f4f4f5] min-w-0 flex-1 text-left cursor-pointer"
+        >
           {isExpanded ? (
             <ChevronDown className="h-3.5 w-3.5 text-[#4d4d4d] dark:text-[#71717a] shrink-0 transition-transform duration-150" />
           ) : (
@@ -96,7 +109,7 @@ function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
               {t('drawer.freedTokens', { tokens: formattedTokens })}
             </span>
           </div>
-        </div>
+        </button>
 
         <div className="flex items-center space-x-2 shrink-0 ml-2">
           {isExpanded && (
@@ -136,9 +149,9 @@ function CompactedContextCardInner({ activity }: CompactedContextCardProps) {
               <Minimize2 className="h-3.5 w-3.5 text-[#0d0d0d] dark:text-[#f4f4f5]" />
               <span className="font-semibold text-[#0d0d0d] dark:text-[#f4f4f5]">Сводка сжатия контекста</span>
             </div>
-            {toolData?.compactorModel && (
+            {compactorModel && (
               <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] bg-[#f4f4f5] dark:bg-[#17171b] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#2c2c33]">
-                model: {toolData.compactorModel}
+                model: {compactorModel}
               </span>
             )}
           </div>

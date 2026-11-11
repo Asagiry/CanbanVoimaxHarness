@@ -41,9 +41,13 @@ export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpand
   }
   if (!subagentId && tool.stdout) {
     try {
-      const parsed = JSON.parse(tool.stdout);
-      if (parsed.subagent_id) subagentId = parsed.subagent_id;
-    } catch {}
+      const parsed: unknown = JSON.parse(tool.stdout);
+      if (parsed && typeof parsed === 'object' && typeof (parsed as { subagent_id?: unknown }).subagent_id === 'string') {
+        subagentId = (parsed as { subagent_id: string }).subagent_id;
+      }
+    } catch (err) {
+      console.debug('[SingleSubagentCard] stdout JSON parse skipped:', err);
+    }
     if (!subagentId) {
       const match = tool.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
       if (match && match[1]) subagentId = match[1];
@@ -132,52 +136,54 @@ export function SingleSubagentExecutionCard({ tool, isExpanded: controlledExpand
   const [isExpanded, setIsExpanded] = useToolExpanded(controlledExpanded, onToggleExpanded, false);
 
   return (
-    <div
-      onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
-      className="group rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] hover:bg-[#f9f9f9] dark:hover:bg-[#1e1e23] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] p-3 shadow-xs transition-all duration-150 cursor-pointer select-none my-2"
-    >
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
-          <button
-            type="button"
-            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
-          >
-            <ChevronRight
-              className={`h-3.5 w-3.5 block shrink-0 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90' : ''
-              }`}
-            />
-          </button>
-          <SubagentTypeIcon isBg={isBg} />
+    <div className="group rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] hover:bg-[#f9f9f9] dark:hover:bg-[#1e1e23] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] p-3 shadow-xs transition-all duration-150 select-none my-2">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? t('compact.collapseDetails') : t('compact.expandDetails')}
+        >
+          <ChevronRight
+            className={`h-3.5 w-3.5 block shrink-0 transition-transform duration-150 ${
+              isExpanded ? 'rotate-90' : ''
+            }`}
+          />
+        </button>
 
-          <span
-            style={roleBadgeStyle}
-            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
-          >
-            {formatSubagentRoleDisplay(rawRole, subagentNumber || 1, false, language)}
-          </span>
+        <button
+          type="button"
+          onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
+          className="flex-1 min-w-0 flex items-center justify-between gap-2.5 text-left cursor-pointer"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
+            <SubagentTypeIcon isBg={isBg} />
 
-          <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f4f4f5] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
-            {displayTitle}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-2 shrink-0">
-          <SubagentStatusBadge status={effectiveStatus} t={t} />
-
-          {subDurationText && (
-            <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
-              {subDurationText}
+            <span
+              style={roleBadgeStyle}
+              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
+            >
+              {formatSubagentRoleDisplay(rawRole, subagentNumber || 1, false, language)}
             </span>
-          )}
 
-          <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
-        </div>
+            <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f4f4f5] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
+              {displayTitle}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            <SubagentStatusBadge status={effectiveStatus} t={t} />
+
+            {subDurationText && (
+              <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                {subDurationText}
+              </span>
+            )}
+
+            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+          </div>
+        </button>
       </div>
 
       {isExpanded && prompt && (

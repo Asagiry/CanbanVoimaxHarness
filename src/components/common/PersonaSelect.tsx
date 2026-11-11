@@ -44,7 +44,7 @@ export default function PersonaSelect({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { agentPersonas } = useCortexStore();
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const { t } = useTranslation();
 
   const resolvedEmptyLabel = emptyLabel !== 'без агента' ? emptyLabel : t('personaSelect.noAgent');
@@ -103,8 +103,8 @@ export default function PersonaSelect({
         <div className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
           {isNewAgent ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <Plus className="h-3.5 w-3.5 block shrink-0 text-indigo-500" />
-              <span className="text-indigo-600 dark:text-indigo-400 font-medium truncate">
+              <Plus className="h-3.5 w-3.5 block shrink-0 text-sky-500" />
+              <span className="text-sky-600 dark:text-sky-400 font-medium truncate">
                 {t('personaSelect.newAgent')}
               </span>
             </div>
@@ -122,7 +122,7 @@ export default function PersonaSelect({
                 {selected.role}
               </span>
               {isBuiltin && (
-                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 shrink-0">
                   {compact ? t('personaSelect.builtinShort') : t('personaSelect.builtin')}
                 </span>
               )}
@@ -196,7 +196,7 @@ export default function PersonaSelect({
                     {p.role}
                   </span>
                   {pIsBuiltin && (
-                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 shrink-0">
                       {t('personaSelect.builtin')}
                     </span>
                   )}
@@ -214,8 +214,8 @@ export default function PersonaSelect({
                   onChange(newAgentOptionValue);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-left cursor-pointer transition select-none text-indigo-600 dark:text-indigo-400 font-medium ${
-                  isNewAgent ? 'bg-indigo-50 dark:bg-indigo-950/40' : ''
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-left cursor-pointer transition select-none text-sky-600 dark:text-sky-400 font-medium ${
+                  isNewAgent ? 'bg-sky-50 dark:bg-sky-950/40' : ''
                 }`}
               >
                 <Plus className="h-3.5 w-3.5 block shrink-0" />

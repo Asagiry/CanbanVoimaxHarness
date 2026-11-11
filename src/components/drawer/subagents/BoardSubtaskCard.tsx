@@ -25,27 +25,23 @@ export function BoardSubtaskCard({ sub, agentPersonas, language }: BoardSubtaskC
   const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
   const stageBadge = getSubagentRoleLabel(sub.role || 'general', language === 'ru');
 
+  const handleOpenSubtask = () => {
+    closeSubagent();
+    openDrawer(sub.id);
+  };
+
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => {
-        closeSubagent();
-        openDrawer(sub.id);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          closeSubagent();
-          openDrawer(sub.id);
-        }
-      }}
-      className="group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left bg-white dark:bg-[#111114] border-[#ebebeb] dark:border-[#212126] hover:bg-[#fafafa] dark:hover:bg-[#17171b] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33]"
+      className="group relative rounded-lg border p-2.5 transition-all duration-150 select-none text-left bg-white dark:bg-[#111114] border-[#ebebeb] dark:border-[#212126] hover:bg-[#fafafa] dark:hover:bg-[#17171b] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33]"
     >
       {/* Top row: GitBranch + Stage Badge + Task ID + Status */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
-        <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
-          <GitBranch className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+        <button
+          type="button"
+          onClick={handleOpenSubtask}
+          className="flex items-center space-x-1.5 min-w-0 flex-1 flex-wrap gap-y-1 text-left cursor-pointer"
+        >
+          <GitBranch className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
           <span
             style={roleBadgeStyle}
             className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
@@ -55,7 +51,7 @@ export function BoardSubtaskCard({ sub, agentPersonas, language }: BoardSubtaskC
           <span className="font-mono text-[11px] font-semibold text-[#52525b] dark:text-[#71717a]">
             {sub.id}
           </span>
-        </div>
+        </button>
 
         <div className="shrink-0 flex items-center space-x-1">
           {sub.status === 'running' ? (
@@ -65,8 +61,7 @@ export function BoardSubtaskCard({ sub, agentPersonas, language }: BoardSubtaskC
               </span>
               <button
                 type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
+                onClick={async () => {
                   try {
                     const { invoke } = await import('@tauri-apps/api/core');
                     await invoke('abort_agent', { taskId: sub.id });
@@ -102,26 +97,31 @@ export function BoardSubtaskCard({ sub, agentPersonas, language }: BoardSubtaskC
         </div>
       </div>
 
-      {/* Title */}
-      <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f4f4f5] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
-        {sub.title}
-      </div>
+      {/* Title & Footer */}
+      <button
+        type="button"
+        onClick={handleOpenSubtask}
+        className="w-full text-left cursor-pointer block"
+      >
+        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f4f4f5] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
+          {sub.title}
+        </div>
 
-      {/* Footer: Duration + Steps */}
-      <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#71717a] pt-1.5 border-t border-[#f4f4f5] dark:border-[#212126]/60">
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1">
-            <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
-            <span className="tabular-nums">
-              {formatDuration(sub.durationMs, sub.status === 'running')}
-            </span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <Layers className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
-            <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
+        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#71717a] pt-1.5 border-t border-[#f4f4f5] dark:border-[#212126]/60">
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <Clock className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+              <span className="tabular-nums">
+                {formatDuration(sub.durationMs, sub.status === 'running')}
+              </span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Layers className="h-3 w-3 block shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+              <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </button>
     </div>
   );
 }

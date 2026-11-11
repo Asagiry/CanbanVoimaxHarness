@@ -5,6 +5,7 @@ import QuestionPromptCard from '../QuestionPromptCard';
 import { QuestionPromptCardInner } from '../QuestionPromptCard';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useDrawerStore } from '../../../stores/drawerStore';
+import { setLanguage } from '../../../stores/languageStore';
 
 // Mock Tauri IPC
 vi.mock('@tauri-apps/api/core', () => ({
@@ -75,6 +76,7 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setLanguage('ru');
     useDrawerStore.setState({
       recordQuestionAnswer: mockRecordQuestionAnswer,
     });
@@ -219,6 +221,29 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
       expect(html).toContain('Агент возобновил выполнение');
     });
 
+    it('uses exact option equality and does not mark substring options as selected', () => {
+      const activity = createActivity({
+        tool: {
+          id: 'q-tool-exact',
+          toolName: 'question',
+          timestamp: '12:00:00',
+          durationMs: 400,
+          status: 'success',
+          stdout: 'Yes, with tests',
+          params: {
+            questionId: 'q-exact',
+            text: 'Proceed?',
+            options: ['Yes', 'Yes, with tests'],
+            selectedAnswer: 'Yes, with tests',
+          },
+        },
+      });
+
+      const html = renderToString(<QuestionPromptCard activity={activity} taskId="CVH-032" />);
+      const selectedMatches = html.match(/Выбрано/g) ?? [];
+      expect(selectedMatches).toHaveLength(1);
+    });
+
     it('renders custom answered response with inline formatting if answer was not predefined', () => {
       const activity = createActivity({
         tool: {
@@ -275,18 +300,25 @@ describe('QuestionPromptCard Markdown View & Interactivity', () => {
       const simulator = new ReactDispatcherSimulator();
       const tree = simulator.render(() => QuestionPromptCardInner({ activity, taskId: 'CVH-032' }));
 
-      // Find option buttons in rendered tree
+      // Find option buttons / QuestionOptionRow triggers in rendered tree
       const buttons = findElements(
         tree,
         (node) => {
           if (!node || typeof node !== 'object') return false;
-          return node.type === 'button' && typeof node.props?.onClick === 'function';
+          return (
+            (node.type === 'button' && typeof node.props?.onClick === 'function') ||
+            (typeof node.type === 'function' && typeof node.props?.onSelect === 'function')
+          );
         }
       );
 
       // Trigger click on first option if found
       expect(buttons.length).toBeGreaterThanOrEqual(1);
-      await buttons[0].props.onClick();
+      if (typeof buttons[0].props.onClick === 'function') {
+        await buttons[0].props.onClick();
+      } else {
+        await buttons[0].props.onSelect(buttons[0].props.option.label);
+      }
 
       expect(mockRecordQuestionAnswer).toHaveBeenCalledWith(
         'CVH-032',

@@ -130,6 +130,7 @@ export const ruDrawer = {
   'gitDiff.filterDeleted': '-Удалено ({count})',
   'gitDiff.noMatchingFiles': 'Нет файлов, соответствующих фильтру',
   'gitDiff.resetFilters': 'Сбросить фильтры',
+  'gitDiff.loadError': 'Ошибка загрузки Git Diff',
 
   // Subagents Sidebar
   'subagents.title': 'Субагенты',

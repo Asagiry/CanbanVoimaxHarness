@@ -135,13 +135,12 @@ export default function DrawerSteerBar({
     const currentImages = [...attachedImages];
     const textToSend = interactiveInput;
 
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-
     const result = onSendPrompt(textToSend, currentImages);
     const clear = (ok: boolean) => {
       if (!ok) return;
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
       if (draftKey) {
         useDrawerStore.getState().clearTaskDraft(draftKey);
       }

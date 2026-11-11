@@ -1,6 +1,6 @@
 import { Clock, ChevronRight } from 'lucide-react';
 import { useCortexStore } from '../../../../stores/cortexStore';
-import { useTranslation } from '../../../../stores/languageStore';
+import { useTranslation, type Language } from '../../../../stores/languageStore';
 import { getRoleBadgeStyle, getDeterministicAgentIcon } from '../../../../lib/agentPalette';
 import {
   formatSubagentRoleDisplay,
@@ -23,14 +23,16 @@ export function extractSubagentIds(params?: Record<string, unknown> | null): str
       if (!trimmed) return;
       if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
         try {
-          const parsed = JSON.parse(trimmed);
+          const parsed: unknown = JSON.parse(trimmed);
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
               if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
             }
             return;
           }
-        } catch {}
+        } catch (err) {
+          console.debug('[AwaitedSubagentRow] JSON array parse skipped:', err);
+        }
       }
       trimmed.split(',').forEach((s) => {
         const part = s.trim();
@@ -67,7 +69,7 @@ export function AwaitedSubagentRow({
 }: {
   sub: AwaitedSubagentItem;
   now: number;
-  language: any;
+  language: Language;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -85,12 +87,13 @@ export function AwaitedSubagentRow({
       : formatDuration(sub.durationMs, false);
 
   return (
-    <div
+    <button
+      type="button"
       onClick={(e) => {
         e.stopPropagation();
         onOpen();
       }}
-      className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
+      className="w-full text-left group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126] hover:border-[#171717]/40 dark:hover:border-[#2c2c33] cursor-pointer transition-colors text-xs"
     >
       <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
         <SubagentTypeIcon isBg={sub.isBg} isBoardSubtask={sub.isBoardSubtask} personaIcon={personaIcon} />
@@ -123,6 +126,6 @@ export function AwaitedSubagentRow({
 
         <ChevronRight className="h-3.5 w-3.5 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
       </div>
-    </div>
+    </button>
   );
 }

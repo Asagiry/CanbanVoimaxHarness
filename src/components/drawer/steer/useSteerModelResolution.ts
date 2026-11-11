@@ -60,7 +60,7 @@ export function useSteerModelResolution(task: KanbanTask, selectableModels: stri
   const effectiveLimit = matchedPersona?.contextWindow || parentMatchedPersona?.contextWindow || 128000;
 
   const providers = useSettingsStore((s) => s.providers) ?? [];
-  const defaultModel = useSettingsStore.getState().settings?.model || (useSettingsStore.getState() as any).model || 'default';
+  const defaultModel = useSettingsStore((s) => s.settings?.model) || 'default';
   const activeBoardSubtask = isBoardSubtask ? boardTasks.find((t) => t.id === activeSubagentId) : undefined;
   const resolvedSubId = activeSubagentId ? (toolIdToSubagentId[activeSubagentId] || activeSubagentId) : null;
   const subConfig = activeSubagentId

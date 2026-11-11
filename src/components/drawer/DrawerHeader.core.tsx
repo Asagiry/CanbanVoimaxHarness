@@ -1,4 +1,5 @@
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { KanbanTask, PipelineStage, PipelineColumn } from '../../types';
 import Logo from '../common/Logo';
 import { useDrawerStore } from '../../stores/drawerStore';
@@ -21,13 +22,13 @@ export function getStageButtonClass(
   targetTaskId: string | null
 ): string {
   if (isCurrent) {
-    return 'bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f5] font-semibold shadow-2xs cursor-default';
+    return 'bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-2xs cursor-default';
   }
   if (targetTaskId && isPassed) {
     return 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] cursor-pointer active:scale-95';
   }
   if (targetTaskId) {
-    return 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#a1a1aa] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f5] dark:hover:bg-[#232328] hover:text-[#171717] dark:hover:text-[#f4f5] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] cursor-pointer active:scale-95';
+    return 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#a1a1aa] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] cursor-pointer active:scale-95';
   }
   return 'bg-[#fafafa] dark:bg-[#17171b] text-[#71717a] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] cursor-default select-none';
 }
@@ -36,7 +37,7 @@ export function getStageAriaLabel(
   isCurrent: boolean,
   targetTaskId: string | null,
   title: string,
-  t: (key: string, params?: Record<string, string | number>) => string
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
 ): string {
   if (isCurrent) {
     return t('drawer.stageCurrent', { title });
@@ -91,19 +92,33 @@ export default function DrawerHeader({
     void toggleMaximizeWindow();
   };
 
-  const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
-  const activeSubagentTitle = useDrawerStore((s) => s.activeSubagentTitle);
-  const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
-  const goBackDrawer = useDrawerStore((s) => s.goBackDrawer);
-  const storeSubagents = useDrawerStore((s) => s.subagents);
-  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
-  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
+  const {
+    activeSubagentId,
+    activeSubagentTitle,
+    activeSubagentRole,
+    goBackDrawer,
+    storeSubagents,
+    toolExecutions,
+    toolIdToSubagentId,
+  } = useDrawerStore(
+    useShallow((s) => ({
+      activeSubagentId: s.activeSubagentId,
+      activeSubagentTitle: s.activeSubagentTitle,
+      activeSubagentRole: s.activeSubagentRole,
+      goBackDrawer: s.goBackDrawer,
+      storeSubagents: s.subagents,
+      toolExecutions: s.toolExecutions,
+      toolIdToSubagentId: s.toolIdToSubagentId,
+    }))
+  );
   const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const matchedPersona = agentPersonas.find(
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
-  const { theme, toggleThemeWithAnimation } = useThemeStore();
+  const { theme, toggleThemeWithAnimation } = useThemeStore(
+    useShallow((s) => ({ theme: s.theme, toggleThemeWithAnimation: s.toggleThemeWithAnimation }))
+  );
   const { language, toggleLanguage, t } = useTranslation();
 
   const subagentNumber = React.useMemo(() => {
@@ -114,7 +129,7 @@ export default function DrawerHeader({
 
   const isBoardSubtask = React.useMemo(() => {
     if (!activeSubagentId) return false;
-    return boardTasks.some((t) => t.id === activeSubagentId);
+    return boardTasks.some((bt) => bt.id === activeSubagentId);
   }, [activeSubagentId, boardTasks]);
 
   const activeSubagentIsBg = React.useMemo(() => {
@@ -123,10 +138,15 @@ export default function DrawerHeader({
     const directSub = subs.find((s) => s.id === activeSubagentId || s.toolCallId === activeSubagentId);
     if (directSub?.isBg !== undefined) return directSub.isBg;
     const tools = toolExecutions[task.id] || [];
-    const t = tools.find((x) => x.id === activeSubagentId || (x.params as any)?.subagent_id === activeSubagentId);
-    if (t) {
-      const p = t.params as any;
-      return t.toolName === 'subagent_bg' || p?.is_bg === true || p?.isBg === true;
+    const matchedTool = tools.find((x) => {
+      const p = x.params && typeof x.params === 'object' ? (x.params as Record<string, unknown>) : null;
+      return x.id === activeSubagentId || p?.subagent_id === activeSubagentId;
+    });
+    if (matchedTool) {
+      const p = matchedTool.params && typeof matchedTool.params === 'object'
+        ? (matchedTool.params as Record<string, unknown>)
+        : null;
+      return matchedTool.toolName === 'subagent_bg' || p?.is_bg === true || p?.isBg === true;
     }
     return false;
   }, [activeSubagentId, task?.id, storeSubagents, toolExecutions]);
@@ -139,7 +159,7 @@ export default function DrawerHeader({
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
     if (!isRunning) return;
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    const interval = setInterval(() => setTick((prev) => prev + 1), 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
 
@@ -158,10 +178,10 @@ export default function DrawerHeader({
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onClose || goBackDrawer}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto btn-tactile leading-none"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto btn-tactile leading-none"
             aria-label={activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}
           >
-            <ArrowLeft className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#f4f5]" />
+            <ArrowLeft className="h-3.5 w-3.5 block shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
             <span className="leading-none">{activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
           </button>
 
@@ -171,31 +191,31 @@ export default function DrawerHeader({
               <button
                 type="button"
                 onClick={() => onOpenDrawer(rootTask.id)}
-                className="font-mono text-xs text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f5] px-1.5 py-0.5 rounded hover:bg-[#f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
+                className="font-mono text-xs text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
                 aria-label={t('drawer.backToParentTitle', { id: rootTask.id })}
               >
                 {rootTask.id}
               </button>
               <ChevronRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#52525b] shrink-0" />
-              <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f5] px-2 py-0.5 rounded bg-[#f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0">
+              <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0">
                 {task.id}
               </span>
             </div>
           ) : (
-            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f5] px-2 py-0.5 rounded bg-[#f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0 select-none pointer-events-auto">
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0 select-none pointer-events-auto">
               {task.id}
             </span>
           ))}
 
           {/* Directly adjacent to the title/breadcrumbs, render the compact worktree/branch badges */}
           {!activeSubagentId && !task?.skipWorktree && (task?.worktreePath || rootTask?.worktreePath) && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
               <FolderGit2 className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
               <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate leading-none">{task?.worktreePath || rootTask?.worktreePath}</span>
             </div>
           )}
           {!activeSubagentId && !task?.skipWorktree && (task?.branch || rootTask?.branch) && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono shrink-0 leading-none">
               <GitBranch className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a]" />
               <span className="text-[#4d4d4d] dark:text-[#a1a1aa] max-w-[140px] truncate leading-none">{task?.branch || rootTask?.branch}</span>
             </div>
@@ -210,16 +230,16 @@ export default function DrawerHeader({
           {activeSubagentId ? (
             <div
               data-no-drag
-              className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-xs font-mono max-w-xl mx-auto shadow-2xs select-none pointer-events-auto min-w-0"
+              className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-xs font-mono max-w-xl mx-auto shadow-2xs select-none pointer-events-auto min-w-0"
             >
-              <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f4f5] truncate min-w-0">
+              <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f4f4f5] truncate min-w-0">
                 {activeSubagentIsBg ? (
                   <div className="relative shrink-0 flex items-center justify-center">
-                    <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#17171b]" />
+                    <Layers className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-cyan-500 ring-1 ring-white dark:ring-[#17171b]" />
                   </div>
                 ) : isBoardSubtask ? (
-                  <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f5] shrink-0" />
+                  <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
                 ) : (
                   <div className="relative shrink-0 flex items-center justify-center">
                     <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />

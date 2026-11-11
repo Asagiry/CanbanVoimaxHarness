@@ -72,6 +72,7 @@ export default function ImageLightboxModal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopImmediatePropagation();
         onClose();
       } else if (e.key === '+' || e.key === '=') {
         e.preventDefault();
@@ -85,8 +86,8 @@ export default function ImageLightboxModal({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [onClose, handleZoomIn, handleZoomOut, handleReset]);
 
   // Mouse wheel zoom

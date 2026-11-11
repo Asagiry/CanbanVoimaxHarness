@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TaskGitDiff } from '../../../../types';
 import { isCvhPath } from '../utils';
 import { listenToEvent } from '../../../../services/tauriEventGateway';
+import { t } from '../../../../stores/languageStore';
 
 export function useGitDiffData(taskId: string) {
   const [diff, setDiff] = useState<TaskGitDiff | null>(null);
@@ -69,7 +70,7 @@ export function useGitDiffData(taskId: string) {
           ? err
           : err instanceof Error
           ? err.message
-          : 'Ошибка загрузки Git Diff';
+          : t('gitDiff.loadError');
       setError(msg);
     } finally {
       if (activeTaskIdRef.current === capturedTaskId) {
@@ -141,8 +142,8 @@ export function useGitDiffData(taskId: string) {
         } else {
           unlistenFinish = uFinish;
         }
-      } catch {
-        // web fallback
+      } catch (err) {
+        console.debug('[useGitDiffData] listener setup skipped in web mode:', err);
       }
     };
 

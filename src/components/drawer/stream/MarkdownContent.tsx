@@ -1,52 +1,28 @@
-import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
-import { Check, Copy } from 'lucide-react';
+import React, { useMemo, useContext } from 'react';
+import { Check } from 'lucide-react';
 import {
-  parseMarkdownTokens,
   parseInlineTokens,
+  sanitizeMarkdownUrl,
   type InlineNode,
-  type MarkdownToken,
 } from '../../../lib/markdown';
+import {
+  LightboxContext,
+  MarkdownCodeBlock,
+  hashContent,
+  getCachedMarkdownTokens,
+  clearMarkdownTokenCache,
+} from './MarkdownCodeBlock';
 
-export const LightboxContext = React.createContext<((src: string, alt?: string) => void) | null>(null);
-
-const MARKDOWN_CACHE_MAX = 100;
-const markdownTokenCache = new Map<string, MarkdownToken[]>();
-
-export function hashContent(content: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < content.length; i++) {
-    const c = content.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193);
-    h2 = Math.imul(h2 ^ c, 0x85ebca6b);
-  }
-  return `${content.length}:${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}`;
-}
-
-export function getCachedMarkdownTokens(content: string): MarkdownToken[] {
-  const key = hashContent(content);
-  const cached = markdownTokenCache.get(key);
-  if (cached) {
-    markdownTokenCache.delete(key);
-    markdownTokenCache.set(key, cached);
-    return cached;
-  }
-  const tokens = parseMarkdownTokens(content);
-  markdownTokenCache.set(key, tokens);
-  if (markdownTokenCache.size > MARKDOWN_CACHE_MAX) {
-    const oldest = markdownTokenCache.keys().next().value;
-    if (oldest !== undefined) markdownTokenCache.delete(oldest);
-  }
-  return tokens;
-}
-
-export function clearMarkdownTokenCache(): void {
-  markdownTokenCache.clear();
-}
+export {
+  LightboxContext,
+  hashContent,
+  getCachedMarkdownTokens,
+  clearMarkdownTokenCache,
+};
 
 export function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode[] {
   return nodes.map((node, i) => {
-    const key = `${prefix}-${i}`;
+    const key = `${prefix}-${node.type}-${i}`;
     switch (node.type) {
       case 'code':
         return (
@@ -70,14 +46,14 @@ export function renderInlineNodes(nodes: InlineNode[], prefix: string): React.Re
           </em>
         );
       case 'link': {
-        const isDangerous = /^\s*javascript\s*:/i.test(node.url);
+        const safeHref = sanitizeMarkdownUrl(node.url);
         return (
           <a
             key={key}
-            href={isDangerous ? '#' : node.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[#7c3aed] dark:text-[#a78bfa] hover:underline"
+            href={safeHref}
+            target={safeHref === '#' ? undefined : '_blank'}
+            rel={safeHref === '#' ? undefined : 'noopener noreferrer'}
+            className="text-sky-600 dark:text-sky-400 hover:underline"
           >
             {node.children.length > 0 ? renderInlineNodes(node.children, `${key}-l`) : node.text}
           </a>
@@ -96,96 +72,11 @@ export function formatInline(text: string, prefix = 'inl'): React.ReactNode[] {
   return renderInlineNodes(nodes, prefix);
 }
 
-function CodeBlock({
-  code,
-  language,
-  unfinished,
-}: {
-  code: string;
-  language?: string;
-  unfinished?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    if (copyTimeoutRef.current) {
-      clearTimeout(copyTimeoutRef.current);
-    }
-    copyTimeoutRef.current = setTimeout(() => {
-      setCopied(false);
-      copyTimeoutRef.current = null;
-    }, 1500);
-  };
-
-  return (
-    <div
-      className={
-        unfinished
-          ? 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#111114] overflow-hidden font-mono text-[13px]'
-          : 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b] overflow-hidden font-mono text-[13px]'
-      }
-    >
-      {(language || unfinished) ? (
-        <div
-          className={
-            unfinished
-              ? 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-between items-center'
-              : 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#111114] border-b border-[#ebebeb] dark:border-[#2c2c33] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-between items-center'
-          }
-        >
-          <span>{language || (unfinished ? 'streaming...' : '')}</span>
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy code block"
-            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
-          >
-            {copied ? (
-              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
-          </button>
-        </div>
-      ) : (
-        <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#111114] border-b border-[#ebebeb] dark:border-[#2c2c33] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-end items-center">
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy code block"
-            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
-          >
-            {copied ? (
-              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
-          </button>
-        </div>
-      )}
-      <pre className="p-3 text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
-        {code}
-      </pre>
-    </div>
-  );
-}
-
 export interface MarkdownContentProps {
   content?: string;
   onImageClick?: (src: string, alt?: string) => void;
   deferred?: boolean;
+  normalizeEscapedNewlines?: boolean;
 }
 
 // Lightweight Markdown Renderer for streaming assistant output
@@ -193,13 +84,14 @@ export function MarkdownContent({
   content,
   onImageClick,
   deferred,
+  normalizeEscapedNewlines,
 }: MarkdownContentProps) {
   const contextOnImageClick = useContext(LightboxContext);
   const handleImageClick = onImageClick || contextOnImageClick;
 
   const tokens = useMemo(
-    () => (deferred ? [] : getCachedMarkdownTokens(content ?? '')),
-    [content, deferred]
+    () => (deferred ? [] : getCachedMarkdownTokens(content ?? '', { normalizeEscapedNewlines })),
+    [content, deferred, normalizeEscapedNewlines]
   );
 
   if (deferred) return null;
@@ -210,7 +102,7 @@ export function MarkdownContent({
         switch (token.type) {
           case 'code':
             return (
-              <CodeBlock
+              <MarkdownCodeBlock
                 key={`code-${index}`}
                 code={token.code}
                 language={token.language}
@@ -229,7 +121,7 @@ export function MarkdownContent({
                     <tr>
                       {token.header.map((cell, k) => (
                         <th
-                          key={k}
+                          key={`th-${index}-${k}-${cell}`}
                           style={{ textAlign: token.aligns[k] }}
                           className="border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#17171b] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f4f4f5]"
                         >
@@ -240,10 +132,10 @@ export function MarkdownContent({
                   </thead>
                   <tbody>
                     {token.rows.map((row, r) => (
-                      <tr key={r}>
+                      <tr key={`tr-${index}-${r}`}>
                         {row.map((cell, k) => (
                           <td
-                            key={k}
+                            key={`td-${index}-${r}-${k}`}
                             style={{ textAlign: token.aligns[k] }}
                             className="border border-[#ebebeb] dark:border-[#212126] px-2 py-1.5 text-[#171717] dark:text-[#f4f4f5]"
                           >
@@ -264,30 +156,50 @@ export function MarkdownContent({
             return (
               <blockquote
                 key={`quote-${index}`}
-                className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#17171b]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#71717a] space-y-1"
+                className="my-2 border-l-2 border-[#a1a1aa] dark:border-[#52525b] bg-[#f9f9fb] dark:bg-[#17171b]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#71717a] space-y-1"
               >
                 {token.lines.map((ql, qIdx) => (
-                  <div key={qIdx} className="leading-relaxed">
+                  <div key={`ql-${index}-${qIdx}`} className="leading-relaxed">
                     {ql.trim() === '' ? <div className="h-1" /> : formatInline(ql, `quote-${index}-${qIdx}`)}
                   </div>
                 ))}
               </blockquote>
             );
 
-          case 'image':
+          case 'image': {
+            const safeImgSrc = sanitizeMarkdownUrl(token.src, { allowDataImage: true });
+            if (!safeImgSrc) {
+              return null;
+            }
+            const imgElement = (
+              <img
+                src={safeImgSrc}
+                alt={token.alt}
+                className="w-full max-h-80 object-contain cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-200"
+              />
+            );
+            if (handleImageClick) {
+              return (
+                <button
+                  key={`img-${index}`}
+                  type="button"
+                  onClick={() => handleImageClick(safeImgSrc, token.alt)}
+                  aria-label={token.alt}
+                  className="block my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#212126] max-w-full max-w-lg bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs group cursor-zoom-in text-left"
+                >
+                  {imgElement}
+                </button>
+              );
+            }
             return (
               <div
                 key={`img-${index}`}
-                onClick={() => handleImageClick?.(token.src, token.alt)}
-                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#212126] max-w-full max-w-lg bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs group cursor-zoom-in"
+                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#212126] max-w-full max-w-lg bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs"
               >
-                <img
-                  src={token.src}
-                  alt={token.alt}
-                  className="w-full max-h-80 object-contain cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-200"
-                />
+                {imgElement}
               </div>
             );
+          }
 
           case 'heading': {
             if (token.level === 6) {
@@ -345,7 +257,7 @@ export function MarkdownContent({
                 className={`${mlClass} text-sm leading-relaxed flex items-start gap-2 my-0.5`}
               >
                 {token.checked ? (
-                  <span className="w-4 h-4 rounded bg-[#7c3aed]/15 dark:bg-[#7c3aed]/25 border border-[#7c3aed]/50 text-[#7c3aed] dark:text-[#a78bfa] flex items-center justify-center shrink-0 mt-0.5 select-none">
+                  <span className="w-4 h-4 rounded bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636] text-[#15803d] dark:text-[#7ee787] flex items-center justify-center shrink-0 mt-0.5 select-none">
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </span>
                 ) : (

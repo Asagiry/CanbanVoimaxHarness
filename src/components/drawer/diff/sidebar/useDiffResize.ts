@@ -14,7 +14,9 @@ export function useDiffResize() {
           return parsed;
         }
       }
-    } catch {}
+    } catch (err) {
+      console.debug('[useDiffResize] Failed to read persisted width:', err);
+    }
     return DEFAULT_SIDEBAR_WIDTH;
   });
 
@@ -22,6 +24,8 @@ export function useDiffResize() {
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(sidebarWidth);
+  const activeMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const activeMouseUpRef = useRef<(() => void) | null>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -49,20 +53,32 @@ export function useDiffResize() {
         setSidebarWidth((finalWidth) => {
           try {
             localStorage.setItem('cvh_git_diff_width', String(Math.round(finalWidth)));
-          } catch {}
+          } catch (err) {
+            console.debug('[useDiffResize] Failed to persist width:', err);
+          }
           return finalWidth;
         });
       }
+      activeMouseMoveRef.current = null;
+      activeMouseUpRef.current = null;
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
 
+    activeMouseMoveRef.current = handleMouseMove;
+    activeMouseUpRef.current = handleMouseUp;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [sidebarWidth]);
 
   useEffect(() => {
     return () => {
+      if (activeMouseMoveRef.current) {
+        window.removeEventListener('mousemove', activeMouseMoveRef.current);
+      }
+      if (activeMouseUpRef.current) {
+        window.removeEventListener('mouseup', activeMouseUpRef.current);
+      }
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };

@@ -101,6 +101,8 @@ export const enCore = {
   'board.newAgentRoleHint': 'Role: {role}',
   'board.autoColor': 'Auto Color',
   'board.autoColorTitle': 'Column color will be selected automatically',
+  'board.autoReset': 'Auto',
+  'board.iconLabel': 'Icon',
   'board.loadMore': 'Load more ({nextCount} of {remaining})',
   'board.totalTasks': 'Total tasks: {count}',
   'board.columnPinnedTitle': 'Column is pinned. Right click for column actions',

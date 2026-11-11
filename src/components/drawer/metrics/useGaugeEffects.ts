@@ -4,7 +4,7 @@ import { TaskTelemetrySummary } from '../../../stores/drawer/types';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
 import { listenToEvent } from '../../../services/tauriEventGateway';
-import { t } from '../../../stores/languageStore';
+import { t, useLanguageStore } from '../../../stores/languageStore';
 import { UseContextGaugeMetricsOptions } from './types';
 
 export function usePersonaContextLimit(
@@ -28,7 +28,8 @@ export function usePersonaContextLimit(
           );
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.debug('[useGaugeEffects] get_agent_context_window skipped:', err);
         const role =
           persona ||
           useBoardStore
@@ -67,8 +68,9 @@ export function useTelemetrySummarySync(
       if (summary && typeof summary.totalTokens === 'number') {
         setTaskTelemetrySummary?.(taskId, summary);
       }
-    } catch {
+    } catch (err) {
       // Web fallback: cumulative stays unset, UI falls back to last-turn snapshot.
+      console.debug('[useGaugeEffects] get_task_telemetry_summary skipped:', err);
     }
   }, [taskId, setTaskTelemetrySummary]);
 
@@ -92,8 +94,8 @@ export function useTelemetrySummarySync(
         });
         if (isDisposed) u();
         else unlisten = u;
-      } catch {
-        // Web fallback
+      } catch (err) {
+        console.debug('[useGaugeEffects] agent:telemetry listener skipped:', err);
       }
     };
     setupListener();
@@ -119,7 +121,8 @@ export function useCompactionActions(params: {
   const savingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSavingsNotice = useCallback((savedCount: number) => {
-    setSavingsBadge(t('gauge.compactedTokens', { count: savedCount.toLocaleString('ru-RU') }));
+    const locale = useLanguageStore.getState().language === 'ru' ? 'ru-RU' : 'en-US';
+    setSavingsBadge(t('gauge.compactedTokens', { count: savedCount.toLocaleString(locale) }));
     if (savingsTimerRef.current) clearTimeout(savingsTimerRef.current);
     savingsTimerRef.current = setTimeout(() => {
       setSavingsBadge(null);
