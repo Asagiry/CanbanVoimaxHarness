@@ -326,7 +326,7 @@ Write-Host ""
 
 Write-Host "[5/5] Building Tauri release bundles..."
 # Ensure WebView2Loader.dll is present in target release directory for NSIS bundling on Windows (GNU)
-if ($OnWindows -and -not $NoBundle -and ($Bundles -match "nsis")) {
+if ($OnWindows -and -not $NoBundle -and ([string]::IsNullOrEmpty($Bundles) -or $Bundles -match "nsis")) {
   $baseTargetDir = if (-not [string]::IsNullOrEmpty($env:CARGO_TARGET_DIR)) { $env:CARGO_TARGET_DIR } else { "src-tauri/target" }
   $targetReleaseDir = if (-not [string]::IsNullOrEmpty($Target)) { Join-Path $baseTargetDir "$Target/release" } else { Join-Path $baseTargetDir "release" }
   New-Item -ItemType Directory -Force -Path $targetReleaseDir | Out-Null
