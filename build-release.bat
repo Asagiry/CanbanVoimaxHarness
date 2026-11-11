@@ -29,6 +29,7 @@ set "BUNDLES="
 set "NO_BUNDLE="
 set "TARGET="
 set "NO_PAUSE=0"
+set "INSTALL_SELF_SIGNED_CERT=0"
 set "EXIT_CODE=0"
 
 :parse_args
@@ -50,6 +51,16 @@ if "%~1"=="--pause" (
 )
 if "%~1"=="-pause" (
   set "NO_PAUSE=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="--install-self-signed-cert" (
+  set "INSTALL_SELF_SIGNED_CERT=1"
+  shift
+  goto parse_args
+)
+if "%~1"=="-install-self-signed-cert" (
+  set "INSTALL_SELF_SIGNED_CERT=1"
   shift
   goto parse_args
 )
@@ -227,24 +238,49 @@ set "TEMP=%CD%\src-tauri\target\tmp"
 
 echo [1/5] Preflight: checking compiler, cargo, node, pnpm...
 
-rem Auto-detect llvm-mingw
+rem Auto-detect llvm-mingw via env or standard user/system paths
 where gcc >nul 2>nul
 if errorlevel 1 (
-  if exist "C:\Users\Voimax\llvm-mingw-20261006-ucrt-x86_64\bin\gcc.exe" (
-    set "PATH=C:\Users\Voimax\llvm-mingw-20261006-ucrt-x86_64\bin;%PATH%"
-    echo   notice: added llvm-mingw to PATH
+  if not "%LLVM_MINGW_BIN%"=="" (
+    if exist "%LLVM_MINGW_BIN%\gcc.exe" (
+      set "PATH=%LLVM_MINGW_BIN%;%PATH%"
+      echo   notice: added %LLVM_MINGW_BIN% to PATH
+    )
+  )
+)
+where gcc >nul 2>nul
+if errorlevel 1 (
+  if exist "%USERPROFILE%\llvm-mingw\bin\gcc.exe" (
+    set "PATH=%USERPROFILE%\llvm-mingw\bin;%PATH%"
+    echo   notice: added %USERPROFILE%\llvm-mingw\bin to PATH
+  ) else if exist "C:\llvm-mingw\bin\gcc.exe" (
+    set "PATH=C:\llvm-mingw\bin;%PATH%"
+    echo   notice: added C:\llvm-mingw\bin to PATH
+  ) else (
+    for /d %%D in ("%USERPROFILE%\llvm-mingw*") do (
+      if exist "%%D\bin\gcc.exe" (
+        set "PATH=%%D\bin;%PATH%"
+        echo   notice: added %%D\bin to PATH
+      )
+    )
   )
 )
 
-rem Auto-detect cargo in %USERPROFILE%\.cargo\bin or C:\Users\Voimax\.cargo\bin
+rem Auto-detect cargo in %CARGO_HOME%\bin or %USERPROFILE%\.cargo\bin
+where cargo >nul 2>nul
+if errorlevel 1 (
+  if not "%CARGO_HOME%"=="" (
+    if exist "%CARGO_HOME%\bin\cargo.exe" (
+      set "PATH=%CARGO_HOME%\bin;%PATH%"
+      echo   notice: added "%CARGO_HOME%\bin" to PATH
+    )
+  )
+)
 where cargo >nul 2>nul
 if errorlevel 1 (
   if exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
     set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
     echo   notice: added "%USERPROFILE%\.cargo\bin" to PATH
-  ) else if exist "C:\Users\Voimax\.cargo\bin\cargo.exe" (
-    set "PATH=C:\Users\Voimax\.cargo\bin;%PATH%"
-    echo   notice: added "C:\Users\Voimax\.cargo\bin" to PATH
   )
 )
 
@@ -255,9 +291,6 @@ if exist "%LOCALAPPDATA%\mbx\bin\cargo.exe" (
 ) else if exist "%USERPROFILE%\AppData\Local\mbx\bin\cargo.exe" (
   set "PATH=%USERPROFILE%\AppData\Local\mbx\bin;%PATH%"
   echo   notice: added mbx compiler cache shim to PATH: %USERPROFILE%\AppData\Local\mbx\bin
-) else if exist "C:\Users\Voimax\AppData\Local\mbx\bin\cargo.exe" (
-  set "PATH=C:\Users\Voimax\AppData\Local\mbx\bin;%PATH%"
-  echo   notice: added mbx compiler cache shim to PATH
 )
 
 rem Auto-detect node
@@ -296,9 +329,20 @@ if errorlevel 1 (
 rem If pnpm still not in PATH, create shim from bundled pnpm.mjs if available
 where pnpm >nul 2>nul
 if errorlevel 1 (
-  if exist "C:\Users\Voimax\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.mjs" (
+  if not "%DSH_RUNTIME_DIR%"=="" (
+    if exist "%DSH_RUNTIME_DIR%\dependencies\pnpm\bin\pnpm.mjs" (
+      if not exist "src-tauri\target\bin" mkdir "src-tauri\target\bin"
+      echo @"node" "%DSH_RUNTIME_DIR%\dependencies\pnpm\bin\pnpm.mjs" %%* > "src-tauri\target\bin\pnpm.cmd"
+      set "PATH=%CD%\src-tauri\target\bin;%PATH%"
+      echo   notice: created pnpm shim in src-tauri\target\bin
+    )
+  )
+)
+where pnpm >nul 2>nul
+if errorlevel 1 (
+  if exist "%USERPROFILE%\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.mjs" (
     if not exist "src-tauri\target\bin" mkdir "src-tauri\target\bin"
-    echo @"node" "C:\Users\Voimax\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.mjs" %%* > "src-tauri\target\bin\pnpm.cmd"
+    echo @"node" "%USERPROFILE%\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.mjs" %%* > "src-tauri\target\bin\pnpm.cmd"
     set "PATH=%CD%\src-tauri\target\bin;%PATH%"
     echo   notice: created pnpm shim in src-tauri\target\bin
   )
@@ -648,14 +692,10 @@ echo.
 
 rem Sign and unblock release artifacts with PowerShell
 echo Signing and unblocking artifacts...
-if exist "%COPIED_BIN%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1; if (-not $cert) { try { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); } catch {} }; if (-not $cert) { $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1 }; if ($cert) { Set-AuthenticodeSignature -FilePath '%COPIED_BIN%' -Certificate $cert | Out-Null; Write-Host ('  ok: signed %COPIED_BIN% with certificate ' + $cert.Subject) } else { Write-Host '  notice: code signing certificate not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%COPIED_BIN%' -ErrorAction SilentlyContinue"
-)
+if exist "%COPIED_BIN%" call :sign_artifact "%COPIED_BIN%"
 if not "!NO_BUNDLE!"=="1" (
   for %%F in ("%INST_DIR%\*.exe") do (
-    if exist "%%F" (
-      powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1; if (-not $cert) { try { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); } catch {} }; if (-not $cert) { $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1 }; if ($cert) { Set-AuthenticodeSignature -FilePath '%%F' -Certificate $cert | Out-Null; Write-Host ('  ok: signed installer %%F with certificate ' + $cert.Subject) } else { Write-Host '  notice: code signing certificate not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%%F' -ErrorAction SilentlyContinue"
-    )
+    if exist "%%F" call :sign_artifact "%%F"
   )
 )
 echo.
@@ -706,11 +746,16 @@ echo     --bundles=LIST    forward to "tauri build --bundles LIST" (e.g. nsis)
 echo     --target=TRIPLE   target triple (e.g. x86_64-pc-windows-gnu)
 echo     --no-pause        do not pause before exit (agents and automated scripts)
 echo     --pause           pause before exit (default behavior)
+echo     --install-self-signed-cert  generate and trust a self-signed Authenticode cert if none exists
 echo     --help, -h, /?    print this help and exit 0
 echo.
 echo   Examples:
 echo     build-release.bat
 echo     build-release.bat --target=x86_64-pc-windows-gnu --bundles=nsis --skip-install
+exit /b 0
+
+:sign_artifact
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$target = '%~1'; $installCert = ('%INSTALL_SELF_SIGNED_CERT%' -eq '1'); $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' -or $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1; if (-not $cert -and $installCert) { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); Write-Host ('  ok: generated and trusted self-signed certificate ' + $cert.Subject) }; if ($cert) { Set-AuthenticodeSignature -FilePath $target -Certificate $cert | Out-Null; Write-Host ('  ok: signed ' + $target + ' with certificate ' + $cert.Subject) } else { Write-Host '  notice: no existing code signing certificate in Cert:\CurrentUser\My; skipping signing (pass --install-self-signed-cert to generate one)' }; Unblock-File -Path $target -ErrorAction SilentlyContinue"
 exit /b 0
 
 :print_size

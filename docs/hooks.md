@@ -20,9 +20,9 @@
      - **Объектный формат с описанием (рекомендуемый)**:
        ```json
        "hooks": {
-         "on_leave": {
-           "script": ".cvh/hooks/on_review_finish.bat",
-           "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+         "on_enter": {
+           "script": ".cvh/hooks/on_enter_ready.bat",
+           "description": "Удаляет worktree папку и пушит в main с origin (merge + push + worktree remove)"
          }
        }
        ```
@@ -120,26 +120,27 @@ fi
 
 ---
 
-## 4. Готовый пример: Слияние и очистка при завершении ревью (`on_review_finish`)
+## 4. Готовый пример: Слияние и очистка при входе в `ready` (`on_enter_ready`)
 
-Когда задача получает вердикт `APPROVED` и переходит дальше, хук автоматически сливает ветку в `main`, пушит в удаленный репозиторий и удаляет временный ворктри.
+Когда задача попадает в терминальную колонку `ready` (напрямую из `review` или после `retro`), хук `on_enter` автоматически сливает ветку в `main`, пушит в удаленный репозиторий и удаляет временный ворктри.
 
-### Скрипт слияния и очистки (`.cvh/hooks/on_review_finish.bat`):
+### Скрипт слияния и очистки (`.cvh/hooks/on_enter_ready.bat`):
 ```bat
 @echo off
-echo [CVH Hook] Finishing task %CVH_TASK_ID% with verdict: %CVH_VERDICT%
+echo [CVH Ready Hook] Finishing task %CVH_TASK_ID% on stage %CVH_STAGE_ID%
 
 REM Проверяем, существует ли ворктри
 if exist "worktrees\%CVH_TASK_ID%" (
-    echo [CVH Hook] Merging feat/%CVH_TASK_ID% into main and pushing...
+    echo [CVH Ready Hook] Merging feat/%CVH_TASK_ID% into main and pushing...
+    git restore -- .cvh >nul 2>&1
     git checkout main
-    git merge "feat/%CVH_TASK_ID%" --no-edit
+    git merge --no-ff "feat/%CVH_TASK_ID%" -m "feat(%CVH_TASK_ID%): %CVH_TASK_TITLE% [ready]"
     git push origin main
     git worktree remove "worktrees\%CVH_TASK_ID%" --force >nul 2>&1
-    git branch -d "feat/%CVH_TASK_ID%" >nul 2>&1
+    git branch -D "feat/%CVH_TASK_ID%" >nul 2>&1
 )
 
-echo [CVH Hook] Worktree cleaned and merged. Task %CVH_TASK_ID% is complete.
+echo [CVH Ready Hook] Worktree cleaned and merged. Task %CVH_TASK_ID% is complete.
 exit /b 0
 ```
 
@@ -167,10 +168,17 @@ exit /b 0
     "on_enter": {
       "script": ".cvh/hooks/gatekeeper_sensor.bat",
       "description": "Запуск gatekeeper-сенсоров: проверка git mergeability, cargo check, Vitest, tsc и Oxlint"
-    },
-    "on_leave": {
-      "script": ".cvh/hooks/on_review_finish.bat",
-      "description": "Сливает утвержденную ветку в main и удаляет ворктри"
+    }
+  }
+},
+{
+  "id": "ready",
+  "title": "Готово",
+  "terminal": true,
+  "hooks": {
+    "on_enter": {
+      "script": ".cvh/hooks/on_enter_ready.bat",
+      "description": "Удаляет worktree папку и пушит в main с origin (merge + push + worktree remove)"
     }
   }
 }

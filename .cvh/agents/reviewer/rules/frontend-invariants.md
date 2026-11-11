@@ -15,7 +15,7 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 ---
 
 ## 2. Component File Size Ceiling (<= 350 lines)
-- **Rule**: React components must NOT exceed 350 lines of code. Keep components atomic, focused, and maintainable (gold standard: `KanbanCard.tsx` at ~239 lines).
+- **Rule**: React components must NOT exceed 350 lines of code. Keep components atomic, focused, and maintainable (gold standard: `KanbanCard.tsx` at ~260 lines).
 - **Audit**: Check line counts of all new or modified `.tsx` files in `src/components/`:
   - Monolithic components exceeding 350 lines must be decomposed into dedicated subcomponents, extracted custom hooks (`use...`), or pure helper modules.
   - *Immunity for Pre-Existing Files*: Following the CVH-069 decomposition where all 12 historical frontend monoliths were decomposed into modular subcomponents and slices, any component touched or introduced in or after CVH-069 must strictly adhere to the <=350-line ceiling (no legacy debt immunity for touched files; immunity applies solely to untouched legacy files originating before the task's branch point).
@@ -69,11 +69,11 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 ---
 
 ## 9. Redundant Copy Elimination & Structural Layout-First Invariant
-- **Rule**: Redundant slogans, explanatory filler text, marketing subtitles, and minor helper labels must be eliminated (§ 2.39).
+- **Rule**: Redundant slogans, explanatory filler text, marketing subtitles, and minor helper labels must be eliminated.
 - **Audit**: If an interface becomes confusing or incomprehensible when explanatory copy is removed, the layout itself is flawed. Reject solutions that add explanatory text or tooltips to patch poor visual hierarchy; mandate redesigning the layout from scratch.
 
 ---
 
 ## 10. Tri-Partite Experience Synergy Invariant (UX, DX, AX)
-- **Rule**: Every change must simultaneously preserve or improve User Experience (UX), Developer Experience (DX), and AI Agent Experience (AX) (§ 2.40).
+- **Rule**: Every change must simultaneously preserve or improve User Experience (UX), Developer Experience (DX), and AI Agent Experience (AX).
 - **Audit**: Verify that UX improvements do not compromise DX or AX, and verify zero regression in existing functionality.

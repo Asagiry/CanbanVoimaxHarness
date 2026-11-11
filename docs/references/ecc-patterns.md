@@ -105,7 +105,7 @@ Under Progressive Disclosure, rules are categorized by technology stack and load
   - Use Zustand stores with fine-grained selectors and `useShallow` to prevent board-wide re-renders.
   - Wrap high-frequency interactive elements (`KanbanCard`, `KanbanColumn`, `StageTimer`) in `React.memo` with explicit custom shallow comparators.
 - **UI & Accessibility**:
-  - Enforce high-contrast Obsidian Dark theme (`#07090e`, `#0d1117`, `#161b22`, `#21262d`, `#f0f6fc`).
+  - Enforce high-contrast Antigravity Stealth Dark theme (`#111114`, `#17171b`, `#232328`, `#2c2c33`, `#f4f4f5`).
   - Never use native browser tooltips (`title="..."` ban on labeled controls) in WebView2/Tauri.
   - Use monospace tabular numerals (`tabular-nums`) for all live timers, counters, and metrics to prevent layout jitter.
   - CSS View Transitions API must always provide defensive fallback toggles when unsupported.

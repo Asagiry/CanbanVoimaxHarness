@@ -30,7 +30,7 @@ description: Turn 1 runtime contract, batch tool execution & fail-fast mechanics
 
 ## 4. CVH UI/UX Architecture
 - **Cortex Explorer**:
-  - Four central tabs: Columns (Stage configuration & personas), Personas (Agent profiles & settings), Global Rules (`.cvh/rules/` markdown editor), and Harness Settings (`tool-policy.json`, LLM credentials, and board configs).
+  - Three collapsible explorer sections: Columns (Stage configuration & personas), Agents (Agent profiles & settings), and Global Rules (`.cvh/rules/` markdown editor), plus `CvhSaveButton` and modal settings editors (`tool-policy.json`, LLM providers, and board configs).
   - Allows live inspection and editing of agent prompts, global rules, and column gatekeepers without restarting the app.
 - **Kanban Board**:
   - Visual stage columns matching `activeBoardId` in `.cvh/boards.json`.

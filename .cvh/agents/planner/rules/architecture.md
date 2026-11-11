@@ -24,8 +24,8 @@ CanbanVoimaxHarness (CVH) is an autonomous software development harness structur
    - Centralized typed event gateway: `tauriEventGateway` (`src/services/tauriEventGateway.ts`) replacing raw `listen<any>`.
    - Domain layer: Branded nominal Value Objects and state machines in `src/types/domain.ts`.
    - Modular UI architecture: Specialized card widgets (`card/`), stream cards (`drawer/stream/`), and token parsers (`markdown/`).
-   - State management: Multi-slice Zustand stores (`cortex/slices/`, `board/slices/`, `drawer/slices/`) subscribing via `useShallow`.
-   - Dual-theme design system: Vercel Light Paper (`#fafafa`) and Obsidian Dark (`#090a0f`).
+   - State management: Multi-slice Zustand stores (`src/stores/cortex/`, `src/stores/slices/`, `src/stores/drawer/slices/`) subscribing via `useShallow`.
+   - Dual-theme design system: Vercel Light Paper (`#fafafa`) and Antigravity Stealth Dark (`#111114` / `#17171b`).
 
 3. **Autonomous Execution Subsystem (Git Worktrees & Hooks)**:
    - Each task executes in an isolated Git worktree: `worktrees/<task-slug>` on feature branch `feat/<task-slug>`.
@@ -40,7 +40,7 @@ When planning technical solutions, identify affected subsystems and map them str
 | Subsystem | Primary Files / Modules | Architectural Responsibilities |
 |---|---|---|
 | **Persistence (SQLite)** | `src-tauri/src/db/pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs` | WAL connection pool, task CRUD, subtask cascades, dialog activity feed, telemetry & task ledger. (Monolithic `db.rs` is eradicated). |
-| **Config & Scaffolding** | `src-tauri/src/config/models.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs` | LLM models, two-level tool policy matrix, workspace root discovery, project scaffolding, atomic JSON I/O. (Monolithic `config.rs` is eradicated). |
+| **Config & Scaffolding** | `src-tauri/src/config/models.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs` | LLM models, Single Authoritative Layer tool policy matrix, workspace root discovery, project scaffolding, atomic JSON I/O. (Monolithic `config.rs` is eradicated). |
 | **Domain Layer (Rust)** | `src-tauri/src/domain/ids.rs`, `state.rs` | Nominal Value Objects (`TaskId`, `StageId`, `BoardId`) and `TaskState` ADT state machine. |
 | **Agent Engine** | `src-tauri/src/agent/react_engine.rs`, `compactor.rs`, `tool_schemas.rs`, `tools/*` | `ReActEngine<Driver>`, unified SSE streaming, telemetry (TTFT, TPS, Cache Hit Rate), context compactor, modular tool execution. |
 | **Task Commands** | `src-tauri/src/commands/tasks/healing.rs`, `lifecycle.rs`, `runner.rs`, `storage.rs`, `transitions.rs` | Self-healing boards, task lifecycle, agent runner dispatch, stage transitions. |
@@ -51,7 +51,7 @@ When planning technical solutions, identify affected subsystems and map them str
 | **Frontend Card Subsystem** | `src/components/card/CardTimerBadge.tsx`, `CardSubtaskBadge.tsx`, `CardContextMenu.tsx`, `CardHookNode.tsx`, `KanbanCard.tsx` | Modular card widgets and layout coordinator. (Card widgets <= 350 lines). |
 | **Frontend Drawer Streams** | `src/components/drawer/stream/ThoughtStreamCard.tsx`, `SteerDirectiveCard.tsx`, `SubagentActivityCard.tsx` | Modular thought, steer directive, and subagent stream cards. |
 | **Frontend Markdown** | `src/lib/markdown/parseMarkdownTokens.ts` | Decoupled Markdown token parsing and syntax highlighting tokens. |
-| **Frontend State Slices** | `src/stores/cortex/slices/*`, `src/stores/slices/*` (board), `src/stores/drawer/slices/*` | Modular Zustand state slices composed into unified stores. |
+| **Frontend State Slices** | `src/stores/cortex/*`, `src/stores/slices/*` (including `tasks/*`), `src/stores/drawer/slices/*` | Modular Zustand state slices composed into unified stores. |
 
 ---
 

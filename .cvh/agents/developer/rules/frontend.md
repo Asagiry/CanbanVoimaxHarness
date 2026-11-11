@@ -70,14 +70,14 @@ Activity feed items are rendered by dedicated stream card components:
 
 ### 3.5 Multi-Slice Zustand Architecture
 Stores are decomposed into modular slices composed into a root store:
-- **Cortex Store** (`src/stores/cortex/slices/`):
-  - `personasSlice.ts`: Persona YAML loading, icons, colors, tool policies.
-  - `rulesSlice.ts`: Markdown rule files reading, editing, and dynamic injection.
-  - `cortexFilesSlice.ts`: Raw project configuration file operations.
-- **Board Store** (`src/stores/slices/`):
+- **Cortex Store** (`src/stores/cortex/`):
+  - `cortexStoreSlice.ts`: Cortex explorer state, stages, personas, global rules, and active editor state.
+  - `cortexFileOps.ts` & `cortexGitSave.ts`: Persona/rule file loading, saving, dirty tracking, and scoped `.cvh/` git commits.
+  - `cortexSync.ts`, `cortexTemplates.ts`, `cortexHelpers.ts`: Column synchronization, template rendering, and path/state helpers.
+- **Board Store Slices** (`src/stores/slices/`):
   - `boardMetaSlice.ts`: Active board ID, board list, column definitions.
-  - `tasksCrudSlice.ts`: Task creation, stage transitions, backend sync, subtask relations.
-  - `taskTimersSlice.ts`: Live execution timing, stage elapsed times, returns counting.
+  - `tasksCrudSlice.ts` & `tasks/` (`tasksCoreSlice.ts`, `tasksCreateSlice.ts`, `tasksMoveSlice.ts`, `tasksMutateSlice.ts`): Task creation, stage transitions, backend sync, subtask relations.
+  - `taskTimersSlice.ts`, `taskHooksSlice.ts`, `taskQuestionsSlice.ts`: Live execution timing, hook status badges, interactive question state.
 - **Drawer Store** (`src/stores/drawer/slices/`):
   - `drawerMetaSlice.ts`: Drawer open/close state, active task ID, active tab.
   - `streamSlice.ts`: Thought chunks, assistant output, live token streaming.

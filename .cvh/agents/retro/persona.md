@@ -1,6 +1,4 @@
 ---
-
-
 name: retro
 description: Continuous Improvement & Rule Evolution Specialist for CanbanVoimaxHarness. Analyzes execution trajectories, tool calls, and review rejections to improve modular rules in .cvh/agents/<role>/rules/.
 model: inherit

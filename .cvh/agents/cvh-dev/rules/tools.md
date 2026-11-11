@@ -19,7 +19,7 @@ Authoritative guide for agent tools in CanbanVoimaxHarness.
 
 ## 2. Authoritative Standard Tool Catalog
 
-All standard tools are defined in Rust backend (`src-tauri/src/agent.rs` and `src-tauri/src/agent/tools/`) and exposed to ReAct agent loops subject to the two-level tool policy matrix.
+All standard tools are defined in Rust backend (`src-tauri/src/agent/tools/`) and exposed to ReAct agent loops subject to the Single Authoritative Layer tool policy matrix (`.cvh/settings/tool-policy.json`).
 
 ### 2.1 Pipeline Flow & Stage Navigation
 - **`advance_task` / `move_task`**: Transitions current task to the next stage or a specific target stage. Enforces Relay Handoff context injection via `summary`.

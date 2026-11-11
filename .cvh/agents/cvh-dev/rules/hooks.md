@@ -17,9 +17,9 @@ Hooks support two schema formats:
 1. **Object format (Recommended)** with `script` and `description`:
    ```json
    "hooks": {
-     "on_leave": {
-       "script": ".cvh/hooks/on_review_finish.bat",
-       "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+     "on_enter": {
+       "script": ".cvh/hooks/on_enter_ready.bat",
+       "description": "Удаляет worktree папку и пушит в main с origin (merge + push + worktree remove)"
      }
    }
    ```

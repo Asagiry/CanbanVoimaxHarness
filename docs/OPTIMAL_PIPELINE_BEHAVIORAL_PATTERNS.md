@@ -153,7 +153,7 @@ Comparing CarSmash against Google Research **Harness²** and can1357's **Oh-My-P
 ### Key Architectural Invariants Learned from Harness² & Oh-My-Pi:
 1. **Load-Bearing Mechanical Guards over Prose Begging (`EmissionGuard`)**:
    - In Oh-My-Pi, telling the model *"don't repeat advice"* failed (producing 309 duplicate calls). The solution was `EmissionGuard` in code.
-   - In CVH, this corresponds to **Two-Level Tool Policy Matrix** and **Gatekeeper Sensors**: the platform enforces constraints physically, not rhetorically.
+   - In CVH, this corresponds to the **Single Authoritative Layer Tool Policy Matrix** and **Gatekeeper Sensors**: the platform enforces constraints physically, not rhetorically.
 2. **Domain Experience Trees (`library.py` in Harness²)**:
    - Harness² stores `<domain>/harnesses/<task>/EXPERIENCE.md` documenting why an adaptation was picked and what lesson was learned.
    - CarSmash's `retro` persona implements this exact structure through the **Cue-Lesson-Evidence** protocol in `.agents/rules/`.
@@ -166,10 +166,10 @@ When `cvh-dev` is instructed to configure a repository, it must generate:
 
 1. **Four Specialized Personas** under `.cvh/agents/`:
    - `planner/`: `persona.md` (scope: read-only, context protection, subagent exploration).
-   - `developer/`: `persona.md` (worktree isolation, Ponytail minimalism, zero-TDD, live sensors).
+   - `developer/`: `persona.md` (worktree isolation, Ponytail minimalism, Vitest/`mbx test` shield, live sensors).
    - `reviewer/`: `persona.md` (scope: read-only, presumption of guilt, 3-axis review, rules actuality guard).
    - `retro/`: `persona.md` (scope: gated-writes excluding `src/`, FTR root cause, CLE rules, sensor patches).
-2. **Two-Level Tool Policy Matrix** in `.cvh/settings/tool-policy.json`:
+2. **Single Authoritative Layer Tool Policy Matrix** in `.cvh/settings/tool-policy.json`:
    - `planner`: `read_file`, `glob`, `grep`, `subagent`, `question`, `advance_task`. (`edit_file`/`write_file` = `false`).
    - `developer`: all implementation tools enabled.
    - `reviewer`: read-only audit tools enabled. (`edit_file`/`write_file` = `false`).

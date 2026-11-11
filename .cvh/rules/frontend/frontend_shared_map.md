@@ -14,7 +14,8 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
 | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
 | `src/components/common/AgentIcon.tsx` | SVG/Lucide persona icon with nominal color mapping. |
-| `src/components/common/BrandFileIcons.tsx` | File extension brand iconography (TS, RS, JSON, MD). |
+| `src/components/common/BrandFileIcons.tsx` | File extension brand icon resolver delegating SVG icons to `brandSvgIcons.tsx`. |
+| `src/components/common/brandSvgIcons.tsx` | Extracted SVG icon components for Python, TS, JS, Rust, React, Go, C++, JSON, HTML, CSS, MD, C#, Shell, Config, SQL. |
 | `src/components/common/ErrorBoundary.tsx` | React 19 error boundary preventing entire app unmount. |
 | `src/components/common/Logo.tsx` | CanbanVoimaxHarness application logo. |
 | `src/components/common/PersonaSelect.tsx` | Persona select dropdown with colored avatar badges. |
@@ -31,11 +32,20 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | `src/services/gateway/taskEventRouter.ts` | Task lifecycle, timer, and stage transition event routing to board stores. |
 | `src/services/gateway/index.ts` | Barrel re-exports for event gateway service. |
 | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
+| `src/stores/project/projectHelpers.ts` | `DEFAULT_PROJECT`, `isInvalidProjectPath`, opened-projects storage and store reset helpers for `projectStore`. |
 | `src/stores/themeStore.ts` | Theme selection and persistence. |
 | `src/stores/languageStore.ts` | Russian/English localization switching. |
 | `src/i18n/translations.ts` | Localized translation resolver. |
-| `src/i18n/ru.ts` | Russian translation entries. |
-| `src/i18n/en.ts` | English translation entries. |
+| `src/i18n/ru.ts` | Russian translation barrel composing `ru/{core,cortex,drawer,settingsTools}.ts`. |
+| `src/i18n/ru/core.ts` | Russian translations for app shell, board, cards, and common labels. |
+| `src/i18n/ru/cortex.ts` | Russian translations for Cortex explorer, personas, rules, and hooks. |
+| `src/i18n/ru/drawer.ts` | Russian translations for agent drawer, stream, diffs, and questions. |
+| `src/i18n/ru/settingsTools.ts` | Russian translations for settings modals, providers, and tool policy matrix. |
+| `src/i18n/en.ts` | English translation barrel composing `en/{core,cortex,drawer,settingsTools}.ts`. |
+| `src/i18n/en/core.ts` | English translations for app shell, board, cards, and common labels. |
+| `src/i18n/en/cortex.ts` | English translations for Cortex explorer, personas, rules, and hooks. |
+| `src/i18n/en/drawer.ts` | English translations for agent drawer, stream, diffs, and questions. |
+| `src/i18n/en/settingsTools.ts` | English translations for settings modals, providers, and tool policy matrix. |
 | `src/i18n/types.ts` | Nominal types and key interfaces for i18n dictionaries. |
 | `src/i18n/index.ts` | Re-exports for translation helpers. |
 | `src/lib/agentPalette.ts` | Theme-safe color constants for personas. |
@@ -43,12 +53,15 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | `src/lib/imageCompression.ts` | Attachment image resizer and optimizer. |
 | `src/lib/logger.ts` | Structured browser logs with backend routing. |
 | `src/lib/slug.ts` | Deterministic worktree and git branch naming. |
-| `src/lib/markdown/parseMarkdownTokens.ts` | AST token parser for codeblocks, tables, inline styling. |
+| `src/lib/markdown/parseMarkdownTokens.ts` | Block-level AST token parser for codeblocks, tables, headings, and lists. |
+| `src/lib/markdown/parseInlineTokens.ts` | Inline markdown parser (`parseInlineTokens`, `isValidInlineCode`, table row/delimiter/HR helpers). |
+| `src/lib/markdown/sanitizeUrl.ts` | URL scheme sanitizer (`isSafeMarkdownUrl`, `sanitizeMarkdownUrl`) blocking `javascript:`, `vbscript:`, unsafe `data:` schemes, and control chars. |
 | `src/lib/markdown/types.ts` | AST interfaces for markdown tokens. |
 | `src/lib/markdown/index.ts` | Re-exports for markdown parser. |
 | `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `ProviderId`, `TaskState`, `StageLike`, `CANONICAL_TERMINAL_STAGES`, `CANONICAL_INTAKE_STAGES`, `isTerminalStage`, `isIntakeStage`. |
 | `src/types/index.ts` | Main types barrel (re-exports `domain.ts`); `ReasoningEffort`, `REASONING_EFFORTS`, `normalizeReasoningEffort`. |
 | `src/types/kanban.ts` | Kanban task/board domain types. |
+| `src/types/runtime.ts` | Extracted runtime types (`ReasoningEffort`, `CortexAgentFile`, `CortexAgentStage`, `ToolExecution`, etc.) re-exported by `src/types/index.ts`. |
 
 ## Related checks
 
@@ -57,3 +70,4 @@ Choose checks for the changed behavior; use the active role's `sensors` rule for
 - `src/hooks/__tests__/useUiZoom.test.ts` — Vitest suite for UI zoom scaling, modal overlays, and wheel listeners.
 - `src/components/common/__tests__/HookIcon.test.tsx` — Vitest suite for hook moment resolution and visual icon rendering.
 - `src/services/__tests__/notificationFormatter.test.ts` — Notification markdown formatter checks.
+- `src/services/__tests__/tauriEventGateway.test.ts` — Tauri event gateway routing, buffer disposal, and project switch reset tests.

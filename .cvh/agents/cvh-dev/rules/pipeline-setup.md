@@ -31,8 +31,8 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
    - **Python**: look for `pyproject.toml`, `requirements.txt`, `main.py`, `pytest` or `ruff`.
    - **Go/C++/Other**: detect native build tools, test suites, and linters.
    - **Project Navigation Maps Authoring**: Author project-specific navigation maps directly into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`, or domain-specific maps) matching the actual codebase layout. NEVER copy CanbanVoimaxHarness's own internal architecture or file paths into external target projects.
-   - **Leverage Local `docs/ecc/` Rule Catalog**:
-     When configuring rules for a specific programming language or framework (e.g. Python, Go, C++, TypeScript, Rust, React, Swift, etc.), do not invent rules from scratch. Use the repository's local catalog at `docs/ecc/rules/<language>/` (and `docs/ecc/agents/`) as an authoritative, battle-tested source for coding style, security invariants, and patterns, adapting them directly into `.cvh/agents/<role>/rules/<topic>.md`.
+   - **Leverage Local `docs/references/ecc-patterns.md` Catalog**:
+     When configuring rules for a specific programming language or framework (e.g. Python, Go, C++, TypeScript, Rust, React, Swift, etc.), do not invent rules from scratch. Use `docs/references/ecc-patterns.md` as an authoritative reference for coding style, security invariants, and progressive-disclosure patterns, adapting them directly into `.cvh/agents/<role>/rules/<topic>.md`.
 
 ---
 
@@ -169,7 +169,7 @@ Authoritative code craftsmanship and simplicity standard.
 
 ## 1. Uncle Bob Clean Code & Architectural Invariants
 1. **Eliminate Primitive Obsession**: Never pass raw primitive strings/numbers through core domain boundaries. Use Domain Value Objects (`domain::ids::TaskId`, `StageId`, `BoardId`) with boundary normalization and validation.
-2. **Make Illegal States Unrepresentable**: Model lifecycles using Algebraic Data Types (`domain::state::TaskState`: `Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `Done { verdict }`). Eliminate conflicting booleans and optional ID pairs.
+2. **Make Illegal States Unrepresentable**: Model lifecycles using Algebraic Data Types (`domain::state::TaskState`: `Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `WaitingSubagent`, `Done { verdict }`). Eliminate conflicting booleans and optional ID pairs.
 3. **TDD for Pure Domain Logic & Store Slices**: Author deterministic unit tests in Vitest (`pnpm test`) for pure utilities, text parsers, diff logic, and Zustand store slices. Author `cargo test` suites for Rust domain logic. Live process testing for real IPC/streaming.
 4. **Single Responsibility & Size Limits**: React components MUST NOT exceed 350 lines (extract subcomponents and hooks). Backend Rust modules MUST NOT exceed 500 lines (adhere to modular SRP packages `db/`, `config/`, `domain/`, `agent/`).
 5. **Frontend Gateway Invariant**: Never call `listen<any>` directly in components or stores. All Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`.

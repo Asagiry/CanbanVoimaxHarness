@@ -1,8 +1,10 @@
 ; NSIS Hooks for CanbanVoimaxHarness
-; Ensures WebView2Loader.dll is deployed alongside the main executable on Windows (GNU toolchain)
+; Ensures WebView2Loader.dll is deployed alongside the main executable when present (e.g. GNU toolchain)
 
 !macro NSIS_HOOK_POSTINSTALL
-  File "${MAINBINARYSRCPATH}\..\WebView2Loader.dll"
+  !if /FileExists "${MAINBINARYSRCPATH}\..\WebView2Loader.dll"
+    File "${MAINBINARYSRCPATH}\..\WebView2Loader.dll"
+  !endif
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

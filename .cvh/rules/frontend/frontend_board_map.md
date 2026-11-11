@@ -11,12 +11,14 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | `src/components/card/cardFamily.ts` | Subtask family relationships, root task resolution, and child aggregation. |
 | `src/components/card/cardModel.ts` | Pure card model transformers, badge calculations, and status predicates. |
 | `src/components/card/CardHookNode.tsx` | Stage stepper, stage switching and running state. |
+| `src/components/card/CardHookPopover.tsx` | Hover/focus popover showing stage hook scripts and descriptions. |
 | `src/components/card/useCardHooks.ts` | Card hook node left/right routing (source vs target) and hook state selection. |
 | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums; exports `CardTimerBadge`, `CardTimeFooter`, `formatCardDate`, `formatStageDuration`. |
 | `src/components/card/CardContextMenu.tsx` | Context actions, model selection, subtask deletion. |
 | `src/components/card/TaskContextMenu.tsx` | Re-export of `CardContextMenu.tsx` (backward-compatible alias, no separate responsibility). |
 | `src/components/card/CardSubtaskBadge.tsx` | Subtask counter/status; exports `CardWaitingSubtaskBadge`, `CardSubtaskProgressBar`, `CardSubtaskBadge`. |
 | `src/components/card/CardTodoProgress.tsx` | Task checklist progress and item count. |
+| `src/components/card/CardTodoPopover.tsx` | Expandable checklist popover for `CardTodoProgress`. |
 | `src/components/card/cardComparators.ts` | `areCardPropsEqual` preventing cascading re-renders. |
 | `src/components/board/KanbanBoard.tsx` | Multi-column DND layout, column rendering. |
 | `src/components/board/useBoardDragDrop.ts` | Drag-and-drop sensor handling, drop animations, and task reordering. |
@@ -34,7 +36,9 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | `src/components/board/ColumnContextMenu.tsx` | Re-export of `StageContextMenu.tsx` (backward-compatible alias, no separate responsibility). |
 | `src/components/board/ColumnHookBadge.tsx` | Re-export of `StageHookBadge.tsx` (backward-compatible alias, no separate responsibility). |
 | `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona and catalog model selection. |
+| `src/components/board/modals/TaskAttachmentPicker.tsx` | Image attachment dropzone, paste handling, and thumbnail gallery for `CreateTaskModal`. |
 | `src/components/board/modals/CreateColumnModal.tsx` | Column creation modal with hook configuration. |
+| `src/components/board/modals/StageAppearancePicker.tsx` | Stage icon and color picker extracted from `CreateColumnModal`. |
 | `src/components/board/CreateBoardModal.tsx` | Board creation modal with preset templates. |
 | `src/components/board/modals/ImageLightboxModal.tsx` | Re-export of the canonical drawer `ImageLightboxModal.tsx` (no separate responsibility). |
 | `src/hooks/useContextMenuPosition.ts` | Viewport-clamped positioning and outside-click/Escape dismissal for context menus. |
@@ -63,3 +67,4 @@ Choose checks for the changed behavior; use the active role's `sensors` rule for
 - `src/components/board/__tests__/StageContextMenu.test.tsx` — Stage context menu interactions.
 - `src/components/card/__tests__/KanbanCard.test.tsx` — Kanban card rendering and layout.
 - `src/stores/__tests__/tasksCrudSlice.test.ts` — Task CRUD and stage transition slice tests.
+- `src/stores/__tests__/boardMetaSlice.test.ts` — Board metadata, stage update, and column order slice tests.

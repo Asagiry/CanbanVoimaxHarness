@@ -20,9 +20,9 @@ jobs:
       matrix:
         include:
           - platform: "windows-latest"
-            args: ""
+            args: "--bundles nsis"
           - platform: "ubuntu-22.04"
-            args: ""
+            args: "--bundles appimage,deb"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -83,10 +83,9 @@ jobs:
           fi
           VER_CLEAN="${TAG#v}"
 
-          # Windows: NSIS setup + MSI + portable exe
+          # Windows: NSIS setup + portable exe
           if [[ "${{ matrix.platform }}" == *"windows"* ]]; then
-            find src-tauri/target -name "*setup.exe" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64-setup.exe \; 2>/dev/null || true
-            find src-tauri/target -name "*.msi" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64.msi \; 2>/dev/null || true
+            find src-tauri/target -path "*/bundle/nsis/*.exe" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64-setup.exe \; 2>/dev/null || true
             cp src-tauri/target/release/canban-voimax-harness.exe artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64_portable.exe 2>/dev/null || true
           fi
 

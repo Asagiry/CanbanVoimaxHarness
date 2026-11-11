@@ -36,6 +36,8 @@ Usage: build-release.ps1 [options]
     -Target TRIPLE | --target=TRIPLE target triple (e.g. x86_64-pc-windows-gnu)
     -NoPause     | --no-pause        do not pause before exit (agents and automated scripts)
     -Pause       | --pause           wait for Enter at the end (default behavior)
+    -InstallSelfSignedCert | --install-self-signed-cert
+                                     generate and trust a self-signed Authenticode cert if none exists
     -Help        | --help, -h, /?    print this help and exit 0
 
   Examples:
@@ -63,6 +65,7 @@ function Fail([string]$Message, [int]$Code = 1) {
 $SkipInstall = $false
 $SkipChecks = $false
 $NoBundle = $false
+$InstallSelfSignedCert = $false
 $Bundles = ""
 $Target = ""
 $i = 0
@@ -73,12 +76,13 @@ while ($i -lt $args.Count) {
   elseif ($a -eq "--skip-checks" -or $a -eq "-SkipChecks") { $SkipChecks = $true }
   elseif ($a -eq "--no-pause" -or $a -eq "-NoPause") { $NoPause = $true }
   elseif ($a -eq "--pause" -or $a -eq "-Pause") { $NoPause = $false }
+  elseif ($a -eq "--install-self-signed-cert" -or $a -eq "-InstallSelfSignedCert") { $InstallSelfSignedCert = $true }
   elseif ($a -eq "--fast" -or $a -eq "-Fast" -or $a -eq "--no-bundle" -or $a -eq "-NoBundle") {
     $NoBundle = $true
     $Bundles = ""
   }
   elseif ($a -like "--bundles=*") {
-    $Bundles = $a.Substring(11)
+    $Bundles = $a.Substring(10)
     if ($Bundles -eq "none" -or $Bundles -eq "off" -or $Bundles -eq "0") {
       $NoBundle = $true
       $Bundles = ""
@@ -135,10 +139,15 @@ Write-Host "[1/5] Preflight: checking compiler, cargo, node, pnpm..."
 
 # Auto-add llvm-mingw to PATH on Windows if found
 if ($OnWindows) {
-  $mingwCandidates = @(
-    "C:/Users/Voimax/llvm-mingw-20261006-ucrt-x86_64/bin",
-    "C:/llvm-mingw/bin"
-  )
+  $mingwCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:LLVM_MINGW_BIN)) {
+    $mingwCandidates += $env:LLVM_MINGW_BIN
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+    $mingwCandidates += (Join-Path $env:USERPROFILE "llvm-mingw/bin")
+    $mingwCandidates += @(Get-ChildItem -Path $env:USERPROFILE -Filter "llvm-mingw*" -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName "bin" })
+  }
+  $mingwCandidates += "C:/llvm-mingw/bin"
   foreach ($mc in $mingwCandidates) {
     if (Test-Path -LiteralPath (Join-Path $mc "gcc.exe") -PathType Leaf) {
       if ($env:PATH -notlike "*$mc*") {
@@ -152,11 +161,16 @@ if ($OnWindows) {
 
 # Auto-add cargo to PATH if missing
 if ($null -eq (Get-Command cargo -ErrorAction SilentlyContinue)) {
-  $cargoCandidates = @(
-    (Join-Path $env:USERPROFILE ".cargo/bin/cargo.exe"),
-    (Join-Path $HOME ".cargo/bin/cargo"),
-    "C:/Users/Voimax/.cargo/bin/cargo.exe"
-  )
+  $cargoCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:CARGO_HOME)) {
+    $cargoCandidates += (Join-Path $env:CARGO_HOME "bin/cargo.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+    $cargoCandidates += (Join-Path $env:USERPROFILE ".cargo/bin/cargo.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($HOME)) {
+    $cargoCandidates += (Join-Path $HOME ".cargo/bin/cargo")
+  }
   foreach ($c in $cargoCandidates) {
     if (Test-Path -LiteralPath $c -PathType Leaf) {
       $cargoDir = Split-Path -Parent $c
@@ -169,12 +183,20 @@ if ($null -eq (Get-Command cargo -ErrorAction SilentlyContinue)) {
 
 # Auto-add node to PATH if missing
 if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) {
-  $nodeCandidates = @(
-    (Join-Path $env:LOCALAPPDATA "Programs/nodejs/node.exe"),
-    (Join-Path $env:ProgramFiles "nodejs/node.exe"),
-    "C:/Program Files/nodejs/node.exe",
-    "C:/Users/Voimax/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe"
-  )
+  $nodeCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $nodeCandidates += (Join-Path $env:LOCALAPPDATA "Programs/nodejs/node.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+    $nodeCandidates += (Join-Path $env:ProgramFiles "nodejs/node.exe")
+  }
+  $nodeCandidates += "C:/Program Files/nodejs/node.exe"
+  if (-not [string]::IsNullOrWhiteSpace($env:DSH_RUNTIME_DIR)) {
+    $nodeCandidates += (Join-Path $env:DSH_RUNTIME_DIR "dependencies/node/bin/node.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+    $nodeCandidates += (Join-Path $env:USERPROFILE ".dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe")
+  }
   foreach ($cand in $nodeCandidates) {
     if (Test-Path -LiteralPath $cand -PathType Leaf) {
       $nodeDir = Split-Path -Parent $cand
@@ -187,13 +209,18 @@ if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) {
 
 # Auto-add pnpm to PATH or create shim
 if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-  $pnpmCandidates = @(
-    (Join-Path $env:APPDATA "npm/pnpm.cmd"),
-    (Join-Path $env:LOCALAPPDATA "Programs/nodejs/pnpm.cmd"),
-    (Join-Path $env:LOCALAPPDATA "pnpm/pnpm.exe"),
-    (Join-Path $env:ProgramFiles "nodejs/node_modules/corepack/shims/pnpm.cmd"),
-    "C:/Program Files/nodejs/node_modules/corepack/shims/pnpm.cmd"
-  )
+  $pnpmCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+    $pnpmCandidates += (Join-Path $env:APPDATA "npm/pnpm.cmd")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $pnpmCandidates += (Join-Path $env:LOCALAPPDATA "Programs/nodejs/pnpm.cmd")
+    $pnpmCandidates += (Join-Path $env:LOCALAPPDATA "pnpm/pnpm.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+    $pnpmCandidates += (Join-Path $env:ProgramFiles "nodejs/node_modules/corepack/shims/pnpm.cmd")
+  }
+  $pnpmCandidates += "C:/Program Files/nodejs/node_modules/corepack/shims/pnpm.cmd"
   foreach ($cand in $pnpmCandidates) {
     if (Test-Path -LiteralPath $cand -PathType Leaf) {
       $pnpmDir = Split-Path -Parent $cand
@@ -206,14 +233,23 @@ if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
 
 # If pnpm still not in PATH, create shim from bundled pnpm.mjs if available
 if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-  $bundledPnpm = "C:/Users/Voimax/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs"
-  if (Test-Path -LiteralPath $bundledPnpm -PathType Leaf) {
-    $shimDir = Join-Path (Get-Location).Path "src-tauri/target/bin"
-    New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
-    $shimPath = Join-Path $shimDir "pnpm.cmd"
-    Set-Content -Path $shimPath -Value "@`"node`" `"$bundledPnpm`" %*" -Encoding Ascii
-    $env:PATH = "$shimDir;$env:PATH"
-    Write-Host "  notice: created pnpm shim at $shimPath"
+  $bundledPnpmCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:DSH_RUNTIME_DIR)) {
+    $bundledPnpmCandidates += (Join-Path $env:DSH_RUNTIME_DIR "dependencies/pnpm/bin/pnpm.mjs")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+    $bundledPnpmCandidates += (Join-Path $env:USERPROFILE ".dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs")
+  }
+  foreach ($bundledPnpm in $bundledPnpmCandidates) {
+    if (Test-Path -LiteralPath $bundledPnpm -PathType Leaf) {
+      $shimDir = Join-Path (Get-Location).Path "src-tauri/target/bin"
+      New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+      $shimPath = Join-Path $shimDir "pnpm.cmd"
+      Set-Content -Path $shimPath -Value "@`"node`" `"$bundledPnpm`" %*" -Encoding Ascii
+      $env:PATH = "$shimDir;$env:PATH"
+      Write-Host "  notice: created pnpm shim at $shimPath"
+      break
+    }
   }
 }
 
@@ -289,16 +325,33 @@ if ($SkipChecks) {
 Write-Host ""
 
 Write-Host "[5/5] Building Tauri release bundles..."
-# Ensure WebView2Loader.dll is present in target release directory for NSIS bundling on Windows
-if ($OnWindows) {
-  $targetReleaseDir = if (-not [string]::IsNullOrEmpty($Target)) { "src-tauri/target/$Target/release" } else { "src-tauri/target/release" }
+# Ensure WebView2Loader.dll is present in target release directory for NSIS bundling on Windows (GNU)
+if ($OnWindows -and -not $NoBundle -and ([string]::IsNullOrEmpty($Bundles) -or $Bundles -match "nsis")) {
+  $baseTargetDir = if (-not [string]::IsNullOrEmpty($env:CARGO_TARGET_DIR)) { $env:CARGO_TARGET_DIR } else { "src-tauri/target" }
+  $targetReleaseDir = if (-not [string]::IsNullOrEmpty($Target)) { Join-Path $baseTargetDir "$Target/release" } else { Join-Path $baseTargetDir "release" }
+  New-Item -ItemType Directory -Force -Path $targetReleaseDir | Out-Null
   $targetDll = Join-Path $targetReleaseDir "WebView2Loader.dll"
   if (-not (Test-Path -LiteralPath $targetDll -PathType Leaf)) {
-    $foundBuildDll = Get-ChildItem "$targetReleaseDir/build" -Recurse -Filter "WebView2Loader.dll" -ErrorAction SilentlyContinue |
-      Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
-    if ($foundBuildDll) {
-      Copy-Item -Force -LiteralPath $foundBuildDll.FullName -Destination $targetReleaseDir
-      Write-Host "  notice: pre-copied WebView2Loader.dll to $targetReleaseDir"
+    $refDll = "Release/Windows/bin/WebView2Loader.dll"
+    if (Test-Path -LiteralPath $refDll -PathType Leaf) {
+      Copy-Item -Force -LiteralPath $refDll -Destination $targetReleaseDir
+      Write-Host "  notice: pre-copied WebView2Loader.dll from $refDll to $targetReleaseDir"
+    } else {
+      if ($Target -like "*gnu*" -and -not (Test-Path -LiteralPath (Join-Path $targetReleaseDir "build") -PathType Container)) {
+        Push-Location -LiteralPath "src-tauri"
+        try {
+          cargo build --release --target $Target
+          if ($LASTEXITCODE -ne 0) { Fail "cargo build --release --target $Target failed." }
+        } finally {
+          Pop-Location
+        }
+      }
+      $foundBuildDll = Get-ChildItem (Join-Path $targetReleaseDir "build") -Recurse -Filter "WebView2Loader.dll" -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
+      if ($foundBuildDll) {
+        Copy-Item -Force -LiteralPath $foundBuildDll.FullName -Destination $targetReleaseDir
+        Write-Host "  notice: pre-copied WebView2Loader.dll to $targetReleaseDir"
+      }
     }
   }
 }
@@ -432,30 +485,26 @@ Write-Host ""
 # Sign and unblock release artifacts with Authenticode
 if ($OnWindows) {
   Write-Host "Signing and unblocking artifacts..."
-  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1
-  if (-not $cert) {
-    try {
-      $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'
-      $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
-      $rootStore.Open('ReadWrite')
-      $rootStore.Add($cert)
-      $rootStore.Close()
-      $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser')
-      $pubStore.Open('ReadWrite')
-      $pubStore.Add($cert)
-      $pubStore.Close()
-    } catch {}
-  }
-  if (-not $cert) {
-    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1
+  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' -or $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1
+  if (-not $cert -and $InstallSelfSignedCert) {
+    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'
+    $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
+    $rootStore.Open('ReadWrite')
+    $rootStore.Add($cert)
+    $rootStore.Close()
+    $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser')
+    $pubStore.Open('ReadWrite')
+    $pubStore.Add($cert)
+    $pubStore.Close()
+    Write-Host "  ok: generated and trusted self-signed certificate $($cert.Subject)"
+  } elseif (-not $cert) {
+    Write-Host "  notice: no existing code signing certificate in Cert:\CurrentUser\My; skipping signing (pass -InstallSelfSignedCert to generate one)"
   }
 
   if (Test-Path -LiteralPath $copiedBin) {
     if ($cert) {
       Set-AuthenticodeSignature -FilePath $copiedBin -Certificate $cert | Out-Null
       Write-Host "  ok: signed $copiedBin with certificate $($cert.Subject)"
-    } else {
-      Write-Host "  notice: code signing certificate not found in Cert:\CurrentUser\My"
     }
     Unblock-File -Path $copiedBin -ErrorAction SilentlyContinue
   }
@@ -465,8 +514,6 @@ if ($OnWindows) {
       if ($cert) {
         Set-AuthenticodeSignature -FilePath $instExe.FullName -Certificate $cert | Out-Null
         Write-Host "  ok: signed installer $($instExe.FullName) with certificate $($cert.Subject)"
-      } else {
-        Write-Host "  notice: code signing certificate not found in Cert:\CurrentUser\My"
       }
       Unblock-File -Path $instExe.FullName -ErrorAction SilentlyContinue
     }

@@ -10,7 +10,7 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
 ## 1. Single Responsibility Principle (SRP) & Modular Directory Architecture
 - **Rule**: Rust backend codebase is partitioned into distinct single-responsibility subpackages under `src-tauri/src/`:
   - `db/`: High-performance SQLite database connection pool (`pool.rs`) and repository modules (`task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`). Pure SQL queries, indexing, and transactional persistence.
-  - `config/`: Configuration parsing, project discovery (`discovery.rs`), I/O operations (`io.rs`), models (`models.rs`), scaffolding (`scaffold.rs`), and two-level tool policy enforcement (`tool_policy.rs`).
+  - `config/`: Configuration parsing, project discovery (`discovery.rs`), I/O operations (`io.rs`), models (`models.rs`), scaffolding (`scaffold.rs`), and Single Authoritative Layer tool policy enforcement (`tool_policy.rs`).
   - `domain/`: Pure domain layer containing Value Objects (`domain::ids`) and lifecycle state machines (`domain::state`). Free of external I/O or GUI concerns.
   - `agent/`: ReAct loop orchestration, context compaction (`compactor.rs`), token telemetry, sanitizers, and modular tool implementations (`tools/`).
 - **Monolithic File Size Ceiling (<= 500 lines)**:

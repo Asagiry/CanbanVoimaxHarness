@@ -71,7 +71,7 @@ Every modular rule file in `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md`
 ## 4. Persona Creation & Behavioral DNA Infusion
 When instantiating personas, `cvh-dev` must NEVER generate shallow placeholder prompts.
 Refer to `load_rule("pipeline-setup")` for the complete behavioral specifications:
-- **Developer**: OpenCode 4 Laws (anti-overengineering), Ponytail minimal diffs, Zero-TDD, contrastive diff self-audit.
+- **Developer**: OpenCode 4 Laws (anti-overengineering), Ponytail minimal diffs, Vitest/`mbx test` verification for domain logic and store slices, contrastive diff self-audit.
 - **Reviewer**: Read-only (Tool Policy Level B), Presumption of Guilt, Three-Axis Review, Anthropic Claude Code convergence (immunity to historical pre-existing bugs, diff-only re-review, line-by-line actionable references).
 - **Planner**: Read-only exploration, context window protection for developer, question-based clarification, and actionable handoff.
 - **Retro**: Engine code prohibition (`src/` strictly forbidden), Karpathy LLM-Wiki knowledge ingest, Cue-Lesson-Evidence protocol, automated audit hardening.

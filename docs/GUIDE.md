@@ -88,7 +88,7 @@
 > (таблица `dialog_items` с индексами и WAL-журналированием). Легаси-файлы `.cvh/dialogs/`
 > и `.cvh/tasks/<id>/dialog.json` ликвидированы в пользу атомарных ACID-транзакций.
 
-> **Скрипты переходов**: общие хуки лежат в `.cvh/hooks/` (`gatekeeper_sensor.bat`, `on_review_finish.bat` и др.).
+> **Скрипты переходов**: общие хуки лежат в `.cvh/hooks/` (`gatekeeper_sensor.bat`, `on_enter_ready.bat` и др.).
 > Если хук не настроен или файл отсутствует, бэкенд безопасно пропускает вызов (`if hook_path.exists()`).
 
 ### 2.2 Колонки досок (`boards.json`, SSOT) — **работает**
@@ -631,8 +631,8 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
    - Разработчик обязан синхронизировать `.cvh/rules/` и `/docs/` при любых изменениях архитектуры, API, таблиц SQLite WAL, Zustand-сторов или дизайн-токенов.
    - Ревьюер проверяет git diff и немедленно реджектит (`reject_task`), если код изменил архитектуру без актуализации правил.
 3. **Автоматический Merge & Push в main**:
-   - При выставлении вердикта `APPROVED` на этапе `review` срабатывает хук `.cvh/hooks/on_review_finish.bat` (и `.sh`).
-   - Хук автоматически выполняет `git merge --no-ff %CVH_BRANCH%` в ветку `main` и пушит в `origin/main`.
+   - При переходе одобренной задачи в терминальную колонку `ready` срабатывает хук `on_enter` — `.cvh/hooks/on_enter_ready.bat` (и `.sh`).
+   - Хук автоматически выполняет `git merge --no-ff %CVH_BRANCH%` в ветку `main`, пушит в `origin/main` и удаляет worktree.
 
 ### Типовые ошибки (все — из кода выше)
 

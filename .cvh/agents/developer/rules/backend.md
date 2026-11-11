@@ -33,7 +33,7 @@ The legacy monolithic `db.rs` is strictly eradicated. All database operations re
 ### 2.2 Configuration & Project Harness Layer (`src-tauri/src/config/`)
 The legacy monolithic `config.rs` is partitioned into modular submodules:
 - `config/models.rs`: LLM model registry, active model resolution, board definitions, and pipeline routing structures.
-- `config/tool_policy.rs`: Two-level tool policy matrix enforcement (Global switches AND Stage overrides), schema pruning, and persona frontmatter synchronization.
+- `config/tool_policy.rs`: Single Authoritative Layer tool policy matrix enforcement (`stageOverrides`), schema pruning, and persona frontmatter synchronization.
 - `config/discovery.rs`: Multi-tier workspace root discovery (local directory, parent traversal, appdata cache).
 - `config/scaffold.rs`: Fresh project scaffolding, default 3-column agile boards, and auto-gitignore enforcement (`.cvh/llm.json`, `.cvh/worktrees/`).
 - `config/io.rs`: Safe, atomic disk read/write operations for harness JSON settings.

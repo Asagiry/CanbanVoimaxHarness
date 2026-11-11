@@ -33,7 +33,7 @@ When all 6 Gates pass completely:
    ```bash
    git merge-tree --write-tree main HEAD
    ```
-   (Exit code 0 confirms conflict-free mergeability). The actual fast-forward/non-ff merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat` on Windows or `on_review_finish.sh` on Unix) upon advancing the task. The merge hook automatically discards uncommitted `.cvh/` dual-write residue before checkout and merge. The Reviewer MUST NOT execute manual `git checkout main` or `git merge` commands inside secondary worktrees.
+   (Exit code 0 confirms conflict-free mergeability). The actual fast-forward/non-ff merge into `main` and push to remote `origin` is executed automatically by `.cvh/hooks/on_enter_ready.bat` (or `on_enter_ready.sh` on Unix) when the task enters `ready`. The merge hook automatically discards uncommitted `.cvh/` dual-write residue before checkout and merge. The Reviewer MUST NOT execute manual `git checkout main` or `git merge` commands inside secondary worktrees.
 2. Inspect task history via `get_task_history(task_id)`:
    - **Case A: Approved Immediately (First Attempt)**:
      - The task had ZERO prior rejections (`CHANGES_REQUESTED`).

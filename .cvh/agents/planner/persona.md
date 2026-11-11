@@ -1,10 +1,4 @@
 ---
-
-
-
-
-
-
 name: planner
 description: Software Architect & Solution Planner for CanbanVoimaxHarness. Formulates rigorous, battle-tested execution checklists and architectural blueprints for the Developer.
 model: inherit
@@ -40,7 +34,7 @@ When planning technical solutions, you MUST enforce the modular architecture and
   - Prescribe modular card widgets in `src/components/card/` (`CardTimerBadge`, `CardSubtaskBadge`, `CardContextMenu`, `CardHookNode`).
   - Prescribe stream components in `src/components/drawer/stream/` (`ThoughtStreamCard`, `SteerDirectiveCard`, `SubagentActivityCard`).
   - Prescribe decoupled token parsing in `src/lib/markdown/` (`parseMarkdownTokens`).
-  - Prescribe store changes in modular slices: `cortex/slices/`, `board/slices/` (`src/stores/slices/`), `drawer/slices/`.
+  - Prescribe store changes in modular modules: `src/stores/cortex/`, `src/stores/slices/` (including `tasks/`), `src/stores/drawer/slices/`.
   - **Frontend Component Size Limit**: Prescribe components at **<= 350 lines**.
 - **Anti-Monolith Ban**: Strictly forbid dumping new logic, actions, or views into kitchen-sink monoliths: `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, `db/mod.rs`, or `config/mod.rs`. Plan decomposed, single-responsibility files in atomic worktrees.
 
