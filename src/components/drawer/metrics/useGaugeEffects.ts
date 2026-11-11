@@ -4,6 +4,7 @@ import { TaskTelemetrySummary } from '../../../stores/drawer/types';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
 import { listenToEvent } from '../../../services/tauriEventGateway';
+import { t } from '../../../stores/languageStore';
 import { UseContextGaugeMetricsOptions } from './types';
 
 export function usePersonaContextLimit(
@@ -118,7 +119,7 @@ export function useCompactionActions(params: {
   const savingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSavingsNotice = useCallback((savedCount: number) => {
-    setSavingsBadge(`Оптимизировано: ~${savedCount.toLocaleString('ru-RU')} токенов`);
+    setSavingsBadge(t('gauge.compactedTokens', { count: savedCount.toLocaleString('ru-RU') }));
     if (savingsTimerRef.current) clearTimeout(savingsTimerRef.current);
     savingsTimerRef.current = setTimeout(() => {
       setSavingsBadge(null);
@@ -133,20 +134,20 @@ export function useCompactionActions(params: {
       try {
         if (isDisposed) return;
         const u = await listenToEvent('agent:compacted', (payload) => {
-          if (payload) {
-            const after = payload.tokens_after ?? payload.tokensAfter;
-            const saved =
-              payload.saved_tokens ?? payload.estimatedSavedTokens ?? payload.savedTokens ?? 0;
-            if (typeof after === 'number' && Number.isFinite(after)) {
-              setTaskTokens?.(taskId, after);
-            }
-            if (saved > 0) triggerSavingsNotice(saved);
+          if (!payload) return;
+          if (payload.taskId && payload.taskId !== taskId) return;
+          const after = payload.tokens_after ?? payload.tokensAfter;
+          const saved =
+            payload.saved_tokens ?? payload.estimatedSavedTokens ?? payload.savedTokens ?? 0;
+          if (typeof after === 'number' && Number.isFinite(after)) {
+            setTaskTokens?.(taskId, after);
           }
+          if (saved > 0) triggerSavingsNotice(saved);
         });
         if (isDisposed) u();
         else unlisten = u;
-      } catch {
-        // Web fallback
+      } catch (err) {
+        console.debug('[useGaugeEffects] agent:compacted listener fallback:', err);
       }
     };
     setupListener();
@@ -168,19 +169,21 @@ export function useCompactionActions(params: {
       try {
         const res = await onCompact();
         if (res) saved = Math.max(saved, res.savedTokens);
-      } catch {
-        /* Fallback */
+      } catch (err) {
+        console.warn('[useGaugeEffects] onCompact failed:', err);
       }
     } else {
       try {
         const res = await useDrawerStore.getState().compactTaskContext(taskId);
         if (res) saved = Math.max(saved, res.savedTokens);
-      } catch {
-        /* Handled */
+      } catch (err) {
+        console.warn('[useGaugeEffects] compactTaskContext failed:', err);
       }
     }
     setIsCompacting(false);
-    triggerSavingsNotice(saved > 0 ? saved : 2450);
+    if (saved > 0) {
+      triggerSavingsNotice(saved);
+    }
   };
 
   return { isCompacting, savingsBadge, handleCompactClick };

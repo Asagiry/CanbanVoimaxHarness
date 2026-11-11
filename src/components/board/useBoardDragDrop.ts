@@ -198,15 +198,16 @@ export function useBoardDragDrop({
         }
       }
 
+      const rollbackTasks = useBoardStore.getState().tasks;
       setTasks(nextTasks);
 
       try {
         await reorderTask(draggableId, destColId, destIndex);
       } catch (err: unknown) {
         console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
-        setTasks(tasks);
+        setTasks(rollbackTasks);
         const msg = err instanceof Error ? err.message : String(err);
-        alert(t('board.errMoveTask', { msg }));
+        setColumnsError(t('board.errMoveTask', { msg }));
       }
       return;
     }
@@ -267,15 +268,16 @@ export function useBoardDragDrop({
       }
     }
 
+    const rollbackTasks = useBoardStore.getState().tasks;
     setTasks(nextTasks);
 
     try {
       await reorderTask(draggableId, destColId, destIndex);
     } catch (err: unknown) {
       console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
-      setTasks(tasks);
+      setTasks(rollbackTasks);
       const msg = err instanceof Error ? err.message : String(err);
-      alert(t('board.errMoveTask', { msg }));
+      setColumnsError(t('board.errMoveTask', { msg }));
     }
   };
 

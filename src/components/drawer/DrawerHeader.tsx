@@ -7,14 +7,21 @@ import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { formatSubagentDisplayTitle, formatSubagentRoleDisplay, getSubagentOrderMap } from './SubagentsSidebar';
-import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
+import { toggleMaximizeWindow } from '../layout/WindowControls';
 import { formatTimerMMSS } from '../card/CardTimerBadge';
 import { resolveStageTask, resolveStageDuration, resolveStageStatus } from './stageStepperHelpers';
 import {
-  ArrowLeft, ChevronRight, Check, Wrench, Settings,
-  FolderGit2, GitBranch, Sun, Moon, Layers, Zap,
+  ArrowLeft,
+  ChevronRight,
+  Check,
+  FolderGit2,
+  GitBranch,
+  Layers,
+  Zap,
 } from 'lucide-react';
+
 import { useThemeStore } from '../../stores/themeStore';
+
 import { useTranslation, type TranslationKey } from '../../stores/languageStore';
 
 export function getStageButtonClass(
