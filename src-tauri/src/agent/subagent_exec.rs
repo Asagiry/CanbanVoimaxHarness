@@ -78,17 +78,9 @@ pub fn run_inprocess_subagent(
         let mut stream_retries = 0;
         let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
         let sub_context_window = subagent_setting.context_window.unwrap_or(128_000) as usize;
-        const SUBAGENT_MAX_TURNS: usize = 25;
 
         loop {
             sub_turn += 1;
-            if sub_turn > SUBAGENT_MAX_TURNS {
-                sub_error = Some(format!(
-                    "Subagent [{}] reached max_turns limit ({})",
-                    subagent_id, SUBAGENT_MAX_TURNS
-                ));
-                break;
-            }
             if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
                 let mut info = session.retry_info.lock().await;
                 info.steps = sub_turn;

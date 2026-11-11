@@ -88,10 +88,21 @@ export function useUnifiedActivities(
   const turns = useMemo(() => {
     if (!task) return 0;
     const feed = activeFeed || [];
-    const feedCount = (feed ?? []).filter((a) => a?.type === 'tool' || a?.type === 'thought' || a?.type === 'output').length;
-    const toolsCount = activeTaskTools?.length || 0;
+    const feedThoughts = feed.filter((a) => a?.type === 'thought').length;
+    const feedToolBatches = feed.filter(
+      (a) => a?.type === 'tool' && (!a.tool?.batch || a.tool.batch.index === 1)
+    ).length;
+    const feedOutputs = feed.filter((a) => a?.type === 'output').length;
+    const feedCount = Math.max(feedThoughts, feedToolBatches + feedOutputs, 0);
+
+    const toolsBatches = (activeTaskTools || []).filter(
+      (t) => !t.batch || t.batch.index === 1
+    ).length;
     const outputsCount = activeStream?.outputs?.filter((o) => o?.type === 'output').length || 0;
-    return Math.max(feedCount, toolsCount + outputsCount, 0);
+    const streamThoughts = activeStream?.thoughts?.length || 0;
+    const streamCount = Math.max(streamThoughts, toolsBatches + outputsCount, 0);
+
+    return Math.max(feedCount, streamCount, 0);
   }, [task, activeFeed, activeTaskTools, activeStream]);
 
   return {

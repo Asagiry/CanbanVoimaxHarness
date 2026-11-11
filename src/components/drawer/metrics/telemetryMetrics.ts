@@ -7,19 +7,25 @@ import { TokenDisplaySummary } from './types';
 export function computeTurnsAndSteps(params: {
   taskId: string;
   turns?: number;
+  turnCount?: number;
   tools?: ToolExecution[];
   thoughts?: LiveStreamEntry[];
   outputs?: LiveStreamEntry[];
 }): { effectiveTurns: number; stepsCount: number } {
-  const { taskId, turns, tools, thoughts, outputs } = params;
+  const { taskId, turns, turnCount, tools, thoughts, outputs } = params;
+  const toolBatches = (tools || []).filter((t) => !t.batch || t.batch.index === 1).length;
+  const thoughtsCount = (thoughts || []).length;
+  const outputsCount = (outputs || []).filter((o) => o?.type === 'output').length;
   const calculatedTurns = Math.max(
-    (tools?.length || 0) + (outputs?.length || 0),
-    thoughts?.length || 0,
+    thoughtsCount,
+    toolBatches + outputsCount,
+    turnCount || 0,
     0
   );
   const isSubagentTask =
     taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
-  const effectiveTurns = turns !== undefined && !isSubagentTask ? turns : calculatedTurns;
+  const effectiveTurns =
+    turns !== undefined && !isSubagentTask ? Math.max(turns, turnCount || 0) : calculatedTurns;
   const stepsCount = tools?.length || 0;
   return { effectiveTurns, stepsCount };
 }

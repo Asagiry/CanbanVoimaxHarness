@@ -13,7 +13,7 @@ import { SessionStatsPopover } from '../SessionStatsPopover';
 import { TokenUsagePopover } from '../TokenUsagePopover';
 import ContextGauge from '../ContextGauge';
 import { computeTokenBreakdown } from '../metrics/tokenMetrics';
-import { computeTokenDisplaySummary } from '../metrics/telemetryMetrics';
+import { computeTokenDisplaySummary, computeTurnsAndSteps } from '../metrics/telemetryMetrics';
 import { useDrawerStore } from '../../../stores/drawerStore';
 
 // Mock Tauri invoke and event APIs
@@ -296,5 +296,45 @@ describe('ContextGauge Component UI Invariants', () => {
       turnCount: 29,
     });
     expect(useDrawerStore.getState().streamedTurnTokens['CVH-073']).toBe(0);
+  });
+
+  it('correctly calculates turns and steps avoiding double-counting parallel tool calls', () => {
+    // 25 turns: each turn generates 1 thought, and 24 turns execute 2 tools in parallel (batch of 2), 1 turn executes 1 tool
+    const tools = Array.from({ length: 49 }, (_, i) => ({
+      id: `tool-${i}`,
+      toolName: 'read_file',
+      timestamp: '2026-11-11T12:00:00Z',
+      durationMs: 100,
+      status: 'success' as const,
+      params: {},
+      batch: i < 48 ? { index: (i % 2) + 1, total: 2 } : { index: 1, total: 1 },
+    }));
+
+    const thoughts = Array.from({ length: 25 }, (_, i) => ({
+      id: `thought-${i}`,
+      timestamp: '2026-11-11T12:00:00Z',
+      type: 'thought' as const,
+      content: 'Thinking...',
+    }));
+
+    const res = computeTurnsAndSteps({
+      taskId: 'CVH-074',
+      tools,
+      thoughts,
+      outputs: [],
+    });
+
+    expect(res.stepsCount).toBe(49);
+    expect(res.effectiveTurns).toBe(25);
+
+    // When turnCount from DB telemetry summary is provided, it is also respected
+    const resWithSummary = computeTurnsAndSteps({
+      taskId: 'CVH-074',
+      turnCount: 25,
+      tools,
+      thoughts,
+      outputs: [],
+    });
+    expect(resWithSummary.effectiveTurns).toBe(25);
   });
 });

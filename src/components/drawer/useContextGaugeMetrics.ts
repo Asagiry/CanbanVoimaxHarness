@@ -112,8 +112,16 @@ export function useContextGaugeMetrics({
   );
 
   const { effectiveTurns, stepsCount } = useMemo(
-    () => computeTurnsAndSteps({ taskId, turns, tools, thoughts, outputs }),
-    [taskId, turns, tools, thoughts, outputs]
+    () =>
+      computeTurnsAndSteps({
+        taskId,
+        turns,
+        turnCount: telemetrySummary?.turnCount,
+        tools,
+        thoughts,
+        outputs,
+      }),
+    [taskId, turns, telemetrySummary?.turnCount, tools, thoughts, outputs]
   );
 
   const { tpsValue, llmTimeSec, ttftMs, safeCacheHitRate } = computeSpeedAndTiming({

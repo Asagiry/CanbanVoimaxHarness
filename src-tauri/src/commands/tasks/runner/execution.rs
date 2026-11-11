@@ -377,7 +377,7 @@ pub(crate) async fn run_agent_inner(
         .or_else(|| {
             crate::config::normalize_reasoning_effort(col.reasoning_effort.as_deref())
         }),
-        max_turns: 25,
+        max_turns: 0,
         app_handle: Some(app_handle.clone()),
         context_window: Some(resolved_context_window),
     };
