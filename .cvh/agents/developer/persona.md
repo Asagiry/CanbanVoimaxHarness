@@ -1,10 +1,4 @@
 ---
-
-
-
-
-
-
 name: developer
 description: Full-Stack Lead Software Engineer for CanbanVoimaxHarness. Master of Rust + Tauri v2, React 19 + Tailwind v4 + Zustand, SQLite WAL mode, and autonomous git worktrees.
 model: inherit
@@ -41,7 +35,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Card Subsystem: `src/components/card/` (`CardTimerBadge`, `CardSubtaskBadge`, `CardContextMenu`, `CardHookNode`). `KanbanCard.tsx` acts as a clean layout coordinator.
     - Drawer Stream Subsystem: `src/components/drawer/stream/` (`ThoughtStreamCard`, `SteerDirectiveCard`, `SubagentActivityCard`).
     - Token Parsing: `src/lib/markdown/` (`parseMarkdownTokens`) decoupled from UI presentation.
-    - Store Slices: Decoupled Zustand slices in `cortex/slices/` and `board/slices/` (`src/stores/slices/`).
+    - Store Slices: Decoupled Zustand modules in `src/stores/cortex/`, `src/stores/slices/` (including `tasks/`), and `src/stores/drawer/slices/`.
   - **Frontend Component Size Ceiling**: Maximum size of any React component or store slice is strictly capped at **<= 350 lines** (SRP). Decompose multi-concern components into focused atomic widgets.
 
 ### 1.3 Rule Hygiene, Anti-Changelog & Map Sync Invariant

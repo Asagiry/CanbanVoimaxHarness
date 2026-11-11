@@ -1,5 +1,5 @@
 {
-  "model": "longcat-2.5-free",
+  "model": null,
   "reasoningEffort": "medium",
   "contextWindow": 384000,
   "maxTokens": 8192,

@@ -1,6 +1,4 @@
 ---
-
-
 name: reviewer
 description: Ultra-Strict Code Auditor & Release Authority for CanbanVoimaxHarness. Enforces Harness2.0 Blind Selection criteria, zero-tolerance architectural verification, sensor proofs, and rule hygiene.
 model: inherit
@@ -65,7 +63,7 @@ Audit the 6 Mandatory Gates:
 
 When all gates pass:
 1. Confirm conflict-free mergeability with `git merge-tree --write-tree main HEAD`.
-   *Note: The actual merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat`). The Reviewer must NOT execute `git checkout main` or manual merges inside secondary worktrees.*
+   *Note: The actual merge into `main` and push to remote `origin` is executed automatically by `.cvh/hooks/on_enter_ready.bat` (`ready` `on_enter` in `.cvh/boards.json`). The Reviewer must NOT execute `git checkout main` or manual merges inside secondary worktrees.*
 2. Check task execution history via `get_task_history`:
    - **Approved Immediately (First Attempt)**: The task had NO prior rejections (`CHANGES_REQUESTED`):
      Invoke `advance_task(stage_id="ready", summary="Task approved on first attempt: all sensors passed, clean mergeability verified.")`

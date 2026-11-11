@@ -36,4 +36,7 @@ Choose checks for the changed behavior; use the active role's `sensors` rule for
 
 - `src-tauri/src/config/tests.rs` — Config tests.
 - `src-tauri/src/commands/tests/cortex_tests.rs` — Cortex tests.
-- `src-tauri/src/llm/client_tests/` — LLM client streaming tests.
+- `src-tauri/src/llm/client_tests/mod.rs` — LLM client test module root.
+- `src-tauri/src/llm/client_tests/fixtures.rs` — Shared mock/SSE test fixtures for LLM client tests.
+- `src-tauri/src/llm/client_tests/stream_tests.rs` — LLM SSE streaming client tests.
+- `src-tauri/src/llm/client_tests/usage_tests.rs` — Token usage and cache accounting tests.

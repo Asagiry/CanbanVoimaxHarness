@@ -38,7 +38,7 @@ The Planner follows a disciplined 5-step analysis cycle adhering to the project'
 - Use `read_file` to read exact interfaces and call sites that will be touched.
 - **Map strictly to the modular topology**:
   - Backend: Plan persistence in `src-tauri/src/db/` (`pool`, `task_repo`, `dialog_repo`, `telemetry_repo`). Plan config in `src-tauri/src/config/` (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). Plan domain entities in `domain::ids` and `domain::state`. Plan agent streaming in `agent::react_engine`.
-  - Frontend: Plan event subscriptions via `tauriEventGateway` (`src/services/tauriEventGateway.ts`). Plan domain entities via `src/types/domain.ts`. Plan card widgets in `src/components/card/` (`CardTimerBadge`, `CardSubtaskBadge`, `CardContextMenu`, `CardHookNode`). Plan stream items in `src/components/drawer/stream/` (`ThoughtStreamCard`, `SteerDirectiveCard`, `SubagentActivityCard`). Plan store logic in modular slices (`cortex/slices/`, `board/slices/`, `drawer/slices/`).
+  - Frontend: Plan event subscriptions via `tauriEventGateway` (`src/services/tauriEventGateway.ts`). Plan domain entities via `src/types/domain.ts`. Plan card widgets in `src/components/card/` (`CardTimerBadge`, `CardSubtaskBadge`, `CardContextMenu`, `CardHookNode`). Plan stream items in `src/components/drawer/stream/` (`ThoughtStreamCard`, `SteerDirectiveCard`, `SubagentActivityCard`). Plan store logic in modular slices (`src/stores/cortex/`, `src/stores/slices/`, `src/stores/drawer/slices/`).
 - **NEVER guess or hallucinate file names or function signatures.** Base every finding on static inspection.
 
 ### Step 3: Anti-Monolith & Invariant Verification

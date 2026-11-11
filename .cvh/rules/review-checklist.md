@@ -83,7 +83,7 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 ### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
 - **Branch Diff Inspection Mandate**: The Reviewer MUST inspect the branch diff using `git diff main...HEAD` (or `git log -p main..HEAD`). A bare `git diff` only inspects uncommitted working tree changes, which produces a deceptive empty diff when developer changes are committed.
 - **Clean Mergeability Check (reviewer verify)**: Independently verify the developer's pre-flight evidence (`git merge-tree --write-tree main HEAD` exit 0, clean `git status --porcelain`) against the committed HEAD; reject with `CHANGES_REQUESTED` if conflicts exist or evidence is stale. Developer pre-flight procedure is owned by `sensors.md` §2.5 — this gate only verifies, it does not restate the procedure.
-- **Merge & Origin Integration**: The actual merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat`) upon advancing the task. The Reviewer executes stage routing via `advance_task(stage_id="ready" | "retro")` (see `verdict-routing.md`).
+- **Merge & Origin Integration**: The actual merge into `main` and push to remote `origin` is executed automatically by `.cvh/hooks/on_enter_ready.bat` (`ready` `on_enter` in `.cvh/boards.json`). The Reviewer executes stage routing via `advance_task(stage_id="ready" | "retro")` (see `verdict-routing.md`).
 
 ---
 

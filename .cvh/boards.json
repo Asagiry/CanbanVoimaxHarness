@@ -52,8 +52,6 @@
             "read_file",
             "glob",
             "grep",
-            "web_search",
-            "web_fetch",
             "todo_write",
             "advance_task",
             "load_rule",
@@ -94,9 +92,7 @@
             "subagent_list",
             "advance_task",
             "list_tasks",
-            "get_task_history",
-            "web_search",
-            "web_fetch"
+            "get_task_history"
           ],
           "hooks": {},
           "autoRun": true,
@@ -126,9 +122,7 @@
             "reject_task",
             "question",
             "list_tasks",
-            "get_task_history",
-            "web_search",
-            "web_fetch"
+            "get_task_history"
           ],
           "hooks": {
             "on_enter": {
@@ -162,9 +156,7 @@
             "todo_write",
             "advance_task",
             "list_tasks",
-            "get_task_history",
-            "web_search",
-            "web_fetch"
+            "get_task_history"
           ],
           "hooks": {},
           "autoRun": true,

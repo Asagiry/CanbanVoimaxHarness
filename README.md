@@ -65,7 +65,7 @@ CanbanVoimaxHarness decouples desktop operating system primitives, high-throughp
  |                                  RUST 2021 TOKIO ASYNC CORE                                      |
  |                                                                                                  |
  |  +-------------------------------------+      +-----------------------------------------------+  |
- |  |      TOKIO ASYNC REACT LOOP         |      |          TWO-TIER TOOL POLICY MATRIX          |  |
+ |  |      TOKIO ASYNC REACT LOOP         |      |        SINGLE-LAYER TOOL POLICY MATRIX        |  |
  |  |  * Non-blocking SSE Event Streaming |      |  * Single Authoritative Layer                 |  |
  |  |  * Subagent Delegation Tree         |      |  * Zero-Trust Request Schema Stripping        |  |
  |  |  * Deterministic Prefix Caching     |      |    (-2,400+ prompt tokens per step)           |  |
@@ -132,7 +132,7 @@ Engineered to strict Clean Architecture and Single-Responsibility principles (Un
 - **R2D2 SQLite WAL Connection Pooling**: Multi-threaded connection pooling with WAL mode and specialized repository pattern (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`), eliminating database lock contention.
 - **Decoupled ReActEngine<Driver>**: Generic agent execution engine (`react_engine.rs`) parameterized by `AgentSessionDriver`, sharing SSE streaming and telemetry logic between root tasks and child subagents with zero duplication.
 - **Type-Safe Tauri Event Gateway**: All IPC event communication routes through `tauriEventGateway.ts`, eliminating unverified `listen<any>` calls.
-- **Modular Frontend Slices**: Monolithic stores and components decomposed into single-responsibility slices (`stores/board/`, `stores/drawer/`, `stores/cortex/`, `KanbanCard.tsx` reduced to ~256 lines).
+- **Modular Frontend Slices**: Monolithic stores and components decomposed into single-responsibility slices (`stores/board/`, `stores/drawer/`, `stores/cortex/`, `KanbanCard.tsx` reduced to 266 lines).
 
 ---
 

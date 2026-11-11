@@ -105,23 +105,6 @@ Every time you are asked to make a change follow:
 * The test calls the code the way its user does and checks the result that user would see.
 * If the test would still pass when every function returned nothing, throw it out.
 
-## Crapper
-
-* Use the crapper tool
-* Reduce each function under CRAP 10 by splitting it, by testing it, or both.
-* Consider whether case statements are worth reducing.
-
-## Dryer
-
-* Use the dryer tool to eliminate duplication that rank 0.8 or above.
-
-## Mutator
-
-* Use the mutator tool
-* Cover the uncovered.
-* Kill the survivors.
-* Delete dead code.
-
 ## Refactoring
 
 * Pin what the code does.

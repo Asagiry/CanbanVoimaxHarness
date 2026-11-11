@@ -9,7 +9,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 
 ## 1. Uncle Bob Clean Code & Architectural Invariants
 1. **Eliminate Primitive Obsession**: Never pass raw primitive strings/numbers through core domain boundaries. Use Domain Value Objects (`domain::ids::TaskId`, `StageId`, `BoardId`) with boundary normalization and validation.
-2. **Make Illegal States Unrepresentable**: Model lifecycles using Algebraic Data Types (`domain::state::TaskState`: `Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `Done { verdict }`). Eliminate conflicting booleans and optional ID pairs.
+2. **Make Illegal States Unrepresentable**: Model lifecycles using Algebraic Data Types (`domain::state::TaskState`: `Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `WaitingSubagent`, `Done { verdict }`). Eliminate conflicting booleans and optional ID pairs.
 3. **Automated Unit Testing & Anti-Mock Policy**: Author deterministic unit tests in Vitest (`pnpm test`) for pure utilities, text parsers, diff logic, and Zustand store slices. Author `cargo test` suites for Rust domain logic. Never substitute live runtime sensor verification with synthetic mocks or purely simulated tests.
 4. **Single Responsibility & Size Limits**: React components MUST NOT exceed 350 lines (decompose into subcomponents, extracted custom hooks, or utility helpers). Backend Rust modules MUST NOT exceed 500 lines (strictly follow modular SRP packages `db/`, `config/`, `domain/`, `agent/`).
 5. **Frontend Gateway Invariant**: Never call `listen<any>` directly in components or stores. All Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`.

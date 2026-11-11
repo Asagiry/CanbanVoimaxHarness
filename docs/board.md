@@ -35,10 +35,6 @@
     "on_enter": {
       "script": ".cvh/hooks/gatekeeper_sensor.bat",
       "description": "Запуск gatekeeper-сенсоров: проверка git mergeability, cargo check, Vitest, tsc и Oxlint"
-    },
-    "on_leave": {
-      "script": ".cvh/hooks/on_review_finish.bat",
-      "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
     }
   },
   "autoRun": true,
