@@ -1,5 +1,5 @@
 {
-  "model": null,
+  "model": "deepseek-v4.1-flash",
   "reasoningEffort": "medium",
   "contextWindow": 384000,
   "maxTokens": 8192,

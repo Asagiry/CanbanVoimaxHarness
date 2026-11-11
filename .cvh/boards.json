@@ -17,13 +17,6 @@
           "reasoningEffort": null,
           "temperature": null,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "read_file",
-            "glob",
-            "grep",
-            "web_search",
-            "web_fetch"
-          ],
           "hooks": {
             "on_leave": {
               "script": ".cvh/hooks/create_worktree.bat",
@@ -46,19 +39,6 @@
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "execute_command",
-            "create_task",
-            "read_file",
-            "glob",
-            "grep",
-            "todo_write",
-            "advance_task",
-            "load_rule",
-            "list_tasks",
-            "get_task_history",
-            "question"
-          ],
           "hooks": {},
           "autoRun": true,
           "terminal": null,
@@ -76,24 +56,6 @@
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "execute_command",
-            "read_file",
-            "edit_file",
-            "write_file",
-            "glob",
-            "grep",
-            "load_rule",
-            "todo_write",
-            "question",
-            "subagent",
-            "subagent_bg",
-            "collect_subagent",
-            "subagent_list",
-            "advance_task",
-            "list_tasks",
-            "get_task_history"
-          ],
           "hooks": {},
           "autoRun": true,
           "terminal": null,
@@ -111,19 +73,6 @@
           "reasoningEffort": null,
           "temperature": 0.1,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "read_file",
-            "glob",
-            "grep",
-            "execute_command",
-            "load_rule",
-            "todo_write",
-            "advance_task",
-            "reject_task",
-            "question",
-            "list_tasks",
-            "get_task_history"
-          ],
           "hooks": {
             "on_enter": {
               "script": ".cvh/hooks/gatekeeper_sensor.bat",
@@ -146,18 +95,6 @@
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "read_file",
-            "edit_file",
-            "write_file",
-            "glob",
-            "grep",
-            "load_rule",
-            "todo_write",
-            "advance_task",
-            "list_tasks",
-            "get_task_history"
-          ],
           "hooks": {},
           "autoRun": true,
           "terminal": null,
@@ -175,11 +112,6 @@
           "reasoningEffort": null,
           "temperature": null,
           "gatekeeperSensor": null,
-          "allowedTools": [
-            "read_file",
-            "glob",
-            "grep"
-          ],
           "hooks": {
             "on_enter": {
               "script": ".cvh/hooks/on_enter_ready.bat",
@@ -208,7 +140,6 @@
           "reasoningEffort": null,
           "temperature": null,
           "gatekeeperSensor": null,
-          "allowedTools": null,
           "hooks": {},
           "autoRun": null,
           "terminal": null,
@@ -226,7 +157,6 @@
           "reasoningEffort": null,
           "temperature": 0.2,
           "gatekeeperSensor": null,
-          "allowedTools": null,
           "hooks": {},
           "autoRun": null,
           "terminal": null,
@@ -244,7 +174,6 @@
           "reasoningEffort": null,
           "temperature": null,
           "gatekeeperSensor": null,
-          "allowedTools": null,
           "hooks": {},
           "autoRun": null,
           "terminal": true,
