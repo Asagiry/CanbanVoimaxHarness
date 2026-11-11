@@ -15,7 +15,7 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 ---
 
 ## 2. Component File Size Ceiling (<= 350 lines)
-- **Rule**: React components must NOT exceed 350 lines of code. Keep components atomic, focused, and maintainable (gold standard: `KanbanCard.tsx` at 266 lines).
+- **Rule**: React components must NOT exceed 350 lines of code. Keep components atomic, focused, and maintainable (gold standard: `KanbanCard.tsx` at ~260 lines).
 - **Audit**: Check line counts of all new or modified `.tsx` files in `src/components/`:
   - Monolithic components exceeding 350 lines must be decomposed into dedicated subcomponents, extracted custom hooks (`use...`), or pure helper modules.
   - *Immunity for Pre-Existing Files*: Following the CVH-069 decomposition where all 12 historical frontend monoliths were decomposed into modular subcomponents and slices, any component touched or introduced in or after CVH-069 must strictly adhere to the <=350-line ceiling (no legacy debt immunity for touched files; immunity applies solely to untouched legacy files originating before the task's branch point).
