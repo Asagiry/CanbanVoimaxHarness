@@ -47,43 +47,20 @@ pub async fn execute_advance_task(
         .map(|s| s.trim())
         .filter(|s| !s.is_empty());
 
-    let mut prev_verdict: Option<(bool, Option<String>)> = None;
-    if let Some(v) = verdict {
-        let mut tasks = crate::commands::tasks::load_tasks_from_disk(repo_root).await;
-        if let Some(t) = tasks.iter_mut().find(|t| crate::commands::tasks::task_id_matches(&t.id, task_id)) {
-            prev_verdict = Some((true, t.verdict.clone()));
-            t.verdict = Some(v.to_string());
-            let _ = crate::db::db_upsert_task(repo_root, t);
-            let _ = crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks).await;
-        }
-    }
-
     let unfinished_before = crate::db::db_get_todos(repo_root, task_id)
         .map(|t| t.len())
         .unwrap_or(0);
 
-    let result = match crate::commands::internal_advance_task_to_stage(
+    let result = crate::commands::internal_advance_task_with_verdict(
         repo_root,
         task_id,
         target_stage,
+        verdict,
         summary,
         ctx.app_handle.as_ref(),
     )
     .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            if let Some((true, old_verdict)) = prev_verdict {
-                let mut tasks = crate::commands::tasks::load_tasks_from_disk(repo_root).await;
-                if let Some(t) = tasks.iter_mut().find(|t| crate::commands::tasks::task_id_matches(&t.id, task_id)) {
-                    t.verdict = old_verdict;
-                    let _ = crate::db::db_upsert_task(repo_root, t);
-                    let _ = crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks).await;
-                }
-            }
-            return Err(anyhow::anyhow!("{}", e));
-        }
-    };
+    .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if unfinished_before > 0 {
         Ok(format!(

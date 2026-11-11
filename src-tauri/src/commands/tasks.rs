@@ -29,7 +29,8 @@ pub use runner::{
 pub use storage::*;
 pub use transitions::{
     auto_complete_task_todos, internal_advance_task, internal_advance_task_to_stage,
-    internal_move_task_stage, propagate_parent_subtask_advance, trigger_column_on_enter_script,
+    internal_advance_task_with_verdict, internal_move_task_stage, propagate_parent_subtask_advance,
+    trigger_column_on_enter_script,
 };
 
 #[tauri::command]
