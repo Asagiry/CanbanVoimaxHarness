@@ -223,6 +223,8 @@ describe('projectStore - Global Rules Sync on Project Switching', () => {
     expect(useProjectStore.getState().hasActiveProject).toBe(false);
     expect(useProjectStore.getState().activeProject.rootPath).toBe('');
     expect(useBoardStore.getState().tasks).toEqual([]);
+    expect(useBoardStore.getState().stages).toEqual([]);
+    expect(useBoardStore.getState().columns).toEqual([]);
     expect(useDrawerStore.getState().isOpen).toBe(false);
     expect(useDrawerStore.getState().activeTaskId).toBeNull();
   });

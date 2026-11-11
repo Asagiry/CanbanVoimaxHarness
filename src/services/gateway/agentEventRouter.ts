@@ -1,5 +1,7 @@
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useAgentSessionStore } from '../../stores/agentSessionStore';
+import { showQuestionNotification } from '../notificationService';
 import type { AgentEventMap, QuestionOptionItem } from './types';
 import type { TextBufferManager } from './textBuffer';
 import {
@@ -284,6 +286,3 @@ export async function registerAgentEventListeners(
     }
   });
 }
-
-import { useAgentSessionStore } from '../../stores/agentSessionStore';
-import { showQuestionNotification } from '../notificationService';

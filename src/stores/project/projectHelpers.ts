@@ -100,6 +100,7 @@ export function resetWorkspaceStoresOnProjectChange(keepLoadingLock: boolean): v
   }
   useBoardStore.setState({
     tasks: [],
+    stages: [],
     columns: [],
     boards: [],
     isLoadingTasks: keepLoadingLock,
