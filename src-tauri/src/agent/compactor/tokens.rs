@@ -130,7 +130,7 @@ pub fn estimate_request_tokens(
 
 /// Returns true if the message is a compacted context summary from earlier compaction.
 pub fn is_compacted_summary(role: &Role, content: &str) -> bool {
-    if !matches!(role, Role::System) {
+    if !matches!(role, Role::System | Role::User) {
         return false;
     }
     let trimmed = content.trim_start();
@@ -163,4 +163,64 @@ pub fn strip_summary_header(content: &str) -> &str {
     } else {
         trimmed
     }
+}
+
+/// Computes the split index in persisted SQLite `ActivityItem`s matching the
+/// recent messages retained after compaction, so older items are archived accurately.
+pub fn find_archive_split_index(
+    existing_items: &[crate::db::ActivityItem],
+    messages: &[ChatMessage],
+) -> usize {
+    let has_summary = messages.iter().any(|m| {
+        is_compacted_summary(&m.role, m.content.as_deref().unwrap_or(""))
+    });
+    let non_recent_overhead = if has_summary { 3 } else { 2 };
+    let recent_msgs = messages.get(non_recent_overhead..).unwrap_or(&[]);
+    if recent_msgs.is_empty() {
+        return existing_items.len();
+    }
+
+    let recent_tool_ids: std::collections::HashSet<&str> = recent_msgs
+        .iter()
+        .flat_map(|m| {
+            m.tool_call_id.as_deref().into_iter().chain(
+                m.tool_calls.iter().flatten().map(|tc| tc.id.as_str()),
+            )
+        })
+        .collect();
+    if !recent_tool_ids.is_empty() {
+        if let Some(idx) = existing_items.iter().position(|it| {
+            recent_tool_ids.contains(it.id.as_str())
+                || it.tool
+                    .as_ref()
+                    .and_then(|t| t.get("id").and_then(|v| v.as_str()))
+                    .is_some_and(|id| recent_tool_ids.contains(id))
+        }) {
+            return idx;
+        }
+    }
+
+    let mut replayable_needed: usize = 0;
+    for msg in recent_msgs {
+        match msg.role {
+            Role::Assistant => {
+                replayable_needed += msg.tool_calls.as_ref().map_or(1, |tcs| tcs.len().max(1));
+            }
+            Role::User => replayable_needed += 1,
+            Role::Tool | Role::System => {}
+        }
+    }
+    if replayable_needed == 0 {
+        return existing_items.len();
+    }
+    let mut remaining = replayable_needed;
+    for (idx, it) in existing_items.iter().enumerate().rev() {
+        if crate::agent::sanitizer::is_dialog_item_replayable(it) {
+            remaining -= 1;
+            if remaining == 0 {
+                return idx;
+            }
+        }
+    }
+    0
 }

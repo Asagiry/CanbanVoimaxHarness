@@ -2,7 +2,7 @@ use tauri::Emitter;
 use crate::agent::compactor;
 use crate::agent::prompts::{is_tool_active_for_agent, strip_yaml_frontmatter};
 use crate::agent::spill::get_all_tools_for_role;
-use crate::agent::subagent_runtime::{canonical_tool_name, OwnedToolContext};
+use crate::agent::subagent_runtime::{canonical_tool_name, generate_subagent_suffix, OwnedToolContext};
 use crate::config::load_agent_setting;
 use crate::db::ActivityItem;
 use crate::llm::{ChatMessage, ToolDefinition};
@@ -33,13 +33,14 @@ pub async fn prepare_subagent_execution(
     explicit_subagent_id: Option<&str>,
 ) -> SubagentPreparedContext {
     let parent_id = ctx.task_id.as_deref().unwrap_or("unknown").to_string();
-    let subagent_suffix = match ctx.call_id.as_deref() {
-        Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
-        _ => format!(
-            "{}-{}",
-            chrono::Utc::now().timestamp_millis(),
-            uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
-        ),
+    let subagent_suffix = match explicit_subagent_id {
+        Some(eid) => eid
+            .rsplit(".sub-")
+            .next()
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| generate_subagent_suffix(ctx.call_id.as_deref())),
+        None => generate_subagent_suffix(ctx.call_id.as_deref()),
     };
     let is_bg_subagent = explicit_subagent_id.is_some();
     let raw_sub_id = explicit_subagent_id
@@ -82,7 +83,7 @@ pub async fn prepare_subagent_execution(
                 t,
                 &ctx.tool_policy,
                 role,
-                None,
+                ctx.stage_id.as_deref(),
                 subagent_setting.allowed_tools.as_deref(),
             )
         })

@@ -1,8 +1,47 @@
 use std::path::Path;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+
+pub const MAX_PIPE_CAPTURE_BYTES: usize = 4 * 1024 * 1024;
 
 #[cfg(windows)]
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Reads at most `max_bytes` from `pipe`, draining any remaining bytes into a fixed
+/// scratch buffer so noisy child processes cannot cause OOM or premature SIGPIPE.
+pub async fn read_pipe_capped(
+    mut pipe: impl tokio::io::AsyncRead + Unpin,
+    max_bytes: usize,
+) -> (Vec<u8>, bool) {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    let mut truncated = false;
+    loop {
+        match pipe.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                if buf.len() < max_bytes {
+                    let take = (max_bytes - buf.len()).min(n);
+                    buf.extend_from_slice(&chunk[..take]);
+                    if take < n {
+                        truncated = true;
+                    }
+                } else {
+                    truncated = true;
+                }
+            }
+        }
+    }
+    (buf, truncated)
+}
+
+/// Validates and wraps a command string for Windows `cmd.exe /D /S /C "..."`.
+pub fn build_windows_cmd_raw_arg(raw_cmd: &str) -> anyhow::Result<String> {
+    if raw_cmd.contains(['\r', '\n', '\0']) {
+        anyhow::bail!("Windows cmd.exe command cannot contain newline or NUL characters");
+    }
+    Ok(format!("\"chcp 65001 >nul && {}\"", raw_cmd))
+}
 
 /// Properly quotes an argument for Windows command execution.
 /// Guarantees that spaces, parentheses `()`, ampersands `&`, carets `^`, and non-ASCII paths
@@ -84,6 +123,11 @@ pub async fn kill_process_tree(pid: u32) {
     }
     #[cfg(not(target_os = "windows"))]
     {
+        let pgid_str = format!("-{}", pid);
+        let _ = Command::new("kill")
+            .args(["-9", &pgid_str])
+            .output()
+            .await;
         let pid_str = pid.to_string();
         let _ = Command::new("kill")
             .args(["-9", &pid_str])
@@ -116,6 +160,13 @@ pub fn kill_process_tree_sync(pid: u32) {
     }
     #[cfg(not(target_os = "windows"))]
     {
+        let pgid_str = format!("-{}", pid);
+        if let Ok(mut child) = std::process::Command::new("kill")
+            .args(["-9", &pgid_str])
+            .spawn()
+        {
+            let _ = child.wait();
+        }
         let pid_str = pid.to_string();
         if let Ok(mut child) = std::process::Command::new("kill")
             .args(["-9", &pid_str])
@@ -144,7 +195,11 @@ impl ProcessTreeGuard {
 impl Drop for ProcessTreeGuard {
     fn drop(&mut self) {
         if let Some(pid) = self.pid {
-            kill_process_tree_sync(pid);
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn_blocking(move || kill_process_tree_sync(pid));
+            } else {
+                kill_process_tree_sync(pid);
+            }
         }
     }
 }

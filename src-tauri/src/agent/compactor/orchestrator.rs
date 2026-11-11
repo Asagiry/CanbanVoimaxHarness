@@ -1,5 +1,6 @@
 //! Compactor Orchestration & LLM Condensation (§ 2.22)
 
+use std::sync::LazyLock;
 use crate::llm::{ChatMessage, Role};
 use tauri::{AppHandle, Emitter, State};
 use crate::commands::state::AppState;
@@ -16,6 +17,13 @@ use super::evaporation::{
     evaporate_current_turn_tools, evaporate_tool_logs_older_than, CompactionReport,
 };
 use super::multi_tier::compact_conversation_to_target;
+
+static COMPACTOR_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+        .unwrap_or_default()
+});
 
 /// Executes LLM compaction using the configured model (or inherits active agent model).
 /// Falls back safely to deterministic report if endpoint is unreachable.
@@ -49,13 +57,7 @@ pub async fn condense_context_with_llm(
         format!("{}/chat/completions", trimmed_base)
     };
 
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(45))
-        .build()
-    {
-        Ok(c) => c,
-        Err(_) => return generate_fallback_compaction_report(task_id, &msgs),
-    };
+    let client = &*COMPACTOR_HTTP_CLIENT;
 
     let mut headers = crate::llm::cache::opencode_headers(base_url, &format!("{task_id}:compactor"));
     headers.insert(
@@ -73,7 +75,7 @@ pub async fn condense_context_with_llm(
 
     let title_str = task_title.unwrap_or("").trim();
     let desc_str = task_desc.unwrap_or("").trim();
-    let desc_truncated = if desc_str.len() > 600 { &desc_str[..600] } else { desc_str };
+    let desc_truncated: String = desc_str.chars().take(600).collect();
     let goal_clause = if !title_str.is_empty() {
         format!(
             "\n                     - In '## Primary Request and Intent': The immutable PRIMARY TASK GOAL is: \"{}\" (Description: {}).\n                       You MUST state this primary task goal. DO NOT replace or confuse it with intermediate user steer directives, feedback, questions, or side notes.",
@@ -181,7 +183,14 @@ pub async fn compact_context_for_task(
     };
 
     // 3. Load dialogue items from SQLite
-    let dialog_items = crate::db::load_dialog_items(&root, &task_id).unwrap_or_default();
+    let root_for_load = root.clone();
+    let tid_for_load = task_id.clone();
+    let dialog_items = tokio::task::spawn_blocking(move || {
+        crate::db::load_dialog_items(&root_for_load, &tid_for_load)
+    })
+    .await
+    .map_err(|e| format!("Failed to join dialog load task: {e}"))?
+    .unwrap_or_default();
 
     // 4. Determine items to condense before the last 4 active messages (2 full recent turns)
     let mut ids_to_archive: Vec<String> = Vec::new();
@@ -245,9 +254,10 @@ pub async fn compact_context_for_task(
         }
     } else {
         // Fallback to in-memory active agent context if available, or task description
+        let ctx_key = AppState::agent_key(&root, &task_id);
         let mem_msgs = {
             let map = state.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
-            map.get(&task_id).map(|cs| {
+            map.get(&ctx_key).or_else(|| map.get(task_id.trim())).map(|cs| {
                 let g = cs.lock().unwrap_or_else(|p| p.into_inner());
                 g.messages.clone()
             })
@@ -347,8 +357,23 @@ pub async fn compact_context_for_task(
         images: None,
     };
 
-    crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive)
-        .map_err(|e| format!("Failed to persist compacted dialog: {}", e))?;
+    let root_for_persist = root.clone();
+    let tid_for_persist = task_id.clone();
+    let compacted_for_persist = compacted_item.clone();
+    let tool_for_persist = tool_act_item.clone();
+    let archive_for_persist = ids_to_archive.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::db::persist_compacted_dialog(
+            &root_for_persist,
+            &tid_for_persist,
+            &compacted_for_persist,
+            Some(&tool_for_persist),
+            &archive_for_persist,
+        )
+    })
+    .await
+    .map_err(|e| format!("Failed to join compacted dialog task: {}", e))?
+    .map_err(|e| format!("Failed to persist compacted dialog: {}", e))?;
 
     // 7. Store task.current_tokens in memory and persist to disk (Fixes 100% gauge on re-entering drawer)
     {
@@ -365,9 +390,10 @@ pub async fn compact_context_for_task(
     }
 
     // 8. Update in-memory active agent context if present (preserving Turn 0 anchors and last 4 messages)
+    let ctx_key = AppState::agent_key(&root, &task_id);
     let context_state_opt = {
         let map = state.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
-        map.get(&task_id).cloned()
+        map.get(&ctx_key).or_else(|| map.get(task_id.trim())).cloned()
     };
 
     let (sys_tokens, tool_tokens, total_tokens_after) = if let Some(cs) = context_state_opt {
@@ -379,7 +405,7 @@ pub async fn compact_context_for_task(
         if guard.messages.len() > 1 && guard.messages[1].role == Role::User {
             new_messages.push(guard.messages[1].clone()); // Initial user spec
         }
-        new_messages.push(ChatMessage::system(format!(
+        new_messages.push(ChatMessage::user(format!(
             "# Compacted Context Summary\n\n{}",
             compacted_markdown
         )));
@@ -407,6 +433,7 @@ pub async fn compact_context_for_task(
     };
 
     let report = CompactionReport {
+        task_id: task_id.clone(),
         tokens_before,
         tokens_after: total_tokens_after,
         evaporated_count: compacted_count,

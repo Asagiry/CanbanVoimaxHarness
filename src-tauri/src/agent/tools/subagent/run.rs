@@ -7,8 +7,9 @@ use tokio::sync::oneshot;
 
 use super::guards::{SubagentActiveHandleGuard, TaskStatusGuard};
 use crate::agent::{
-    are_subagent_prompts_duplicate, prune_subagent_sessions_cache, run_inprocess_subagent,
-    SubagentRetryInfo, SubagentSession, ToolContext, SUBAGENT_SESSIONS,
+    are_subagent_prompts_duplicate, enforce_subagent_concurrency, generate_subagent_suffix,
+    prune_subagent_sessions_cache, run_inprocess_subagent, SubagentRetryInfo, SubagentSession,
+    ToolContext, SUBAGENT_SESSIONS,
 };
 
 pub async fn execute_subagent(
@@ -65,14 +66,9 @@ pub async fn execute_subagent(
         }
     }
 
-    let subagent_suffix = match ctx.call_id {
-        Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
-        _ => format!(
-            "{}-{}",
-            chrono::Utc::now().timestamp_millis(),
-            uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
-        ),
-    };
+    enforce_subagent_concurrency(ctx, "subagent", parent_id).await?;
+
+    let subagent_suffix = generate_subagent_suffix(ctx.call_id);
     let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
     let tc_id_opt = ctx.call_id.map(|s| s.to_string());
 
@@ -137,7 +133,7 @@ pub async fn execute_subagent(
             let sub_summary = crate::agent::session_registry::AgentSessionSummary {
                 session_id: subagent_id.clone(),
                 task_id: subagent_id.clone(),
-                stage_id: None,
+                stage_id: ctx.stage_id.map(|s| s.to_string()),
                 started_at: chrono::Utc::now().timestamp_millis() as u64,
                 status: crate::agent::session_registry::SessionStatus::Running,
                 project_path: Some(root_str),

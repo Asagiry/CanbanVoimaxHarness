@@ -198,8 +198,8 @@ pub fn append_messages_from_dialog(
                     let args = if let Some(args_str) = tool_val.get("arguments").and_then(|v| v.as_str()) {
                         args_str.to_string()
                     } else if let Some(params_val) = tool_val.get("params") {
-                        if params_val.is_string() {
-                            params_val.as_str().unwrap().to_string()
+                        if let Some(s) = params_val.as_str() {
+                            s.to_string()
                         } else {
                             serde_json::to_string(params_val).unwrap_or_else(|_| "{}".to_string())
                         }
@@ -238,7 +238,7 @@ pub fn append_messages_from_dialog(
                         } else {
                             format!("# Compacted Context Summary\n\n{}", trimmed)
                         };
-                        messages.push(ChatMessage::system(formatted));
+                        messages.push(ChatMessage::user(formatted));
                     }
                 }
             }

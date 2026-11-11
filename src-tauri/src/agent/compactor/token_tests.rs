@@ -194,14 +194,21 @@ fn test_summary_normalization_reconstructed_from_sqlite() {
         .iter()
         .filter(|m| m.role == Role::System)
         .collect();
+    assert_eq!(system_messages.len(), 1, "Only Turn 0 prompt may have Role::System");
+
+    let summary_messages: Vec<_> = messages
+        .iter()
+        .filter(|m| is_compacted_summary(&m.role, m.content.as_deref().unwrap_or("")))
+        .collect();
 
     assert_eq!(
-        system_messages.len(),
-        2,
-        "Must have exactly 2 system messages (Turn 0 prompt and single compacted summary)"
+        summary_messages.len(),
+        1,
+        "Must have exactly 1 compacted summary message"
     );
+    assert_eq!(summary_messages[0].role, Role::User);
     assert!(
-        system_messages[1].content.as_deref().unwrap().starts_with("# Compacted Context Summary"),
+        summary_messages[0].content.as_deref().unwrap().starts_with("# Compacted Context Summary"),
         "Summary message must be normalized to standard header"
     );
 }

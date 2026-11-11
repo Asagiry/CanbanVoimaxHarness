@@ -7,6 +7,8 @@ use crate::llm::{ChatMessage, Role};
 /// Official compaction report detailing token space reclaimed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CompactionReport {
+    #[serde(default, rename = "taskId")]
+    pub task_id: String,
     pub tokens_before: usize,
     pub tokens_after: usize,
     pub evaporated_count: usize,
@@ -84,8 +86,15 @@ pub fn compute_message_turns(messages: &[ChatMessage]) -> Vec<usize> {
                 }
             }
             Role::User => {
-                current_turn_idx += 1;
-                turns.push(current_turn_idx);
+                if super::tokens::is_compacted_summary(
+                    &msg.role,
+                    msg.content.as_deref().unwrap_or(""),
+                ) {
+                    turns.push(current_turn_idx);
+                } else {
+                    current_turn_idx += 1;
+                    turns.push(current_turn_idx);
+                }
             }
             Role::Assistant => {
                 current_turn_idx += 1;
@@ -212,35 +221,25 @@ where
                     let mut new_content = content.to_string();
                     let mut modified = false;
 
-                    while let Some(start_idx) = new_content.find("<think>") {
-                        if let Some(end_offset) = new_content[start_idx..].find("</think>") {
-                            let end_idx = start_idx + end_offset + "</think>".len();
-                            let inner_len = end_idx - start_idx;
-                            if inner_len > 300 {
-                                let placeholder = format!("[Thought evaporated: {} chars truncated]", inner_len);
-                                new_content.replace_range(start_idx..end_idx, &placeholder);
-                                modified = true;
+                    for (open_tag, close_tag) in [("<think>", "</think>"), ("<thinking>", "</thinking>")] {
+                        let mut search_from = 0;
+                        while let Some(rel_start) = new_content[search_from..].find(open_tag) {
+                            let start_idx = search_from + rel_start;
+                            if let Some(end_offset) = new_content[start_idx..].find(close_tag) {
+                                let end_idx = start_idx + end_offset + close_tag.len();
+                                let inner_len = end_idx - start_idx;
+                                if inner_len > 300 {
+                                    let placeholder = format!("[Thought evaporated: {} chars truncated]", inner_len);
+                                    new_content.replace_range(start_idx..end_idx, &placeholder);
+                                    modified = true;
+                                    search_from = start_idx + placeholder.len();
+                                } else {
+                                    search_from = end_idx;
+                                    continue;
+                                }
                             } else {
                                 break;
                             }
-                        } else {
-                            break;
-                        }
-                    }
-
-                    while let Some(start_idx) = new_content.find("<thinking>") {
-                        if let Some(end_offset) = new_content[start_idx..].find("</thinking>") {
-                            let end_idx = start_idx + end_offset + "</thinking>".len();
-                            let inner_len = end_idx - start_idx;
-                            if inner_len > 300 {
-                                let placeholder = format!("[Thought evaporated: {} chars truncated]", inner_len);
-                                new_content.replace_range(start_idx..end_idx, &placeholder);
-                                modified = true;
-                            } else {
-                                break;
-                            }
-                        } else {
-                            break;
                         }
                     }
 

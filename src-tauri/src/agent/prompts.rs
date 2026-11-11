@@ -82,7 +82,7 @@ Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS
 - Ironclad Completion Rule: Before calling advance_task, you MUST mark all TODO items as completed via todo_write (unfinished items are auto-completed by the backend as a fallback). After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
 
 Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance to next stage / ready; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
-Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
+Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>500 lines/64KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
 What to ask when blocked: stack + build cmd, target board template, allowed tools per stage, sensor to gate on.
 Red Flags: prompt >150 lines; any rule telling you to read monolithic rule files/.agents/skills/docs into context; absolute path outside worktree; `terminal:true` missing on ready; duplicate column id.
@@ -163,7 +163,7 @@ pub fn is_tool_active_for_agent(
     tool_policy: &crate::config::ToolPolicyConfig,
     role: &str,
     stage_id: Option<&str>,
-    _agent_allowed_tools: Option<&[String]>,
+    agent_allowed_tools: Option<&[String]>,
 ) -> bool {
     let effective_stage = stage_id.unwrap_or(role);
     let is_orch = role.to_lowercase().contains("orchestrat")
@@ -225,8 +225,11 @@ pub fn is_tool_active_for_agent(
     {
         return false;
     }
-    // ToolPolicyConfig (stage_overrides / per-role) is the authoritative source of truth.
-    // Persona YAML frontmatter 'tools: [...]' is no longer required or enforced as a gate.
+    if let Some(allowed) = agent_allowed_tools {
+        if !crate::config::agent_allows_tool(Some(allowed), name) {
+            return false;
+        }
+    }
     true
 }
 

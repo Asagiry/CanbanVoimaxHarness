@@ -7,6 +7,7 @@ use crate::llm::{ChatMessage, Role};
 
 pub fn sync_context_state(
     app_handle: &Option<AppHandle>,
+    repo_root: &std::path::Path,
     task_id: &str,
     turn: usize,
     messages: &mut Vec<ChatMessage>,
@@ -14,8 +15,9 @@ pub fn sync_context_state(
 ) {
     if let Some(ref app) = app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
+            let ctx_key = crate::commands::AppState::agent_key(repo_root, task_id);
             if let Ok(map) = state.agent_contexts.lock() {
-                if let Some(cs) = map.get(task_id) {
+                if let Some(cs) = map.get(&ctx_key).or_else(|| map.get(task_id.trim())) {
                     if let Ok(mut guard) = cs.lock() {
                         if guard.compaction_revision > *local_compaction_rev {
                             eprintln!(
@@ -31,6 +33,28 @@ pub fn sync_context_state(
                     }
                 }
             }
+        }
+    }
+}
+
+fn refresh_system_and_attachments(
+    msgs: &mut Vec<ChatMessage>,
+    system_prompt: &str,
+    initial_user_prompt: &str,
+    task_attachments: Option<&Vec<String>>,
+) {
+    let sys_msg = ChatMessage::system(system_prompt.to_string())
+        .with_cache_control(crate::llm::CacheControl::ephemeral());
+    if !msgs.is_empty() && msgs[0].role == Role::System {
+        msgs[0] = sys_msg;
+    } else {
+        msgs.insert(0, sys_msg);
+    }
+    if let Some(atts) = task_attachments {
+        if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
+            let text = msgs[1].text_content().unwrap_or(initial_user_prompt).to_string();
+            msgs[1] = ChatMessage::user_with_images(text, atts.clone())
+                .with_cache_control(crate::llm::CacheControl::ephemeral());
         }
     }
 }
@@ -67,13 +91,20 @@ pub async fn resolve_initial_agent_context(
     }
 
     if let Some(steer) = config.steer_prompt.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
-        let already_persisted_id = crate::db::load_dialog_items(&config.repo_root, &config.task_id)
-            .ok()
-            .and_then(|items| {
-                items.into_iter().rev().find(|it| {
-                    it.item_type == "steer" && it.content.as_deref() == Some(steer)
-                }).map(|it| it.id)
-            });
+        let root_c = config.repo_root.clone();
+        let tid_c = config.task_id.clone();
+        let steer_s = steer.to_string();
+        let already_persisted_id = tokio::task::spawn_blocking(move || {
+            crate::db::load_dialog_items(&root_c, &tid_c)
+                .ok()
+                .and_then(|items| {
+                    items.into_iter().rev().find(|it| {
+                        it.item_type == "steer" && it.content.as_deref() == Some(steer_s.as_str())
+                    }).map(|it| it.id)
+                })
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to join dialog load task: {e}"))?;
 
         if let Some(existing_id) = already_persisted_id {
             eprintln!("CVH [agent]: Steer message already persisted as '{}', reusing.", existing_id);
@@ -86,7 +117,17 @@ pub async fn resolve_initial_agent_context(
             } else {
                 None
             };
-            if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), steer_message_id.as_deref()).map_err(anyhow::Error::msg)? {
+            let root_c = config.repo_root.clone();
+            let tid_c = config.task_id.clone();
+            let steer_s = steer.to_string();
+            let steer_imgs = config.steer_images.clone();
+            let persisted_item = tokio::task::spawn_blocking(move || {
+                persist_steer_message(&root_c, &tid_c, &steer_s, steer_imgs, steer_message_id.as_deref())
+                    .map_err(anyhow::Error::msg)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to join steer persist task: {e}"))??;
+            if let Some(item) = persisted_item {
                 if let Some(app) = config.app_handle.as_ref() {
                     let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
                     let _ = app.emit("task:activity", &payload);
@@ -95,38 +136,46 @@ pub async fn resolve_initial_agent_context(
             }
         }
     }
-    let context_cursor = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
-        .map_err(anyhow::Error::msg)?;
-    let saved_context = crate::db::load_conversation_context(&config.repo_root, &config.task_id)
-        .map_err(anyhow::Error::msg)?;
+    let root_c = config.repo_root.clone();
+    let tid_c = config.task_id.clone();
+    let (context_cursor, saved_context, sqlite_has_compacted) = tokio::task::spawn_blocking(move || {
+        let cursor = crate::db::context_dialog_cursor(&root_c, &tid_c).map_err(anyhow::Error::msg)?;
+        let saved = crate::db::load_conversation_context(&root_c, &tid_c).map_err(anyhow::Error::msg)?;
+        let has_compacted = crate::db::load_dialog_items(&root_c, &tid_c)
+            .map(|items| items.iter().any(|it| it.item_type == "compacted"))
+            .unwrap_or(false);
+        Ok::<_, anyhow::Error>((cursor, saved, has_compacted))
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to join context load task: {e}"))??;
 
     // 1. Check if an existing in-memory context already exists for this task_id
+    let ctx_key = crate::commands::AppState::agent_key(&config.repo_root, &config.task_id);
     let in_memory_context = if saved_context.is_some() || context_cursor > 0 || config.steer_prompt.is_some() {
         None
     } else if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             state.agent_contexts.lock().ok().and_then(|map| {
-                map.get(&config.task_id).and_then(|cs| {
-                    let guard = cs.lock().ok()?;
-                    // Discard stale in-memory context if SQLite was compacted and in-memory is not
-                    let in_memory_has_compacted = guard.messages.iter().any(|m| {
-                        m.content.as_deref().map(|c| c.contains("# Compacted Context Summary")).unwrap_or(false)
-                    });
-                    let sqlite_has_compacted = crate::db::load_dialog_items(&config.repo_root, &config.task_id)
-                        .map(|items| items.iter().any(|it| it.item_type == "compacted"))
-                        .unwrap_or(false);
+                map.get(&ctx_key)
+                    .or_else(|| map.get(config.task_id.trim()))
+                    .and_then(|cs| {
+                        let guard = cs.lock().ok()?;
+                        // Discard stale in-memory context if SQLite was compacted and in-memory is not
+                        let in_memory_has_compacted = guard.messages.iter().any(|m| {
+                            compactor::is_compacted_summary(&m.role, m.content.as_deref().unwrap_or(""))
+                        });
 
-                    if !in_memory_has_compacted && sqlite_has_compacted {
-                        eprintln!("CVH [agent]: In-memory context is stale (missing compaction found in SQLite). Rebuilding from SQLite.");
-                        return None;
-                    }
+                        if !in_memory_has_compacted && sqlite_has_compacted {
+                            eprintln!("CVH [agent]: In-memory context is stale (missing compaction found in SQLite). Rebuilding from SQLite.");
+                            return None;
+                        }
 
-                    if guard.messages.len() > 2 {
-                        Some((guard.current_turn, guard.messages.clone()))
-                    } else {
-                        None
-                    }
-                })
+                        if guard.messages.len() > 2 {
+                            Some((guard.current_turn, guard.messages.clone()))
+                        } else {
+                            None
+                        }
+                    })
             })
         } else {
             None
@@ -138,22 +187,38 @@ pub async fn resolve_initial_agent_context(
     // 2. Check SQLite history if in-memory context is absent or <= 2 messages
     let sqlite_context = if in_memory_context.is_none() {
         if let Some(mut saved) = saved_context {
-            let pending = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, saved.dialog_cursor, context_cursor)
-                .map_err(anyhow::Error::msg)?;
+            let root_c = config.repo_root.clone();
+            let tid_c = config.task_id.clone();
+            let saved_cursor = saved.dialog_cursor;
+            let pending = tokio::task::spawn_blocking(move || {
+                crate::db::load_dialog_items_between(&root_c, &tid_c, saved_cursor, context_cursor)
+                    .map_err(anyhow::Error::msg)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to join dialog load task: {e}"))??;
             let pending: Vec<_> = pending.into_iter().filter(|item| {
                 crate::agent::sanitizer::is_dialog_item_replayable(item)
             }).collect();
             append_messages_from_dialog(&mut saved.messages, &initial_user_prompt, &pending);
             Some((saved.turn, saved.messages))
-        } else if let Ok(dialog_items) = crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, 0, context_cursor) {
-            let reconstructed = reconstruct_messages_from_dialog(system_prompt, &initial_user_prompt, &dialog_items);
-            if reconstructed.len() > 2 {
-                Some((0, reconstructed))
+        } else {
+            let root_c = config.repo_root.clone();
+            let tid_c = config.task_id.clone();
+            let items_opt = tokio::task::spawn_blocking(move || {
+                crate::db::load_dialog_items_between(&root_c, &tid_c, 0, context_cursor).ok()
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to join dialog load task: {e}"))?;
+            if let Some(dialog_items) = items_opt {
+                let reconstructed = reconstruct_messages_from_dialog(system_prompt, &initial_user_prompt, &dialog_items);
+                if reconstructed.len() > 2 {
+                    Some((0, reconstructed))
+                } else {
+                    None
+                }
             } else {
                 None
             }
-        } else {
-            None
         }
     } else {
         None
@@ -165,48 +230,14 @@ pub async fn resolve_initial_agent_context(
             "CVH [agent]: Adopting existing in-memory context ({} messages, turn {}) for task {}",
             msgs.len(), cur_turn, config.task_id
         );
-        // Refresh system message so active tools, personas, and rules are always 100% in sync
-        if !msgs.is_empty() && msgs[0].role == Role::System {
-            msgs[0] = ChatMessage::system(system_prompt.to_string())
-                .with_cache_control(crate::llm::CacheControl::ephemeral());
-        } else {
-            msgs.insert(
-                0,
-                ChatMessage::system(system_prompt.to_string())
-                    .with_cache_control(crate::llm::CacheControl::ephemeral()),
-            );
-        }
-        if let Some(ref atts) = config.task_attachments {
-            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
-                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
-                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
-                    .with_cache_control(crate::llm::CacheControl::ephemeral());
-            }
-        }
+        refresh_system_and_attachments(&mut msgs, system_prompt, &initial_user_prompt, config.task_attachments.as_ref());
         (cur_turn, msgs)
     } else if let Some((cur_turn, mut msgs)) = sqlite_context {
         eprintln!(
             "CVH [agent]: Adopting reconstructed SQLite dialogue context ({} messages) for task {}",
             msgs.len(), config.task_id
         );
-        // Refresh system message so active tools, personas, and rules are always 100% in sync
-        if !msgs.is_empty() && msgs[0].role == Role::System {
-            msgs[0] = ChatMessage::system(system_prompt.to_string())
-                .with_cache_control(crate::llm::CacheControl::ephemeral());
-        } else {
-            msgs.insert(
-                0,
-                ChatMessage::system(system_prompt.to_string())
-                    .with_cache_control(crate::llm::CacheControl::ephemeral()),
-            );
-        }
-        if let Some(ref atts) = config.task_attachments {
-            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
-                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
-                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
-                    .with_cache_control(crate::llm::CacheControl::ephemeral());
-            }
-        }
+        refresh_system_and_attachments(&mut msgs, system_prompt, &initial_user_prompt, config.task_attachments.as_ref());
         (cur_turn, msgs)
     } else {
         let initial_user_msg = if let Some(ref atts) = config.task_attachments {
@@ -255,12 +286,13 @@ pub async fn resolve_initial_agent_context(
     if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             if let Ok(mut map) = state.agent_contexts.lock() {
-                let initial_rev = map.get(&config.task_id)
+                let initial_rev = map.get(&ctx_key)
+                    .or_else(|| map.get(config.task_id.trim()))
                     .and_then(|cs| cs.lock().ok().map(|g| g.compaction_revision))
                     .unwrap_or(0);
                 local_compaction_rev = initial_rev;
                 map.insert(
-                    config.task_id.clone(),
+                    ctx_key,
                     std::sync::Arc::new(std::sync::Mutex::new(compactor::AgentContextState {
                         current_turn: starting_turn,
                         messages: messages.clone(),
@@ -274,7 +306,7 @@ pub async fn resolve_initial_agent_context(
     Ok((starting_turn, messages, context_cursor, local_compaction_rev))
 }
 
-pub fn maybe_compact_turn_context<F>(
+pub async fn maybe_compact_turn_context<F>(
     config: &AgentSessionConfig,
     messages: &mut Vec<ChatMessage>,
     context_cursor: &mut i64,
@@ -289,8 +321,7 @@ where
     let compaction_threshold = context_window;
     let current_tokens = compactor::estimate_tokens(messages);
 
-    let should_compact = current_tokens >= compaction_threshold;
-    if should_compact {
+    if current_tokens >= compaction_threshold {
         let target_window = (context_window * 3) / 4;
         let compaction_res = compactor::compact_conversation_to_target(messages, target_window, None);
         if compaction_res.saved_chars > 0 || compactor::estimate_tokens(messages) < current_tokens {
@@ -319,40 +350,57 @@ where
                 images: None,
             };
 
+            let summary_text = if !compaction_res.preserved_state_summary.is_empty() {
+                compaction_res.preserved_state_summary.clone()
+            } else {
+                "Dynamic context compaction: older turns condensed to preserve context window.".to_string()
+            };
+            let compacted_item = crate::db::ActivityItem {
+                id: format!("compacted-{}-{}", config.task_id, chrono::Utc::now().timestamp_millis()),
+                item_type: "compacted".to_string(),
+                timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
+                content: Some(summary_text),
+                tool: Some(serde_json::json!({
+                    "compactedCount": compaction_res.evaporated_tools_count,
+                    "savedTokens": saved_tokens,
+                    "tokensBefore": current_tokens,
+                    "tokensAfter": tokens_after,
+                    "autoCompacted": true,
+                    "contextWindow": context_window,
+                })),
+                duration_ms: None,
+                images: None,
+            };
+
+            let root_c = config.repo_root.clone();
+            let tid_c = config.task_id.clone();
+            let existing_items = tokio::task::spawn_blocking(move || {
+                crate::db::load_dialog_items(&root_c, &tid_c).unwrap_or_default()
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to join dialog load task: {e}"))?;
+            let archive_count = compactor::find_archive_split_index(&existing_items, messages);
+            let ids_to_archive: Vec<String> = existing_items[..archive_count].iter().map(|it| it.id.clone()).collect();
+
+            let root_p = config.repo_root.clone();
+            let tid_p = config.task_id.clone();
+            let compacted_p = compacted_item.clone();
+            let tool_p = tool_act_item.clone();
+            if let Err(e) = tokio::task::spawn_blocking(move || {
+                crate::db::persist_compacted_dialog(&root_p, &tid_p, &compacted_p, Some(&tool_p), &ids_to_archive)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to join compaction persist task: {e}"))?
+            {
+                eprintln!("CVH [compactor]: Failed to persist compacted dialog: {}", e);
+            }
+
+            if crate::agent::steering::drain_pending_steers(config, messages, context_cursor, false).await?.1 {
+                *completion_nudges = 0;
+            }
+            *local_compaction_rev += 1;
+
             if let Some(ref app) = config.app_handle {
-                let summary_text = if !compaction_res.preserved_state_summary.is_empty() {
-                    compaction_res.preserved_state_summary.clone()
-                } else {
-                    "Dynamic context compaction: older turns condensed to preserve context window.".to_string()
-                };
-                let compacted_item = crate::db::ActivityItem {
-                    id: format!("compacted-{}-{}", config.task_id, chrono::Utc::now().timestamp_millis()),
-                    item_type: "compacted".to_string(),
-                    timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
-                    content: Some(summary_text),
-                    tool: Some(serde_json::json!({
-                        "compactedCount": compaction_res.evaporated_tools_count,
-                        "savedTokens": saved_tokens,
-                        "tokensBefore": current_tokens,
-                        "tokensAfter": tokens_after,
-                        "autoCompacted": true,
-                        "contextWindow": context_window,
-                    })),
-                    duration_ms: None,
-                    images: None,
-                };
-
-                let existing_items = crate::db::load_dialog_items(&config.repo_root, &config.task_id).unwrap_or_default();
-                let has_summary = messages.iter().any(|m| compactor::is_compacted_summary(&m.role, m.content.as_deref().unwrap_or("")));
-                let non_recent_overhead = if has_summary { 3 } else { 2 };
-                let recent_count = messages.len().saturating_sub(non_recent_overhead);
-                let archive_count = existing_items.len().saturating_sub(recent_count);
-                let ids_to_archive: Vec<String> = existing_items[..archive_count].iter().map(|it| it.id.clone()).collect();
-
-                let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive);
-                if crate::agent::steering::drain_pending_steers(config, messages, context_cursor, false)?.1 {
-                    *completion_nudges = 0;
-                }
                 let _ = app.emit(
                     "agent:tool_call",
                     serde_json::json!({
@@ -374,10 +422,10 @@ where
                 );
                 let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
 
-                *local_compaction_rev += 1;
+                let ctx_key = crate::commands::AppState::agent_key(&config.repo_root, &config.task_id);
                 if let Some(state) = app.try_state::<crate::commands::AppState>() {
                     if let Ok(map) = state.agent_contexts.lock() {
-                        if let Some(cs) = map.get(&config.task_id) {
+                        if let Some(cs) = map.get(&ctx_key).or_else(|| map.get(config.task_id.trim())) {
                             if let Ok(mut guard) = cs.lock() {
                                 guard.compaction_revision = *local_compaction_rev;
                                 guard.messages = messages.clone();

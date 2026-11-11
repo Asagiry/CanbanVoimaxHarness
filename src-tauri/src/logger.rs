@@ -164,7 +164,11 @@ mod tests {
 
     #[test]
     fn test_cvh_log_format_and_file_write() {
-        let temp_dir = std::path::PathBuf::from("target").join(format!("cvh_log_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let temp_dir = std::path::PathBuf::from("target").join(format!("cvh_log_test_{}", nanos));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         cvh_log(Some(&temp_dir), "INFO", "TEST", "Hello logging world!");
@@ -173,7 +177,7 @@ mod tests {
         let log_file = temp_dir.join(".cvh").join("logs").join("cvh.log");
         assert!(log_file.exists(), "Log file must exist at {:?}", log_file);
 
-        let content = std::fs::read_to_string(&log_file).unwrap();
+        let content = std::fs::read_to_string(&log_file).unwrap_or_default();
         assert!(content.contains("[INFO] [TEST] Hello logging world!"));
         assert!(content.contains("[ERROR] [TEST_ERR] Something failed"));
         assert!(content.contains("Details: Call stack details"));

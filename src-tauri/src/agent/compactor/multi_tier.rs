@@ -50,7 +50,7 @@ pub fn condense_older_messages_keeping_recent(
         if let Some(prev) = existing_summary {
             let clean = strip_summary_header(&prev);
             let summary_md = clean.to_string();
-            let summary_msg = ChatMessage::system(format!(
+            let summary_msg = ChatMessage::user(format!(
                 "# Compacted Context Summary\n\n{}",
                 summary_md
             ));
@@ -69,11 +69,11 @@ pub fn condense_older_messages_keeping_recent(
     // Include previous summary text in older messages scan to retain historical context
     let mut older_for_summary = older_messages.clone();
     if let Some(prev) = existing_summary {
-        older_for_summary.push(ChatMessage::system(prev));
+        older_for_summary.push(ChatMessage::user(prev));
     }
     let summary_md = generate_fallback_compaction_report("active_task", &older_for_summary);
 
-    let summary_msg = ChatMessage::system(format!(
+    let summary_msg = ChatMessage::user(format!(
         "# Compacted Context Summary\n\n{}",
         summary_md
     ));
@@ -117,6 +117,7 @@ pub fn compact_context_messages(
     let saved_tokens = tokens_before.saturating_sub(tokens_after);
 
     CompactionReport {
+        task_id: String::new(),
         tokens_before,
         tokens_after,
         evaporated_count,

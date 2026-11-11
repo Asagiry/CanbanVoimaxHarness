@@ -42,6 +42,45 @@ pub fn resolve_safe_path(worktree_dir: &Path, rel_path: &str) -> Result<PathBuf>
         );
     }
 
+    if worktree_dir.exists() {
+        let canon_root = std::fs::canonicalize(worktree_dir)
+            .with_context(|| format!("Failed to canonicalize worktree {:?}", worktree_dir))?;
+
+        if std::fs::symlink_metadata(&norm_candidate).is_ok() {
+            let canon_target = std::fs::canonicalize(&norm_candidate).with_context(|| {
+                format!("Denied dangling or unreadable path/symlink: {:?}", rel_path)
+            })?;
+            if !canon_target.starts_with(&canon_root) {
+                bail!(
+                    "Path traversal denied: symlink or junction {:?} escapes worktree boundary",
+                    rel_path
+                );
+            }
+        } else {
+            let mut ancestor_opt = norm_candidate.parent();
+            while let Some(anc) = ancestor_opt {
+                if std::fs::symlink_metadata(anc).is_ok() {
+                    let canon_anc = std::fs::canonicalize(anc).with_context(|| {
+                        format!("Denied dangling or unreadable ancestor for {:?}", rel_path)
+                    })?;
+                    let remainder = norm_candidate.strip_prefix(anc).unwrap_or(Path::new(""));
+                    let resolved_check = canon_anc.join(remainder);
+                    if !resolved_check.starts_with(&canon_root) {
+                        bail!(
+                            "Path traversal denied: ancestor symlink/junction {:?} escapes worktree boundary",
+                            rel_path
+                        );
+                    }
+                    break;
+                }
+                if anc == norm_worktree {
+                    break;
+                }
+                ancestor_opt = anc.parent();
+            }
+        }
+    }
+
     Ok(norm_candidate)
 }
 
@@ -98,6 +137,9 @@ pub async fn collect_matching_files(
                 Err(_) => continue,
             };
 
+            if file_type.is_symlink() {
+                continue;
+            }
             if file_type.is_dir() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name == ".git" || name == "target" || name == "node_modules" {
@@ -127,39 +169,113 @@ pub fn glob_match(pattern: &str, candidate: &str) -> bool {
     glob_match_slices(p.as_bytes(), c.as_bytes())
 }
 
+enum GlobTok {
+    DoubleStar,
+    Star,
+    Any,
+    Lit(u8),
+}
+
 pub fn glob_match_slices(pattern: &[u8], candidate: &[u8]) -> bool {
-    if pattern.is_empty() {
-        return candidate.is_empty();
-    }
-    if pattern.starts_with(b"**") {
-        let rest_pat = if pattern.starts_with(b"**/*") {
-            &pattern[4..]
-        } else if pattern.starts_with(b"**/") {
-            &pattern[3..]
+    let mut toks = Vec::with_capacity(pattern.len());
+    let mut idx = 0;
+    while idx < pattern.len() {
+        if pattern[idx..].starts_with(b"**/*") {
+            toks.push(GlobTok::DoubleStar);
+            idx += 4;
+        } else if pattern[idx..].starts_with(b"**/") {
+            toks.push(GlobTok::DoubleStar);
+            idx += 3;
+        } else if pattern[idx..].starts_with(b"**") {
+            toks.push(GlobTok::DoubleStar);
+            idx += 2;
+        } else if pattern[idx] == b'*' {
+            toks.push(GlobTok::Star);
+            idx += 1;
+        } else if pattern[idx] == b'?' {
+            toks.push(GlobTok::Any);
+            idx += 1;
         } else {
-            &pattern[2..]
-        };
-        for i in 0..=candidate.len() {
-            if glob_match_slices(rest_pat, &candidate[i..]) {
-                return true;
+            toks.push(GlobTok::Lit(pattern[idx]));
+            idx += 1;
+        }
+    }
+
+    let n = candidate.len();
+    let mut dp = vec![false; n + 1];
+    let mut next = vec![false; n + 1];
+    dp[0] = true;
+
+    for tok in &toks {
+        next.fill(false);
+        match tok {
+            GlobTok::DoubleStar => {
+                if let Some(first) = dp.iter().position(|&b| b) {
+                    next[first..].fill(true);
+                }
+            }
+            GlobTok::Star => {
+                let mut active = false;
+                for j in 0..=n {
+                    if dp[j] {
+                        active = true;
+                    }
+                    if active {
+                        next[j] = true;
+                    }
+                    if j < n && candidate[j] == b'/' {
+                        active = false;
+                    }
+                }
+            }
+            GlobTok::Any => {
+                for j in 0..n {
+                    if dp[j] {
+                        next[j + 1] = true;
+                    }
+                }
+            }
+            GlobTok::Lit(b) => {
+                for j in 0..n {
+                    if dp[j] && candidate[j] == *b {
+                        next[j + 1] = true;
+                    }
+                }
             }
         }
+        std::mem::swap(&mut dp, &mut next);
+    }
+
+    dp[n]
+}
+
+const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_GREP_FILE_BYTES: u64 = 2 * 1024 * 1024;
+
+async fn grep_single_file(
+    path: &Path,
+    worktree_root: &Path,
+    pattern: &regex::Regex,
+    max_bytes: u64,
+    out: &mut Vec<String>,
+) -> bool {
+    if !tokio::fs::metadata(path).await.is_ok_and(|m| m.len() <= max_bytes) {
         return false;
     }
-    if pattern[0] == b'*' {
-        let rest_pat = &pattern[1..];
-        for i in 0..=candidate.len() {
-            if i > 0 && candidate[i - 1] == b'/' {
-                break;
-            }
-            if glob_match_slices(rest_pat, &candidate[i..]) {
-                return true;
+    if let Ok(content) = tokio::fs::read_to_string(path).await {
+        let rel = path
+            .strip_prefix(worktree_root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        for (idx, line) in content.lines().enumerate() {
+            if pattern.is_match(line) {
+                out.push(format!("{}:{}: {}", rel, idx + 1, line.trim()));
+                if out.len() >= 200 {
+                    return true;
+                }
             }
         }
-        return false;
-    }
-    if !candidate.is_empty() && (pattern[0] == b'?' || pattern[0] == candidate[0]) {
-        return glob_match_slices(&pattern[1..], &candidate[1..]);
     }
     false
 }
@@ -171,68 +287,36 @@ pub async fn grep_walk(
     out: &mut Vec<String>,
 ) -> Result<()> {
     if target.is_file() {
-        if let Ok(content) = tokio::fs::read_to_string(target).await {
-            let rel = target
-                .strip_prefix(worktree_root)
-                .unwrap_or(target)
-                .to_string_lossy()
-                .replace('\\', "/");
-
-            for (idx, line) in content.lines().enumerate() {
-                if pattern.is_match(line) {
-                    out.push(format!("{}:{}: {}", rel, idx + 1, line.trim()));
-                    if out.len() >= 200 {
-                        return Ok(());
-                    }
-                }
-            }
-        }
+        let _ = grep_single_file(target, worktree_root, pattern, MAX_READ_FILE_BYTES, out).await;
         return Ok(());
     }
 
     let mut dir_stack = vec![target.to_path_buf()];
-
     while let Some(current_dir) = dir_stack.pop() {
-        let mut read_dir = match tokio::fs::read_dir(&current_dir).await {
-            Ok(rd) => rd,
-            Err(_) => continue,
+        let Ok(mut read_dir) = tokio::fs::read_dir(&current_dir).await else {
+            continue;
         };
-
         while let Ok(Some(entry)) = read_dir.next_entry().await {
             let path = entry.path();
-            let file_type = match entry.file_type().await {
-                Ok(ft) => ft,
-                Err(_) => continue,
+            let Ok(file_type) = entry.file_type().await else {
+                continue;
             };
-
+            if file_type.is_symlink() {
+                continue;
+            }
             let name = entry.file_name().to_string_lossy().to_string();
             if name == ".git" || name == "target" || name == "node_modules" {
                 continue;
             }
-
             if file_type.is_dir() {
                 dir_stack.push(path);
-            } else if file_type.is_file() {
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    let rel = path
-                        .strip_prefix(worktree_root)
-                        .unwrap_or(&path)
-                        .to_string_lossy()
-                        .replace('\\', "/");
-
-                    for (idx, line) in content.lines().enumerate() {
-                        if pattern.is_match(line) {
-                            out.push(format!("{}:{}: {}", rel, idx + 1, line.trim()));
-                            if out.len() >= 200 {
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
+            } else if file_type.is_file()
+                && grep_single_file(&path, worktree_root, pattern, MAX_GREP_FILE_BYTES, out).await
+            {
+                return Ok(());
             }
         }
     }
-
     Ok(())
 }
 
@@ -272,6 +356,18 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
         .and_then(|v| v.as_u64())
         .map(|v| v as usize)
         .unwrap_or(default_limit);
+
+    let meta = tokio::fs::metadata(&target)
+        .await
+        .with_context(|| format!("Failed to stat file: {:?}", rel_path))?;
+    if meta.len() > MAX_READ_FILE_BYTES {
+        bail!(
+            "File {:?} exceeds maximum readable size ({} bytes > {} bytes)",
+            rel_path,
+            meta.len(),
+            MAX_READ_FILE_BYTES
+        );
+    }
 
     let content = tokio::fs::read_to_string(&target)
         .await
@@ -314,12 +410,9 @@ pub async fn execute_write_file(ctx: &ToolContext<'_>, args: &serde_json::Value)
 
     let target = resolve_safe_path(ctx.worktree_dir, rel_path)?;
     crate::config::atomic_write_file(&target, content).await?;
-    if ctx.worktree_dir != ctx.repo_root && crate::commands::git::is_cvh_config_path(rel_path) {
-        if let Ok(repo_target) = resolve_safe_path(ctx.repo_root, rel_path) {
-            let _ = crate::config::atomic_write_file(&repo_target, content).await;
-        }
+    if ctx.worktree_dir == ctx.repo_root {
+        emit_file_change_events(ctx, rel_path).await;
     }
-    emit_file_change_events(ctx, rel_path).await;
     Ok(format!("Successfully wrote {} bytes to {:?}", content.len(), rel_path))
 }
 
@@ -358,12 +451,9 @@ pub async fn execute_edit_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
     };
 
     crate::config::atomic_write_file(&target, &updated).await?;
-    if ctx.worktree_dir != ctx.repo_root && crate::commands::git::is_cvh_config_path(rel_path) {
-        if let Ok(repo_target) = resolve_safe_path(ctx.repo_root, rel_path) {
-            let _ = crate::config::atomic_write_file(&repo_target, &updated).await;
-        }
+    if ctx.worktree_dir == ctx.repo_root {
+        emit_file_change_events(ctx, rel_path).await;
     }
-    emit_file_change_events(ctx, rel_path).await;
     Ok(format!("Successfully updated {:?}", rel_path))
 }
 

@@ -65,7 +65,7 @@ fn test_immutable_anchors_and_condensation() {
 
     // Message at index 2 should be the Compacted Context Summary
     let summary_msg = &messages[2];
-    assert_eq!(summary_msg.role, Role::System);
+    assert_eq!(summary_msg.role, Role::User);
     assert!(summary_msg.content.as_ref().unwrap().starts_with("# Compacted Context Summary"));
 
     // Recent turns (Turns 3 and 4) are preserved
@@ -153,11 +153,11 @@ fn test_multiple_compaction_rounds_no_duplicate_summary() {
     let report1 = compact_context_messages(&mut messages, 5);
     assert!(report1.compacted_messages_count > 0);
 
-    // Count how many system summary messages exist
+    // Count how many summary messages exist
     let summaries_count_1 = messages
         .iter()
         .filter(|m| {
-            m.role == Role::System
+            m.role == Role::User
                 && m.content
                     .as_ref()
                     .map(|c| c.starts_with("# Compacted Context Summary"))
@@ -178,7 +178,7 @@ fn test_multiple_compaction_rounds_no_duplicate_summary() {
     let summaries_count_2 = messages
         .iter()
         .filter(|m| {
-            m.role == Role::System
+            m.role == Role::User
                 && m.content
                     .as_ref()
                     .map(|c| c.starts_with("# Compacted Context Summary"))
@@ -269,4 +269,24 @@ fn test_fallback_compaction_extracts_tools_todos_and_tests() {
 
     // Verify current focus
     assert!(report.contains("Fix gauge bug in ContextGauge.tsx"));
+}
+
+#[test]
+fn test_evaporate_multiple_think_blocks_after_small_block() {
+    let small_think = "<think>short thought</think>";
+    let large_think = format!("<think>{}</think>", "x".repeat(400));
+    let mut messages = vec![
+        ChatMessage::system("system"),
+        ChatMessage::user("spec"),
+        ChatMessage::assistant(Some(format!("{}\n{}\nFinal answer", small_think, large_think)), None),
+        ChatMessage::assistant(Some("recent 1".to_string()), None),
+        ChatMessage::assistant(Some("recent 2".to_string()), None),
+    ];
+
+    let count = evaporate_tool_logs(&mut messages, 5);
+    assert_eq!(count, 1);
+    let content = messages[2].content.as_deref().unwrap();
+    assert!(content.contains(small_think), "small block should stay intact");
+    assert!(content.contains("[Thought evaporated:"), "second large block must evaporate");
+    assert!(content.contains("Final answer"));
 }

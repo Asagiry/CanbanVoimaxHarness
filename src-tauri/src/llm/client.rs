@@ -4,11 +4,45 @@ use eventsource_stream::{Eventsource, EventStreamError};
 use futures_util::StreamExt;
 use reqwest::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
 use crate::llm::responses_event::handle_responses_sse_event;
 pub use crate::llm::usage::*;
+
+static SHARED_LLM_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .tcp_keepalive(Duration::from_secs(30))
+        .build()
+        .unwrap_or_default()
+});
+
+static SECRET_REDACT_PATTERNS: LazyLock<Vec<(regex::Regex, &'static str)>> = LazyLock::new(|| {
+    let specs = [
+        (r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}", "${1}[REDACTED]"),
+        (r"(?i)((?:api[_-]?key|x-api-key|authorization|secret|password|token)\s*[:=]\s*['\x22]?)[^\s'\x22,;}{]{6,}", "${1}[REDACTED]"),
+        (r"([?&](?:api_key|key|token)=)[^&\s]+", "${1}[REDACTED]"),
+        (r"\b(?:sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,}|AIza[A-Za-z0-9_-]{16,}|gh[po]_[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,})\b", "[REDACTED]"),
+    ];
+    specs
+        .into_iter()
+        .filter_map(|(pat, rep)| regex::Regex::new(pat).ok().map(|re| (re, rep)))
+        .collect()
+});
+
+/// Masks API keys, Bearer tokens, and secret query/header values from logs and errors.
+pub fn redact_secrets(input: &str, extra_secret: Option<&str>) -> String {
+    let mut out = input.to_string();
+    if let Some(secret) = extra_secret.map(str::trim).filter(|s| s.len() >= 4) {
+        out = out.replace(secret, "[REDACTED]");
+    }
+    for (re, rep) in SECRET_REDACT_PATTERNS.iter() {
+        out = re.replace_all(&out, *rep).into_owned();
+    }
+    out
+}
 
 #[derive(Debug, Clone)]
 pub struct LlmClient {
@@ -25,13 +59,8 @@ impl Default for LlmClient {
 
 impl LlmClient {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(15))
-            .tcp_keepalive(Duration::from_secs(30))
-            .build()
-            .unwrap_or_default();
         Self {
-            client,
+            client: SHARED_LLM_HTTP_CLIENT.clone(),
             session: uuid::Uuid::new_v4().to_string(),
             prefix: std::sync::Arc::new(std::sync::Mutex::new(super::cache::PrefixTracker::default())),
         }
@@ -91,6 +120,9 @@ impl LlmClient {
             }
         }
 
+        const MAX_STREAM_RETRIES: usize = 4;
+        const HEADER_TIMEOUT: Duration = Duration::from_secs(60);
+        let mut attempt = 0usize;
         let mut delay_secs = 5_u64;
         loop {
             let id = uuid::Uuid::new_v4().to_string();
@@ -103,47 +135,65 @@ impl LlmClient {
                 .headers(headers.clone())
                 .json(&body_json);
 
-            let response = tokio::select! {
+            let response_res = tokio::select! {
                 _ = tx.closed() => return Ok(()),
-                response = req.send() => response,
+                res = tokio::time::timeout(HEADER_TIMEOUT, req.send()) => res,
             };
-            let retry_reason = match response {
-                Ok(resp) if resp.status().is_success() => {
+            let retry_reason = match response_res {
+                Ok(Ok(resp)) if resp.status().is_success() => {
                     match Self::consume_openai_response(resp, &tx).await? {
                         Some(reason) => reason,
                         None => return Ok(()),
                     }
                 }
-                Ok(resp) => {
+                Ok(Ok(resp)) => {
                     let status = resp.status();
                     let text = tokio::select! {
                         _ = tx.closed() => return Ok(()),
                         text = resp.text() => text.unwrap_or_else(|_| "Failed to read error body".to_string()),
                     };
-                    let err_summary = if text.len() > 120 {
-                        format!("{}...", text.chars().take(120).collect::<String>())
+                    let redacted_text = redact_secrets(&text, api_key);
+                    let err_summary = if redacted_text.chars().count() > 120 {
+                        format!("{}...", redacted_text.chars().take(120).collect::<String>())
                     } else {
-                        text.clone()
+                        redacted_text.clone()
                     };
                     if status.is_server_error() {
                         format!("HTTP {}: {}", status, err_summary)
                     } else {
-                        let final_err = format!("OpenAI API error [{}]: {}", status, text);
+                        let final_err = format!("OpenAI API error [{}]: {}", status, redacted_text);
                         eprintln!("CVH [llm_client]: {}", final_err);
                         let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
                         bail!(final_err);
                     }
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
+                    let redacted_err = redact_secrets(&e.to_string(), api_key);
                     if e.is_builder() || e.is_redirect() {
-                        let final_err = format!("Invalid OpenAI request: {e}");
+                        let final_err = format!("Invalid OpenAI request: {redacted_err}");
                         let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
                         bail!(final_err);
                     }
-                    e.to_string()
+                    redacted_err
                 }
+                Err(_) => "HTTP response header timeout (60s)".to_string(),
             };
-            eprintln!("CVH [llm_client]: {}. Reconnecting in {}s", retry_reason, delay_secs);
+            let redacted_reason = redact_secrets(&retry_reason, api_key);
+            if attempt >= MAX_STREAM_RETRIES {
+                let final_err = format!(
+                    "OpenAI stream failed after {} attempts: {}",
+                    attempt + 1,
+                    redacted_reason
+                );
+                eprintln!("CVH [llm_client]: {}", final_err);
+                let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                bail!(final_err);
+            }
+            attempt += 1;
+            eprintln!(
+                "CVH [llm_client]: {} (retry {}/{}). Reconnecting in {}s",
+                redacted_reason, attempt, MAX_STREAM_RETRIES, delay_secs
+            );
             if tx.send(StreamChunk::Retry { id, delay_secs }).await.is_err() {
                 return Ok(());
             }
@@ -307,8 +357,9 @@ impl LlmClient {
                                                         "CVH [llm_client] tool call id changed at idx={idx} ({} -> {}); split into idx={fresh}",
                                                         existing.0, new_id
                                                     );
-                                                    tool_calls_in_progress.insert(fresh, (String::new(), String::new(), String::new()));
-                                                    let entry = tool_calls_in_progress.get_mut(&fresh).unwrap();
+                                                    let entry = tool_calls_in_progress
+                                                        .entry(fresh)
+                                                        .or_insert_with(|| (String::new(), String::new(), String::new()));
                                                     entry.0.push_str(new_id);
                                                     if let Some(func) = tc.function {
                                                         if let Some(name) = func.name {

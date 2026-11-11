@@ -1,4 +1,7 @@
-use super::process::{kill_process_tree, ProcessTreeGuard};
+use super::process::{
+    build_windows_cmd_raw_arg, kill_process_tree, quote_windows_arg, read_pipe_capped,
+    ProcessTreeGuard, MAX_PIPE_CAPTURE_BYTES,
+};
 #[cfg(windows)]
 use super::process::CREATE_NO_WINDOW;
 use super::runner::HookExecutionResult;
@@ -6,7 +9,6 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -48,8 +50,8 @@ pub async fn execute_sensor_command(
         c.raw_arg("/C");
         let effective_cmd = {
             let trimmed = command_str.trim();
-            let (is_call, token_slice, rest) = if trimmed.len() >= 5 && trimmed[..5].eq_ignore_ascii_case("call ") {
-                let after_call = trimmed[5..].trim_start();
+            let (is_call, token_slice, rest) = if trimmed.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("call ")) {
+                let after_call = trimmed.get(5..).unwrap_or("").trim_start();
                 let (tok, r) = parse_command_token(after_call);
                 (true, tok, r)
             } else {
@@ -61,10 +63,11 @@ pub async fn execute_sensor_command(
             let lower = unquoted.to_ascii_lowercase();
             if lower.ends_with(".bat") || lower.ends_with(".cmd") {
                 let normalized = unquoted.replace('/', "\\");
+                let quoted_bat = quote_windows_arg(&normalized);
                 if rest.is_empty() {
-                    format!("call \"{}\"", normalized)
+                    format!("call {}", quoted_bat)
                 } else {
-                    format!("call \"{}\" {}", normalized, rest)
+                    format!("call {} {}", quoted_bat, rest)
                 }
             } else if is_call {
                 trimmed.to_string()
@@ -72,7 +75,7 @@ pub async fn execute_sensor_command(
                 command_str.to_string()
             }
         };
-        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", effective_cmd));
+        c.raw_arg(build_windows_cmd_raw_arg(&effective_cmd)?);
         c
     };
 
@@ -111,28 +114,36 @@ pub async fn execute_sensor_command(
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(unix)]
+    cmd.process_group(0);
     cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn sensor command: {}", command_str))?;
     let pid = child.id();
     let mut tree_guard = ProcessTreeGuard::new(pid);
 
-    let mut stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
-    let mut stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
+    let stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
+    let stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
 
     let timeout_duration = timeout.unwrap_or(Duration::from_secs(300));
 
     let run_task = async {
         let stdout_drain = async {
-            let mut buf = Vec::new();
-            let _ = stdout_pipe.read_to_end(&mut buf).await;
-            crate::agent::decode_output_bytes(&buf)
+            let (buf, truncated) = read_pipe_capped(stdout_pipe, MAX_PIPE_CAPTURE_BYTES).await;
+            let mut s = crate::agent::decode_output_bytes(&buf);
+            if truncated {
+                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
+            }
+            s
         };
 
         let stderr_drain = async {
-            let mut buf = Vec::new();
-            let _ = stderr_pipe.read_to_end(&mut buf).await;
-            crate::agent::decode_output_bytes(&buf)
+            let (buf, truncated) = read_pipe_capped(stderr_pipe, MAX_PIPE_CAPTURE_BYTES).await;
+            let mut s = crate::agent::decode_output_bytes(&buf);
+            if truncated {
+                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
+            }
+            s
         };
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
@@ -151,6 +162,7 @@ pub async fn execute_sensor_command(
         _ = tokio::time::sleep(timeout_duration) => {
             if let Some(p) = pid {
                 kill_process_tree(p).await;
+                tree_guard.disarm();
             }
             let _ = child.kill().await;
             bail!("Sensor command '{}' timed out after {:?}", command_str, timeout_duration)

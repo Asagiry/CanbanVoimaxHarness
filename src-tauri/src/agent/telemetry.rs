@@ -3,8 +3,13 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Instant;
+use crate::llm::client::redact_secrets;
 use crate::llm::{ChatMessage, Role, ToolCall, ToolDefinition};
+
+static LLM_DEBUG_LOG_MUTEX: LazyLock<std::sync::Mutex<()>> =
+    LazyLock::new(|| std::sync::Mutex::new(()));
 
 /// Snapshot of turn telemetry metrics (cache hit rate and tokens per second).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -84,29 +89,45 @@ pub fn calculate_turn_telemetry(
     }
 }
 
-/// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
-/// Rotates the log to `.cvh/llm_debug.log.1` if size exceeds 10MB.
+/// Appends redacted model request and response telemetry to `.cvh/llm_debug.log`
+/// Rotates the log to `.cvh/llm_debug.log.1` atomically under a mutex if size exceeds 10MB.
 pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
     let cvh_dir = repo_root.join(".cvh");
-    let _ = tokio::fs::create_dir_all(&cvh_dir).await;
-    let log_path = cvh_dir.join("llm_debug.log");
-    const MAX_BYTES: u64 = 10 * 1024 * 1024; // 10MB
-    if let Ok(meta) = tokio::fs::metadata(&log_path).await {
-        if meta.len() >= MAX_BYTES {
-            let rot_path = cvh_dir.join("llm_debug.log.1");
-            let _ = tokio::fs::remove_file(&rot_path).await;
-            let _ = tokio::fs::rename(&log_path, &rot_path).await;
+    let sanitized = redact_secrets(text, None);
+    let _ = tokio::task::spawn_blocking(move || {
+        use std::io::Write;
+        const MAX_BYTES: u64 = 10 * 1024 * 1024;
+        let _guard = LLM_DEBUG_LOG_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Err(e) = std::fs::create_dir_all(&cvh_dir) {
+            eprintln!("CVH [telemetry]: failed to create .cvh dir: {}", e);
+            return;
         }
-    }
-    if let Ok(mut file) = tokio::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path)
-        .await
-    {
-        use tokio::io::AsyncWriteExt;
-        let _ = file.write_all(text.as_bytes()).await;
-    }
+        let log_path = cvh_dir.join("llm_debug.log");
+        if let Ok(meta) = std::fs::metadata(&log_path) {
+            if meta.len() >= MAX_BYTES {
+                let rot_path = cvh_dir.join("llm_debug.log.1");
+                let _ = std::fs::remove_file(&rot_path);
+                if let Err(e) = std::fs::rename(&log_path, &rot_path) {
+                    eprintln!("CVH [telemetry]: failed to rotate llm_debug.log: {}", e);
+                }
+            }
+        }
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(sanitized.as_bytes()) {
+                    eprintln!("CVH [telemetry]: failed to write llm_debug.log: {}", e);
+                }
+            }
+            Err(e) => eprintln!("CVH [telemetry]: failed to open llm_debug.log: {}", e),
+        }
+    })
+    .await;
 }
 
 /// Appends formatted turn request metadata and system prompt to `.cvh/llm_debug.log`.

@@ -83,7 +83,7 @@ impl AgentSessionDriver for MainAgentDriver {
     fn on_turn_finished(&self, turn: usize, messages: &[ChatMessage]) {
         let mut msgs = messages.to_vec();
         let mut rev = 0;
-        sync_context_state(&self.app_handle, &self.task_id, turn, &mut msgs, &mut rev);
+        sync_context_state(&self.app_handle, &self.repo_root, &self.task_id, turn, &mut msgs, &mut rev);
     }
 }
 

@@ -85,9 +85,18 @@ where
     loop {
         turn += 1;
         if abort_flag.load(Ordering::SeqCst) {
-            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
+        }
+        if config.max_turns > 0 && turn.saturating_sub(starting_turn) > config.max_turns {
+            let err_msg = format!(
+                "Agent reached max_turns limit ({}) without completing the task",
+                config.max_turns
+            );
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn.saturating_sub(1), &mut messages, &mut local_compaction_rev);
+            event_sink(AgentEvent::Error(err_msg.clone()));
+            bail!("{}", err_msg);
         }
 
         event_sink(AgentEvent::TurnStart { turn });
@@ -95,8 +104,9 @@ where
         // Synchronize in-memory agent context state with AppState
         if let Some(ref app) = config.app_handle {
             if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                let ctx_key = crate::commands::AppState::agent_key(&config.repo_root, &config.task_id);
                 if let Ok(map) = state.agent_contexts.lock() {
-                    if let Some(cs) = map.get(&config.task_id) {
+                    if let Some(cs) = map.get(&ctx_key).or_else(|| map.get(config.task_id.trim())) {
                         if let Ok(guard) = cs.lock() {
                             if guard.compaction_revision > local_compaction_rev || (guard.messages.len() < messages.len() && !guard.messages.is_empty()) {
                                 eprintln!(
@@ -112,7 +122,7 @@ where
             }
         }
 
-        if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+        if drain_pending_steers(&config, &mut messages, &mut context_cursor, false).await?.1 {
             completion_nudges = 0;
         }
 
@@ -124,7 +134,7 @@ where
             &mut local_compaction_rev,
             &mut completion_nudges,
             &event_sink,
-        )?;
+        ).await?;
 
         // Safety guard: guarantee request never ends with an Assistant turn (Gemini HTTP 400).
         if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
@@ -177,7 +187,7 @@ where
 
         let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
         if context_revision != local_compaction_rev {
-            if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+            if drain_pending_steers(&config, &mut messages, &mut context_cursor, false).await?.1 {
                 completion_nudges = 0;
             }
             context_revision = local_compaction_rev;
@@ -264,7 +274,7 @@ where
         let stream_res = final_stream_res.ok_or_else(|| anyhow::anyhow!("Stream result unexpectedly missing after LLM streaming loop"))?;
 
         if stream_res.aborted {
-            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -305,9 +315,13 @@ where
             }
             crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                 .await.map_err(anyhow::Error::msg)?;
-            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             let unfinished_todos = if active_tool_names.iter().any(|name| name == "todo_write") {
-                crate::db::db_get_todos(&config.repo_root, &config.task_id)
+                let root_c = config.repo_root.clone();
+                let tid_c = config.task_id.clone();
+                tokio::task::spawn_blocking(move || crate::db::db_get_todos(&root_c, &tid_c))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to join todos query: {e}"))?
                     .map_err(anyhow::Error::msg)?
             } else {
                 Vec::new()
@@ -318,12 +332,12 @@ where
                 &mut messages,
                 &mut context_cursor,
                 !unfinished || completion_nudges >= MAX_COMPLETION_NUDGES,
-            )?;
+            ).await?;
             if steer_appended {
                 if user_instruction {
                     completion_nudges = 0;
                 }
-                sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+                sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                 crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                     .await.map_err(anyhow::Error::msg)?;
                 continue;
@@ -348,7 +362,7 @@ where
                         items_list
                     );
                     messages.push(ChatMessage::user(reminder));
-                    sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+                    sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                     crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, &messages, context_cursor, &abort_flag)
                         .await.map_err(anyhow::Error::msg)?;
                     continue;
@@ -405,6 +419,6 @@ where
         }
 
         // Sync messages to in-memory context state
-        sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
+        sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
     }
 }

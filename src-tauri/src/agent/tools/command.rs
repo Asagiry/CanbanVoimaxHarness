@@ -12,20 +12,23 @@ use crate::agent::{load_custom_tools, run_scoped_command, ToolContext};
 /// returning `Some((target_path, rest_command))`.
 pub fn parse_leading_cd(cmd: &str) -> Option<(&str, &str)> {
     let trimmed = cmd.trim_start();
-    if trimmed.len() < 3 || !trimmed[..2].eq_ignore_ascii_case("cd") {
+    if trimmed.len() < 3 || !trimmed.get(..2).is_some_and(|p| p.eq_ignore_ascii_case("cd")) {
         return None;
     }
-    let after_cd = &trimmed[2..];
+    let after_cd = trimmed.get(2..)?;
     if !after_cd.starts_with([' ', '\t']) {
         return None;
     }
     let mut s = after_cd.trim_start();
 
     // Optional /d or -d switch
-    if s.len() >= 2 && (s[..2].eq_ignore_ascii_case("/d") || s[..2].eq_ignore_ascii_case("-d")) {
-        let after_flag = &s[2..];
-        if after_flag.starts_with([' ', '\t', '"', '\'']) {
-            s = after_flag.trim_start();
+    if let Some(flag) = s.get(..2) {
+        if flag.eq_ignore_ascii_case("/d") || flag.eq_ignore_ascii_case("-d") {
+            if let Some(after_flag) = s.get(2..) {
+                if after_flag.starts_with([' ', '\t', '"', '\'']) {
+                    s = after_flag.trim_start();
+                }
+            }
         }
     }
 
@@ -47,10 +50,8 @@ pub fn parse_leading_cd(cmd: &str) -> Option<(&str, &str)> {
     let after_ws = after_target.trim_start();
     let after_sep = if let Some(r) = after_ws.strip_prefix("&&") {
         r
-    } else if let Some(r) = after_ws.strip_prefix('&') {
-        r
     } else {
-        return None;
+        after_ws.strip_prefix('&')?
     };
 
     let rest = after_sep.trim_start();
@@ -157,6 +158,37 @@ pub async fn execute_command(
     Ok(format!("[Exit Code: 0]\n{}", output))
 }
 
+pub fn format_custom_tool_command(template: &str, args: &serde_json::Value) -> Result<String> {
+    if !template.contains("{{args}}") {
+        return Ok(template.to_string());
+    }
+    let args_json = serde_json::to_string(args)?;
+    if args_json.contains('\0') {
+        bail!("Custom tool arguments contain disallowed NUL byte");
+    }
+
+    #[cfg(target_os = "windows")]
+    let uses_cmd_exe = crate::agent::command_runner::find_git_bash().is_none();
+    #[cfg(not(target_os = "windows"))]
+    let uses_cmd_exe = false;
+
+    let safe_arg = if uses_cmd_exe {
+        if args_json.chars().any(|c| {
+            matches!(c, '&' | '|' | '<' | '>' | '^' | '%' | '!' | '`' | '$' | '(' | ')' | ';' | '\r' | '\n')
+        }) {
+            bail!("Custom tool arguments contain unsafe cmd.exe shell metacharacters");
+        }
+        crate::hooks::quote_windows_arg(&args_json)
+    } else {
+        format!("'{}'", args_json.replace('\'', "'\\''"))
+    };
+
+    Ok(template
+        .replace("'{{args}}'", &safe_arg)
+        .replace("\"{{args}}\"", &safe_arg)
+        .replace("{{args}}", &safe_arg))
+}
+
 pub async fn execute_custom_tool(
     ctx: &ToolContext<'_>,
     custom_tool: &str,
@@ -168,7 +200,7 @@ pub async fn execute_custom_tool(
 
     let custom_tools = load_custom_tools(repo_root).await;
     if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
-        let cmd_str = ct.command.replace("{{args}}", &args.to_string());
+        let cmd_str = format_custom_tool_command(&ct.command, args)?;
         let res = run_scoped_command(
             worktree_dir,
             &cmd_str,

@@ -1,4 +1,7 @@
-use super::process::{kill_process_tree, quote_windows_path, resolve_powershell_executable, ProcessTreeGuard};
+use super::process::{
+    build_windows_cmd_raw_arg, kill_process_tree, quote_windows_path, read_pipe_capped,
+    resolve_powershell_executable, ProcessTreeGuard, MAX_PIPE_CAPTURE_BYTES,
+};
 #[cfg(windows)]
 use super::process::CREATE_NO_WINDOW;
 use anyhow::{bail, Context, Result};
@@ -6,7 +9,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -63,7 +65,7 @@ pub async fn execute_hook(
                 c.raw_arg("/D");
                 c.raw_arg("/S");
                 c.raw_arg("/C");
-                c.raw_arg(format!("\"chcp 65001 >nul && {}\"", call_cmd));
+                c.raw_arg(build_windows_cmd_raw_arg(&call_cmd)?);
                 c
             }
             #[cfg(not(target_os = "windows"))]
@@ -163,28 +165,36 @@ pub async fn execute_hook(
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(unix)]
+    cmd.process_group(0);
     cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn hook script {:?}", script))?;
     let pid = child.id();
     let mut tree_guard = ProcessTreeGuard::new(pid);
 
-    let mut stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
-    let mut stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
+    let stdout_pipe = child.stdout.take().context("Failed to open child stdout")?;
+    let stderr_pipe = child.stderr.take().context("Failed to open child stderr")?;
 
     let timeout_duration = timeout.unwrap_or(Duration::from_secs(180));
 
     let run_task = async {
         let stdout_drain = async {
-            let mut buf = Vec::new();
-            let _ = stdout_pipe.read_to_end(&mut buf).await;
-            crate::agent::decode_output_bytes(&buf)
+            let (buf, truncated) = read_pipe_capped(stdout_pipe, MAX_PIPE_CAPTURE_BYTES).await;
+            let mut s = crate::agent::decode_output_bytes(&buf);
+            if truncated {
+                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
+            }
+            s
         };
 
         let stderr_drain = async {
-            let mut buf = Vec::new();
-            let _ = stderr_pipe.read_to_end(&mut buf).await;
-            crate::agent::decode_output_bytes(&buf)
+            let (buf, truncated) = read_pipe_capped(stderr_pipe, MAX_PIPE_CAPTURE_BYTES).await;
+            let mut s = crate::agent::decode_output_bytes(&buf);
+            if truncated {
+                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
+            }
+            s
         };
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
@@ -203,6 +213,7 @@ pub async fn execute_hook(
         _ = tokio::time::sleep(timeout_duration) => {
             if let Some(p) = pid {
                 kill_process_tree(p).await;
+                tree_guard.disarm();
             }
             let _ = child.kill().await;
             bail!("Hook script {:?} timed out after {:?}", script, timeout_duration)

@@ -572,10 +572,14 @@ use std::sync::Arc;
             "Fix the bug in agent.rs"
         ));
 
-        // 3. High similarity / prefix match
-        assert!(are_subagent_prompts_duplicate(
+        // 3. Prefix / high-overlap prompts with distinct instructions must NOT match
+        assert!(!are_subagent_prompts_duplicate(
             "Investigate and fix the compiler error in src-tauri/src/agent.rs right away",
             "Investigate and fix the compiler error in src-tauri/src/agent.rs"
+        ));
+        assert!(!are_subagent_prompts_duplicate(
+            "Read src/file_a.rs and report all error handling bugs in the module",
+            "Read src/file_b.rs and report all error handling bugs in the module"
         ));
 
         // 4. Distinct prompts must NOT match

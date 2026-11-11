@@ -273,31 +273,64 @@ pub fn are_questions_duplicate(q1: &str, q2: &str) -> bool {
     ws1 == ws2 || are_subagent_prompts_duplicate(q1, q2)
 }
 
+pub fn generate_subagent_suffix(call_id: Option<&str>) -> String {
+    let uid: String = uuid::Uuid::new_v4().simple().to_string().chars().take(6).collect();
+    match call_id.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(cid) => format!("{}-{}", cid, uid),
+        None => format!("{}-{}", chrono::Utc::now().timestamp_millis(), uid),
+    }
+}
+
+pub async fn enforce_subagent_concurrency(
+    ctx: &ToolContext<'_>,
+    tool_key: &str,
+    parent_id: &str,
+) -> anyhow::Result<()> {
+    let max_concurrent = ctx
+        .tool_policy
+        .tool_settings
+        .get(tool_key)
+        .or_else(|| ctx.tool_policy.tool_settings.get("subagent"))
+        .and_then(|v| v.get("max_concurrent"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3) as usize;
+    if max_concurrent == 0 {
+        return Ok(());
+    }
+    let info_locks: Vec<Arc<tokio::sync::Mutex<SubagentRetryInfo>>> = {
+        let sessions = SUBAGENT_SESSIONS.lock().await;
+        sessions.values().map(|s| Arc::clone(&s.retry_info)).collect()
+    };
+    let mut running_count = 0usize;
+    for info_lock in info_locks {
+        let info = info_lock.lock().await;
+        if info.parent_task_id == parent_id && info.status == "running" {
+            running_count += 1;
+        }
+    }
+    if running_count >= max_concurrent {
+        anyhow::bail!(
+            "Maximum concurrent subagents ({}) reached for task '{}'. Collect or wait for running subagents before spawning more.",
+            max_concurrent,
+            parent_id
+        );
+    }
+    Ok(())
+}
+
 /// Robust subagent prompt similarity check for single-turn deduplication.
 pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
     let t1 = p1.trim();
     let t2 = p2.trim();
+    if t1.is_empty() || t2.is_empty() {
+        return false;
+    }
     if t1 == t2 {
         return true;
     }
     let ws1: String = t1.split_whitespace().collect::<Vec<_>>().join(" ");
     let ws2: String = t2.split_whitespace().collect::<Vec<_>>().join(" ");
-    if ws1 == ws2 {
-        return true;
-    }
-    if ws1.len() >= 20 && ws2.len() >= 20 {
-        if ws1.starts_with(&ws2) || ws2.starts_with(&ws1) {
-            return true;
-        }
-        let set1: std::collections::HashSet<&str> = ws1.split(' ').collect();
-        let set2: std::collections::HashSet<&str> = ws2.split(' ').collect();
-        let intersection = set1.intersection(&set2).count();
-        let union = set1.union(&set2).count();
-        if union > 0 && (intersection as f64 / union as f64) >= 0.85 {
-            return true;
-        }
-    }
-    false
+    ws1 == ws2
 }
 
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.

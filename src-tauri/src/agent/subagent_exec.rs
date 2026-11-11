@@ -48,6 +48,9 @@ pub fn run_inprocess_subagent(
         let mut sub_messages = prep.sub_messages;
         let mut resolved_model = prep.resolved_model;
         if resolved_model.trim().is_empty() {
+            if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+                drop(session.sender.lock().await.take());
+            }
             return Err(anyhow::anyhow!("Модель не выбрана: укажите модель в настройках задачи, персоны или Settings → Providers"));
         }
         let mut base_url = prep.base_url;
@@ -75,9 +78,17 @@ pub fn run_inprocess_subagent(
         let mut stream_retries = 0;
         let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
         let sub_context_window = subagent_setting.context_window.unwrap_or(128_000) as usize;
+        const SUBAGENT_MAX_TURNS: usize = 25;
 
         loop {
             sub_turn += 1;
+            if sub_turn > SUBAGENT_MAX_TURNS {
+                sub_error = Some(format!(
+                    "Subagent [{}] reached max_turns limit ({})",
+                    subagent_id, SUBAGENT_MAX_TURNS
+                ));
+                break;
+            }
             if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
                 let mut info = session.retry_info.lock().await;
                 info.steps = sub_turn;
@@ -302,6 +313,7 @@ pub fn run_inprocess_subagent(
                     info.status = "paused".to_string();
                     info.last_error = Some(err_msg.clone());
                     info.duration_ms = Some(duration_ms);
+                    drop(session.sender.lock().await.take());
                 }
 
                 if let Some(ref app) = ctx.app_handle {
@@ -364,7 +376,7 @@ pub fn run_inprocess_subagent(
 
         // Synthesis turn if final response is empty
         if final_sub_response.trim().is_empty() && !ctx.abort_handle.load(Ordering::SeqCst) {
-            final_sub_response = run_subagent_synthesis(
+            match run_subagent_synthesis(
                 &ctx,
                 &subagent_id,
                 &parent_id,
@@ -380,7 +392,20 @@ pub fn run_inprocess_subagent(
                 &subagent_engine,
                 &mut sub_messages,
                 start_instant,
-            ).await?;
+            ).await {
+                Ok(resp) => final_sub_response = resp,
+                Err(e) => {
+                    if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+                        drop(session.sender.lock().await.take());
+                    }
+                    if let Some(ref app) = ctx.app_handle {
+                        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                            state_ref.remove_active_agent(&ctx.repo_root, &subagent_id);
+                        }
+                    }
+                    return Err(e);
+                }
+            }
         }
 
         let report = format!(

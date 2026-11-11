@@ -94,6 +94,7 @@ pub async fn run_subagent_synthesis(
                 info.status = "paused".to_string();
                 info.last_error = Some(err_msg.clone());
                 info.duration_ms = Some(duration_ms);
+                drop(session.sender.lock().await.take());
             }
             if let Some(ref app) = ctx.app_handle {
                 if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
@@ -118,6 +119,29 @@ pub async fn run_subagent_synthesis(
                 subagent_id, err_msg
             );
             bail!("Subagent [{}] paused on transient provider error: {}", subagent_id, err_msg);
+        } else {
+            let duration_ms = start_instant.elapsed().as_millis() as f64;
+            if let Some((_, session)) = find_subagent_session(Some(parent_id), subagent_id).await {
+                let mut info = session.retry_info.lock().await;
+                info.status = "error".to_string();
+                info.last_error = Some(err_msg.clone());
+                info.duration_ms = Some(duration_ms);
+                if let Some(sender) = session.sender.lock().await.take() {
+                    let _ = sender.send(format!("[Subagent synthesis error: {}]", err_msg));
+                }
+            }
+            if let Some(ref app) = ctx.app_handle {
+                if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                    state_ref.session_registry.update_status(subagent_id, crate::agent::session_registry::SessionStatus::Finished);
+                }
+                let _ = app.emit("subagent:error", serde_json::json!({
+                    "parentTaskId": parent_id,
+                    "subagentId": subagent_id,
+                    "error": &err_msg,
+                    "durationMs": duration_ms,
+                }));
+            }
+            bail!("Subagent [{}] synthesis error: {}", subagent_id, err_msg);
         }
     }
 

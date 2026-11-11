@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::Manager;
 
-use super::guards::TaskStatusGuard;
+use super::guards::{SubagentActiveHandleGuard, TaskStatusGuard};
 use crate::agent::{
     find_subagent_report_from_db, find_subagent_session, remove_subagent_receiver, ToolContext,
     SUBAGENT_RECEIVERS, SUBAGENT_SESSIONS,
@@ -40,12 +40,6 @@ pub async fn execute_collect_subagent(
     let mut collected_reports: Vec<(String, String)> = Vec::new();
 
     for subagent_id in &ids {
-        if let Some(ref app) = ctx.app_handle {
-            if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
-                state_ref.remove_active_agent(repo_root, subagent_id);
-            }
-        }
-
         // 1. Check SUBAGENT_RECEIVERS (in-flight background subagents)
         let rx_opt = {
             let mut reg = SUBAGENT_RECEIVERS.lock().await;
@@ -53,6 +47,12 @@ pub async fn execute_collect_subagent(
         };
 
         if let Some((resolved_id, mut rx)) = rx_opt {
+            let guard_id = resolved_id.clone();
+            let _active_guard = SubagentActiveHandleGuard {
+                app_handle: ctx.app_handle.as_ref(),
+                repo_root,
+                subagent_id: &guard_id,
+            };
             let mut status_guard = task_id.map(|tid| TaskStatusGuard::new(ctx.app_handle.as_ref(), repo_root, tid));
             // Poll parent abort while waiting (D1): bare rx.await hangs forever on
             // panic/abort of the subagent task — mirror execute_subagent's 200ms poll.
@@ -120,12 +120,21 @@ pub async fn execute_collect_subagent(
                         continue;
                     }
 
-                    let is_aborted = if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
+                    let (is_aborted, paused_err) = if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
                         let info = session.retry_info.lock().await;
-                        info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst)
+                        let aborted = info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst);
+                        let paused = if info.status == "paused" {
+                            Some(info.last_error.clone().unwrap_or_else(|| "transient error".to_string()))
+                        } else {
+                            None
+                        };
+                        (aborted, paused)
                     } else {
-                        false
+                        (false, None)
                     };
+                    if let Some(err) = paused_err {
+                        bail!("Subagent [{}] paused on transient error: {}", resolved_id, err);
+                    }
                     let mut sessions = SUBAGENT_SESSIONS.lock().await;
                     sessions.remove(&resolved_id);
                     if is_aborted {
@@ -139,13 +148,70 @@ pub async fn execute_collect_subagent(
 
         // 2. Check SUBAGENT_SESSIONS (synchronous or already completed subagents)
         if let Some((resolved_id, session)) = find_subagent_session(task_id, subagent_id).await {
-            let info = session.retry_info.lock().await;
-            if let Some(ref rep) = info.report {
-                collected_reports.push((resolved_id, rep.clone()));
-                continue;
+            // Wait if still running without a receiver entry (e.g. second collector or race)
+            let mut status_guard: Option<TaskStatusGuard<'_>> = None;
+            loop {
+                let status_snapshot = {
+                    let info = session.retry_info.lock().await;
+                    if let Some(ref rep) = info.report {
+                        Ok(Some(rep.clone()))
+                    } else if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
+                        Ok(Some("[Субагент прерван пользователем / Subagent aborted by user]".to_string()))
+                    } else if info.status == "paused" {
+                        Err(anyhow::anyhow!(
+                            "Subagent [{}] is paused on transient error: {}",
+                            resolved_id,
+                            info.last_error.as_deref().unwrap_or("Unknown error")
+                        ))
+                    } else if info.status == "error" {
+                        Err(anyhow::anyhow!(
+                            "Subagent [{}] failed with error: {}",
+                            resolved_id,
+                            info.last_error.as_deref().unwrap_or("Unknown error")
+                        ))
+                    } else if info.status == "running" {
+                        Ok(None)
+                    } else {
+                        Ok(Some(String::new()))
+                    }
+                };
+                match status_snapshot {
+                    Ok(Some(rep)) if !rep.is_empty() => {
+                        if let Some(ref mut g) = status_guard {
+                            g.disarm_to_running();
+                        }
+                        collected_reports.push((resolved_id.clone(), rep));
+                        break;
+                    }
+                    Ok(Some(_)) => break,
+                    Ok(None) => {
+                        if status_guard.is_none() {
+                            status_guard = task_id.map(|tid| TaskStatusGuard::new(ctx.app_handle.as_ref(), repo_root, tid));
+                        }
+                        if ctx.abort_handle.load(Ordering::SeqCst) {
+                            session.abort_handle.store(true, Ordering::SeqCst);
+                            if let Some(ref mut g) = status_guard {
+                                g.disarm_to_running();
+                            }
+                            collected_reports.push((resolved_id.clone(), "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                    }
+                    Err(e) => {
+                        if let Some(ref mut g) = status_guard {
+                            g.disarm_to_running();
+                        }
+                        return Err(e);
+                    }
+                }
             }
-            if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
-                collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+            if collected_reports.last().is_some_and(|(id, _)| id == &resolved_id) {
+                if let Some(ref app) = ctx.app_handle {
+                    if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                        state_ref.remove_active_agent(repo_root, &resolved_id);
+                    }
+                }
                 continue;
             }
             if let Some(db_report) = find_subagent_report_from_db(repo_root, task_id, &resolved_id)
@@ -153,10 +219,6 @@ pub async fn execute_collect_subagent(
             {
                 collected_reports.push((resolved_id, db_report));
                 continue;
-            }
-            if info.status == "error" {
-                let err = info.last_error.as_deref().unwrap_or("Unknown error");
-                bail!("Subagent [{}] failed with error: {}", resolved_id, err);
             }
         }
 

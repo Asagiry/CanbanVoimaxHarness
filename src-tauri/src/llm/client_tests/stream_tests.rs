@@ -373,3 +373,17 @@ async fn test_opencode_responses_api_for_crouton_streams_tools_and_reasoning() {
     assert!(events.iter().any(|e| matches!(e, StreamChunk::Usage { input_tokens: 23508, output_tokens: 42, cache_read_tokens: 20000, .. })));
     assert!(matches!(events.last(), Some(StreamChunk::Done)));
 }
+
+#[test]
+fn redact_secrets_masks_bearer_and_api_keys() {
+    let raw = "Authorization: Bearer sk-secret-1234567890abcd failed with api_key=my_secret_value and ?key=AIzaSyDummyKeyValue123456";
+    let redacted = crate::llm::client::redact_secrets(raw, Some("custom-secret-tok"));
+    assert!(!redacted.contains("sk-secret-1234567890abcd"));
+    assert!(!redacted.contains("my_secret_value"));
+    assert!(!redacted.contains("AIzaSyDummyKeyValue123456"));
+    assert!(redacted.contains("[REDACTED]"));
+
+    let custom = crate::llm::client::redact_secrets("error with custom-secret-tok leaked", Some("custom-secret-tok"));
+    assert!(!custom.contains("custom-secret-tok"));
+    assert!(custom.contains("[REDACTED]"));
+}

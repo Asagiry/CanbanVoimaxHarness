@@ -518,7 +518,7 @@ line 2 again"
             call_id: None,
         };
 
-        // 1. write_file with .cvh/rules/runtime.md must write to BOTH worktree and repo_root
+        // 1. write_file with .cvh/rules/runtime.md must stay isolated in worktree_dir and NOT mutate repo_root
         let write_res = execute_tool(&tool_ctx, "write_file", &serde_json::json!({
             "file_path": ".cvh/rules/runtime.md",
             "content": "# Live Runtime Rules
@@ -534,12 +534,9 @@ v1.0
 v1.0
 ");
 
-        let repo_runtime = tokio::fs::read_to_string(repo_root.join(".cvh").join("rules").join("runtime.md")).await.expect("read repo_root runtime.md");
-        assert_eq!(repo_runtime, "# Live Runtime Rules
-v1.0
-");
+        assert!(!repo_root.join(".cvh").join("rules").join("runtime.md").exists(), "Worktree writes to .cvh/ must NOT mirror directly into repo_root");
 
-        // 2. edit_file with .cvh/rules/runtime.md must also mirror to repo_root
+        // 2. edit_file with .cvh/rules/runtime.md must also stay isolated in worktree_dir
         let edit_res = execute_tool(&tool_ctx, "edit_file", &serde_json::json!({
             "file_path": ".cvh/rules/runtime.md",
             "old_string": "v1.0",
@@ -554,10 +551,7 @@ v1.0
 v2.0
 ");
 
-        let repo_runtime_v2 = tokio::fs::read_to_string(repo_root.join(".cvh").join("rules").join("runtime.md")).await.unwrap();
-        assert_eq!(repo_runtime_v2, "# Live Runtime Rules
-v2.0
-");
+        assert!(!repo_root.join(".cvh").join("rules").join("runtime.md").exists(), "Worktree edits to .cvh/ must NOT mirror directly into repo_root");
 
         // 3. Regular source code must NOT be written to repo_root (stays isolated in worktree)
         let _ = execute_tool(&tool_ctx, "write_file", &serde_json::json!({
@@ -583,5 +577,13 @@ v2.0
         assert!(!repo_root.join(".cvh").join("spill").join("test.log").exists(), "Spill logs written directly by agent must not dual write");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_glob_match_linear_on_pathological_pattern() {
+        let pat = "a**b**c**d**e**f**g";
+        let cand = "a".repeat(200) + "x";
+        assert!(!glob_match(pat, &cand));
+        assert!(glob_match("src/**/*.rs", "src/agent/tools/file_ops.rs"));
     }
 

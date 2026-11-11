@@ -55,35 +55,65 @@ pub fn persist_steer_message(
     Ok(crate::db::insert_steer_message(root, task_id, &item)?.then_some(item))
 }
 
-pub fn drain_pending_steers(
+pub async fn has_pending_user_steer(config: &AgentSessionConfig, cursor: i64) -> Result<bool> {
+    let repo_root = config.repo_root.clone();
+    let task_id = config.task_id.clone();
+    tokio::task::spawn_blocking(move || {
+        let end = crate::db::context_dialog_cursor(&repo_root, &task_id)
+            .map_err(anyhow::Error::msg)?;
+        if end <= cursor {
+            return Ok(false);
+        }
+        let pending = crate::db::load_dialog_items_between(&repo_root, &task_id, cursor, end)
+            .map_err(anyhow::Error::msg)?;
+        Ok(pending.iter().any(|item| matches!(item.item_type.as_str(), "user" | "steer")))
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to join steer check task: {e}"))?
+}
+
+pub async fn drain_pending_steers(
     config: &AgentSessionConfig,
     messages: &mut Vec<ChatMessage>,
     cursor: &mut i64,
     close_if_empty: bool,
 ) -> Result<(bool, bool)> {
     use crate::agent::sanitizer::is_dialog_item_replayable;
-    let mut gate = config
-        .steering
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Steering queue lock poisoned"))?;
-    let end = crate::db::context_dialog_cursor(&config.repo_root, &config.task_id)
-        .map_err(anyhow::Error::msg)?;
-    let pending: Vec<_> =
-        crate::db::load_dialog_items_between(&config.repo_root, &config.task_id, *cursor, end)
-            .map_err(anyhow::Error::msg)?
-            .into_iter()
-            .filter(is_dialog_item_replayable)
-            .collect();
-    let user_instruction = pending
-        .iter()
-        .any(|item| matches!(item.item_type.as_str(), "user" | "steer"));
-    let before = messages.len();
-    append_messages_from_dialog(messages, "", &pending);
+    let steering = Arc::clone(&config.steering);
+    let repo_root = config.repo_root.clone();
+    let task_id = config.task_id.clone();
+    let cur = *cursor;
+    let mut snapshot = messages.clone();
+    let before = snapshot.len();
+
+    let (delta, end, appended, user_instruction) = tokio::task::spawn_blocking(move || {
+        let mut gate = steering
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Steering queue lock poisoned"))?;
+        let end = crate::db::context_dialog_cursor(&repo_root, &task_id)
+            .map_err(anyhow::Error::msg)?;
+        let pending: Vec<_> =
+            crate::db::load_dialog_items_between(&repo_root, &task_id, cur, end)
+                .map_err(anyhow::Error::msg)?
+                .into_iter()
+                .filter(is_dialog_item_replayable)
+                .collect();
+        let user_instruction = pending
+            .iter()
+            .any(|item| matches!(item.item_type.as_str(), "user" | "steer"));
+        append_messages_from_dialog(&mut snapshot, "", &pending);
+        let delta = snapshot.split_off(before);
+        let appended = !delta.is_empty();
+        if close_if_empty && !appended {
+            gate.accepting = false;
+        }
+        Ok::<_, anyhow::Error>((delta, end, appended, user_instruction))
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to join drain steers task: {e}"))??;
+
+    messages.extend(delta);
     *cursor = end;
-    let appended = messages.len() > before;
-    if close_if_empty && !appended {
-        gate.accepting = false;
-    }
     Ok((appended, user_instruction))
 }
 

@@ -804,3 +804,25 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[test]
+    fn test_parse_leading_cd_utf8_and_cp1251_decode() {
+        assert_eq!(parse_leading_cd("€€€ command"), None);
+        assert_eq!(parse_leading_cd("Привет мир"), None);
+        // CP1251 bytes for "Привет": П=0xCF, р=0xF0, и=0xE8, в=0xE2, е=0xE5, т=0xF2
+        let cp1251_bytes = [0xCFu8, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2];
+        assert_eq!(decode_output_bytes(&cp1251_bytes), "Привет");
+    }
+
+    #[test]
+    fn test_format_custom_tool_command_blocks_or_quotes_injection() {
+        let payload = serde_json::json!({"q": "$(whoami); rm -rf /"});
+        let res = super::super::tools::command::format_custom_tool_command("python tool.py {{args}}", &payload);
+        #[cfg(target_os = "windows")]
+        if crate::agent::command_runner::find_git_bash().is_none() {
+            assert!(res.is_err());
+            return;
+        }
+        let cmd = res.expect("bash single-quoted args");
+        assert!(cmd.starts_with("python tool.py '"));
+    }

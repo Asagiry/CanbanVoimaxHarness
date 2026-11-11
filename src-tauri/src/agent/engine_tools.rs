@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use crate::agent::engine_context::sync_context_state;
 use crate::agent::react_engine::{detect_degenerate_command_or_loop, normalize_tool_call_for_circuit_breaker};
 use crate::agent::sanitizer::sanitize_unclosed_tool_calls;
-use crate::agent::steering::{drain_pending_steers, AgentSessionConfig};
+use crate::agent::steering::{drain_pending_steers, has_pending_user_steer, AgentSessionConfig};
 use crate::agent::subagent_runtime::{
     are_questions_duplicate, are_subagent_prompts_duplicate, canonical_tool_name,
     should_abort_tool_batch, ExecutedSubagentCall, ToolContext,
@@ -56,6 +56,7 @@ where
     let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
     let mut executed_questions_in_turn: Vec<(String, String, String)> = Vec::new();
     let mut batch_aborted_by_error: Option<String> = None;
+    let mut deferred_for_steer = false;
     let total_in_batch = turn_tool_calls.len();
     if total_in_batch > 1 {
         for (idx, tc) in turn_tool_calls.iter().enumerate() {
@@ -85,7 +86,7 @@ where
 
         if abort_flag.load(Ordering::SeqCst) {
             sanitize_unclosed_tool_calls(messages);
-            sync_context_state(&config.app_handle, &config.task_id, turn, messages, local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, messages, local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -189,8 +190,19 @@ where
         let mut call_tool_ctx = tool_ctx.clone();
         call_tool_ctx.call_id = Some(&tc.id);
 
+        let norm_lower = tc.function.name.trim().to_lowercase();
+        let is_stage_transition = matches!(
+            norm_lower.as_str(),
+            "advance_task" | "move_task" | "reject_task" | "move_task_stage" | "advance_stage" | "next_stage"
+        ) || norm_name == "advance_task";
+
         let tool_start = std::time::Instant::now();
-        let exec_result = if let Some(cb_msg) = detect_degenerate_command_or_loop(
+        let exec_result = if is_stage_transition && has_pending_user_steer(config, *context_cursor).await? {
+            deferred_for_steer = true;
+            Err(anyhow::anyhow!(
+                "Stage transition deferred: new user steer instruction received. Address the user instruction before advancing."
+            ))
+        } else if let Some(cb_msg) = detect_degenerate_command_or_loop(
             &tc.function.name,
             &tc.function.arguments,
             recent_tool_calls,
@@ -223,7 +235,7 @@ where
                 batch: batch_info.clone(),
             });
             sanitize_unclosed_tool_calls(messages);
-            sync_context_state(&config.app_handle, &config.task_id, turn, messages, local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, messages, local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -321,39 +333,42 @@ where
         crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, messages, *context_cursor, abort_flag)
             .await.map_err(anyhow::Error::msg)?;
 
-        if should_abort_tool_batch(&tc.function.name, success, &result_str) {
+        if should_abort_tool_batch(&tc.function.name, success, &result_str)
+            || (is_stage_transition && deferred_for_steer)
+        {
             batch_aborted_by_error = Some(tc.function.name.clone());
         }
 
-        let norm_name = tc.function.name.trim().to_lowercase();
-        let is_stage_transition = matches!(
-            norm_name.as_str(),
-            "advance_task" | "move_task" | "reject_task" | "move_task_stage" | "advance_stage" | "next_stage"
-        ) || canonical_tool_name(&norm_name) == "advance_task";
-
         if is_stage_transition && success {
-            let (steer_appended, user_instruction) = drain_pending_steers(
-                config,
-                messages,
-                context_cursor,
-                false,
-            )?;
-            if steer_appended && user_instruction {
-                *completion_nudges = 0;
-                sync_context_state(&config.app_handle, &config.task_id, turn, messages, local_compaction_rev);
-                crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, messages, *context_cursor, abort_flag)
-                    .await.map_err(anyhow::Error::msg)?;
+            if has_pending_user_steer(config, *context_cursor).await? {
+                deferred_for_steer = true;
+                batch_aborted_by_error = Some(tc.function.name.clone());
                 continue;
             }
             if let Some(ref flag) = config.advance_aborted {
                 flag.store(true, Ordering::SeqCst);
             }
             abort_flag.store(true, Ordering::SeqCst);
-            sync_context_state(&config.app_handle, &config.task_id, turn, messages, local_compaction_rev);
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, messages, local_compaction_rev);
             event_sink(AgentEvent::Finished {
                 final_response: String::new(),
             });
             return Ok(TurnToolOutcome::Terminated(result_str));
+        }
+    }
+
+    if deferred_for_steer {
+        let (steer_appended, user_instruction) = drain_pending_steers(
+            config,
+            messages,
+            context_cursor,
+            false,
+        ).await?;
+        if steer_appended && user_instruction {
+            *completion_nudges = 0;
+            sync_context_state(&config.app_handle, &config.repo_root, &config.task_id, turn, messages, local_compaction_rev);
+            crate::db::save_conversation_context(&config.repo_root, &config.task_id, turn, messages, *context_cursor, abort_flag)
+                .await.map_err(anyhow::Error::msg)?;
         }
     }
 

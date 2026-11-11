@@ -1296,3 +1296,30 @@ async fn test_unfinished_todos_get_only_one_completion_reminder() {
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 }
+
+#[tokio::test]
+async fn test_run_agent_loop_enforces_max_turns() {
+    let base = std::path::PathBuf::from("target").join(format!("cvh_max_turns_{}", uuid::Uuid::new_v4()));
+    tokio::fs::create_dir_all(base.join(".cvh")).await.unwrap();
+    let task = make_test_task("CVH-MAXTURNS", "dev", "test-board");
+    crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.unwrap();
+    let sse = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"glob\",\"arguments\":\"{\\\"pattern\\\":\\\"*.rs\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n";
+    let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let (base_url, server) = start_mock_sse_server(sse, Arc::clone(&counter)).await;
+    let config = AgentSessionConfig {
+        repo_root: base.clone(), worktree_path: base.clone(), role: "developer".into(),
+        stage_id: "dev".into(), task_id: "CVH-MAXTURNS".into(), task_title: "Max turns".into(),
+        task_description: "Loop test".into(), handover_summary: None, task_attachments: None,
+        steer_prompt: None, steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())),
+        advance_aborted: None, base_url, api_key: None, model: "test-model".into(),
+        temperature: None, reasoning_effort: None, max_turns: 2, app_handle: None, context_window: None,
+    };
+    let err = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        run_agent_loop(config, Arc::new(AtomicBool::new(false)), |_| {}),
+    ).await.unwrap().expect_err("must stop at max_turns");
+    server.abort();
+    assert!(err.to_string().contains("max_turns"), "got: {}", err);
+    assert_eq!(counter.load(Ordering::SeqCst), 2);
+    let _ = tokio::fs::remove_dir_all(&base).await;
+}

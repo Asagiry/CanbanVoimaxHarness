@@ -465,3 +465,13 @@ Rule: Strictly isolated worktrees.",
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_is_tool_active_respects_agent_allowed_tools_and_subagent_stage() {
+        let policy = ToolPolicyConfig::default();
+        let allowed = vec!["read_file".to_string(), "grep".to_string()];
+        assert!(is_tool_active_for_agent("read_file", &policy, "developer", Some("dev"), Some(&allowed)));
+        assert!(!is_tool_active_for_agent("write_file", &policy, "developer", Some("dev"), Some(&allowed)));
+        assert!(!is_tool_active_for_agent("write_file", &policy, "developer", Some("review"), None));
+        assert!(!is_tool_active_for_agent("edit_file", &policy, "developer", Some("review"), None));
+    }

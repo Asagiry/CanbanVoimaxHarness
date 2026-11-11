@@ -202,7 +202,7 @@ pub async fn execute_subagent_turn_tools(
         let sub_tool_ctx = ToolContext {
             repo_root: &ctx.repo_root,
             worktree_dir: &ctx.worktree_dir,
-            stage_id: None,
+            stage_id: ctx.stage_id.as_deref(),
             role: Some(role),
             abort_handle: Arc::clone(&ctx.abort_handle),
             tool_policy: &ctx.tool_policy,

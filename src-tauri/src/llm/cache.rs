@@ -45,11 +45,15 @@ pub fn build_responses_payload(request: &OpenAIChatRequest) -> serde_json::Value
     let mut system_parts = Vec::new();
     let mut input = Vec::new();
 
-    for msg in &request.messages {
+    for (idx, msg) in request.messages.iter().enumerate() {
         match msg.role {
             Role::System => {
                 if let Some(text) = msg.text_content().filter(|t| !t.is_empty()) {
-                    system_parts.push(text.to_string());
+                    if idx == 0 {
+                        system_parts.push(text.to_string());
+                    } else {
+                        input.push(serde_json::json!({ "role": "user", "content": text }));
+                    }
                 }
             }
             Role::User => match &msg.content {
@@ -237,5 +241,29 @@ mod tests {
         assert_eq!(input[3]["type"], "function_call_output");
         assert_eq!(input[3]["output"], "fn main() {}");
         assert_eq!(payload["tools"][0]["name"], "read_file");
+    }
+
+    #[test]
+    fn responses_payload_keeps_mid_transcript_system_in_input() {
+        let req = OpenAIChatRequest {
+            model: "crouton-alpha-free".into(),
+            messages: vec![
+                ChatMessage::system("initial instructions"),
+                ChatMessage::user("task"),
+                ChatMessage::system("# Compacted Context Summary\n\nSummary body"),
+                ChatMessage::user("continue"),
+            ],
+            temperature: None,
+            stream: true,
+            tools: None,
+            reasoning_effort: None,
+            stream_options: None,
+        };
+        let payload = build_responses_payload(&req);
+        assert_eq!(payload["instructions"], "initial instructions");
+        let input = payload["input"].as_array().unwrap();
+        assert_eq!(input.len(), 3);
+        assert_eq!(input[1]["role"], "user");
+        assert!(input[1]["content"].as_str().unwrap().contains("Compacted Context Summary"));
     }
 }
