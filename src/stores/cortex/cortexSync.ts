@@ -254,7 +254,8 @@ export async function loadAgentPersonasAction(set: CortexSet, get: CortexGet): P
     const { invoke } = await import('@tauri-apps/api/core');
     const list = await invoke<RawAgentPersona[]>('list_agent_personas');
     if (Array.isArray(list)) raw = list;
-  } catch {
+  } catch (err) {
+    console.warn('list_agent_personas failed:', err);
     raw = [];
   }
   const seen = new Set<string>();
@@ -341,7 +342,6 @@ export async function loadAgentPersonasAction(set: CortexSet, get: CortexGet): P
 
   if (colsChanged) {
     boardState.setColumns(nextCols);
-    void boardState.saveCurrentBoard(nextCols);
   }
 
   get().syncStagesFromColumns(nextCols);

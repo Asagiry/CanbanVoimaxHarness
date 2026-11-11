@@ -1,5 +1,7 @@
 import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../../types';
 import { CvhGitStatus, CortexState, PendingDelete } from './types';
+import { extractScriptPath } from './cortexHelpers';
+import { replaceFileInStageList } from './cortexTemplates';
 
 type CortexSet = (
   partial: Partial<CortexState> | ((state: CortexState) => Partial<CortexState>),
@@ -137,6 +139,25 @@ export async function saveCvhToGitAction(set: CortexSet, get: CortexGet, message
       set({ cvhGitSaving: false, cvhGitError: detail });
       throw new Error(detail);
     }
+
+    const activeFile = get().activeFile;
+    if (activeFile?.isDirty) {
+      const isBuiltin = activeFile.path.startsWith('builtin:');
+      const scriptPath = extractScriptPath(activeFile.path);
+      const isDirectCommand = activeFile.type === 'hook' && !isBuiltin && !scriptPath;
+      if (!isBuiltin && !isDirectCommand) {
+        const targetPath = scriptPath ?? activeFile.path;
+        await invoke('save_cortex_file', { path: targetPath, content: activeFile.content });
+        const flushed: CortexAgentFile = { ...activeFile, isDirty: false };
+        set((state) => ({
+          stages: replaceFileInStageList(state.stages, flushed.stageId, flushed.id, flushed),
+          agentStages: replaceFileInStageList(state.agentStages, flushed.stageId, flushed.id, flushed),
+          globalRules: state.globalRules.map((f) => (f.id === flushed.id ? flushed : f)),
+          activeFile: flushed,
+        }));
+      }
+    }
+
     const status = await invoke<CvhGitStatus>('cvh_git_save', { message: message ?? null });
     set((state) => ({
       cvhGitStatus: status,

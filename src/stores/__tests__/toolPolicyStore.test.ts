@@ -168,11 +168,11 @@ describe('toolPolicyStore (Modular Tool Policy Engine)', () => {
       expect(tokensSaved).toBe(310 + 260 + 260 + 220); // 1050 tokens
     });
 
-    it('returns fallback floor (2400) when all tools are allowed', () => {
+    it('returns 0 when all tools are allowed', () => {
       const store = useToolPolicyStore.getState();
       // Non-existent stage has 0 disabled tools
       const tokensSaved = store.calculateSavedTokens('free_stage');
-      expect(tokensSaved).toBe(2400);
+      expect(tokensSaved).toBe(0);
     });
 
     it('manages tool settings with defaults and updates', async () => {

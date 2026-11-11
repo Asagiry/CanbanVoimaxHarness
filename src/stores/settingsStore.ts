@@ -7,25 +7,25 @@ import {
   upsertProviderLocal,
   type Provider,
 } from './settings/providers';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_PROVIDERS,
+  PROVIDER_PRESETS,
+  syncFlatFromProviders,
+  loadStoredNotificationSettings,
+  loadStoredAvailableModels,
+  mapBackendSettingsToLlmState,
+  extractModelIds,
+  fetchModelsFromClientEndpoints,
+  type LlmSettingsState,
+  type NotificationSettings,
+  type BackendLlmSettingsDTO,
+  type ModelCandidateItem,
+} from './settings/settingsHelpers';
 
 export type { Provider, ProviderModel, ProviderProtocol } from './settings/providers';
-
-export interface LlmSettingsState {
-  provider: string;
-  gatewayUrl: string;
-  baseUrl?: string;
-  apiKey: string;
-  model: string;
-  compactorModel?: string;
-  providers?: Provider[];
-}
-
-export interface NotificationSettings {
-  enabled: boolean;
-  onAdvanceTask: boolean;
-  onQuestion: boolean;
-  onTaskCompleted: boolean;
-}
+export type { LlmSettingsState, NotificationSettings } from './settings/settingsHelpers';
+export { syncFlatFromProviders } from './settings/settingsHelpers';
 
 interface SettingsStoreState {
   isOpen: boolean;
@@ -52,85 +52,6 @@ interface SettingsStoreState {
   fetchProviderModels: (providerId: ProviderId) => Promise<string[]>;
 }
 
-const DEFAULT_SETTINGS: LlmSettingsState = {
-  provider: 'OpenCode Go',
-  gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
-  baseUrl: 'https://opencode.ai/inference/go/openai/v1',
-  apiKey: '',
-  model: '',
-  compactorModel: 'inherit',
-};
-
-const DEFAULT_PROVIDERS = migrateFlatToProviders(DEFAULT_SETTINGS);
-
-export function syncFlatFromProviders(providers: Provider[], base: LlmSettingsState): LlmSettingsState {
-  // No "active provider": flat legacy fields always mirror providers[0]
-  // (matching the backend's ensure_providers sync).
-  const first = providers[0];
-  if (!first) return base;
-  const catalogIds = new Set(first.models.map((m) => m.id));
-  const model = base.model && catalogIds.has(base.model)
-    ? base.model
-    : first.models[0]?.id || base.model || '';
-  return {
-    ...base,
-    provider: first.name,
-    gatewayUrl: first.baseUrl || base.gatewayUrl,
-    baseUrl: first.baseUrl || base.baseUrl,
-    apiKey: first.apiKey,
-    model,
-    providers,
-  };
-}
-
-const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  enabled: true,
-  onAdvanceTask: true,
-  onQuestion: true,
-  onTaskCompleted: true,
-};
-
-function loadStoredNotificationSettings(): NotificationSettings {
-  try {
-    const raw = localStorage.getItem('cvh_notification_settings');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        enabled: parsed.enabled ?? DEFAULT_NOTIFICATION_SETTINGS.enabled,
-        onAdvanceTask: parsed.onAdvanceTask ?? DEFAULT_NOTIFICATION_SETTINGS.onAdvanceTask,
-        onQuestion: parsed.onQuestion ?? DEFAULT_NOTIFICATION_SETTINGS.onQuestion,
-        onTaskCompleted: parsed.onTaskCompleted ?? DEFAULT_NOTIFICATION_SETTINGS.onTaskCompleted,
-      };
-    }
-  } catch {
-    // Ignore localStorage error
-  }
-  return DEFAULT_NOTIFICATION_SETTINGS;
-}
-
-const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: string }> = {
-  'OpenCode Go': {
-    gatewayUrl: 'https://opencode.ai/inference/go/openai/v1',
-    defaultModel: '',
-  },
-  'OpenAI': {
-    gatewayUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o',
-  },
-  'Anthropic': {
-    gatewayUrl: 'https://api.anthropic.com/v1',
-    defaultModel: 'claude-3-7-sonnet-20250219',
-  },
-  'Ollama': {
-    gatewayUrl: 'http://127.0.0.1:11434/v1',
-    defaultModel: 'qwen2.5-coder:32b',
-  },
-  'Custom': {
-    gatewayUrl: '',
-    defaultModel: '',
-  },
-};
-
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
   settings: { ...DEFAULT_SETTINGS, providers: DEFAULT_PROVIDERS.providers },
@@ -143,7 +64,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
   openSettings: () => {
     set({ isOpen: true, saveStatus: 'idle', errorMessage: null });
-    get().loadSettings();
+    void get().loadSettings();
   },
 
   closeSettings: () => {
@@ -151,8 +72,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 
   setNotificationSettings: (partial) => {
-    const current = get().notificationSettings;
-    const next = { ...current, ...partial };
+    const next = { ...get().notificationSettings, ...partial };
     set({ notificationSettings: next });
     try {
       localStorage.setItem('cvh_notification_settings', JSON.stringify(next));
@@ -166,38 +86,42 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     set({ availableModels: unique });
     try {
       localStorage.setItem('cvh_available_models', JSON.stringify(unique));
-    } catch {
-      // Ignore localStorage error
+    } catch (err) {
+      console.debug('Failed to persist cvh_available_models:', err);
     }
   },
 
   addAvailableModels: (newModels) => {
-    const current = get().availableModels;
-    const combined = Array.from(new Set([...current, ...newModels]));
+    const combined = Array.from(new Set([...get().availableModels, ...newModels]));
     set({ availableModels: combined });
     try {
       localStorage.setItem('cvh_available_models', JSON.stringify(combined));
-    } catch {
-      // Ignore localStorage error
+    } catch (err) {
+      console.debug('Failed to persist cvh_available_models:', err);
     }
   },
 
   setProviders: (providers) => {
     const migrated = migrateFlatToProviders({ providers });
     const settings = syncFlatFromProviders(migrated.providers, get().settings);
+    const derived = availableModelIds(migrated.providers);
     set({
       providers: migrated.providers,
       settings,
-      availableModels: availableModelIds(migrated.providers).length > 0
-        ? availableModelIds(migrated.providers)
-        : get().availableModels,
+      availableModels: derived.length > 0 ? derived : get().availableModels,
     });
   },
 
   upsertProvider: async (provider) => {
     const next = upsertProviderLocal(get().providers, provider);
     const settings = syncFlatFromProviders(next, get().settings);
-    set({ providers: next, settings, availableModels: availableModelIds(next).length > 0 ? availableModelIds(next) : get().availableModels });
+    const derived = availableModelIds(next);
+    set({
+      providers: next,
+      settings,
+      availableModels: derived.length > 0 ? derived : get().availableModels,
+      errorMessage: null,
+    });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const saved = await invoke<Provider[]>('upsert_provider_command', { provider });
@@ -205,8 +129,10 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         get().setProviders(saved);
         return get().providers;
       }
-    } catch {
-      // Local-first fallback; backend save happens on saveSettings
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('upsert_provider_command failed:', err);
+      set({ errorMessage: errMsg });
     }
     return next;
   },
@@ -214,7 +140,12 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   deleteProvider: async (providerId) => {
     const { providers } = deleteProviderLocal(get().providers, providerId);
     const settings = syncFlatFromProviders(providers, get().settings);
-    set({ providers, settings, availableModels: availableModelIds(providers) });
+    set({
+      providers,
+      settings,
+      availableModels: availableModelIds(providers),
+      errorMessage: null,
+    });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const saved = await invoke<Provider[]>('delete_provider', { providerId });
@@ -222,8 +153,10 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         get().setProviders(saved);
         return get().providers;
       }
-    } catch {
-      // Local-first fallback
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('delete_provider failed:', err);
+      set({ errorMessage: errMsg });
     }
     return providers;
   },
@@ -231,15 +164,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   setSettings: (partial) => {
     const current = get().settings;
     const next = { ...current, ...partial };
+    if (partial.baseUrl && !partial.gatewayUrl) next.gatewayUrl = partial.baseUrl;
+    if (partial.gatewayUrl && !partial.baseUrl) next.baseUrl = partial.gatewayUrl;
 
-    if (partial.baseUrl && !partial.gatewayUrl) {
-      next.gatewayUrl = partial.baseUrl;
-    }
-    if (partial.gatewayUrl && !partial.baseUrl) {
-      next.baseUrl = partial.gatewayUrl;
-    }
-
-    // If provider changed, auto-suggest preset gateway and model if they match default
     if (partial.provider && partial.provider !== current.provider) {
       const preset = PROVIDER_PRESETS[partial.provider];
       if (preset) {
@@ -257,74 +184,32 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       }
     }
 
-    set({ settings: next, saveStatus: 'idle' });
+    set({ settings: next, saveStatus: 'idle', errorMessage: null });
   },
 
   loadSettings: async () => {
     let loaded: LlmSettingsState | null = null;
-    let storedModels: string[] = [];
+    const storedModels = loadStoredAvailableModels();
 
-    // 1. Snapshot localStorage models (used only if backend has no catalog)
-    try {
-      const savedModels = localStorage.getItem('cvh_available_models');
-      if (savedModels) {
-        const parsed = JSON.parse(savedModels);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          storedModels = Array.from(new Set(parsed));
-        }
-      }
-    } catch {
-      // Ignore JSON error
-    }
-
-    // 2. Try backend for settings (authoritative)
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const backendSettings = await invoke<any>('get_llm_settings');
+      const backendSettings = await invoke<BackendLlmSettingsDTO | null>('get_llm_settings');
       if (backendSettings) {
-        const backendProviders = Array.isArray(backendSettings.providers) ? backendSettings.providers : [];
-        const hasBackendCatalog = backendProviders.some(
-          (p: Provider) => Array.isArray(p.models) && p.models.length > 0,
-        );
-        if (hasBackendCatalog || backendProviders.length === 0) {
-          const gUrl = backendSettings.gatewayUrl || backendSettings.gateway_url || backendSettings.baseUrl || backendSettings.base_url || DEFAULT_SETTINGS.gatewayUrl;
-          const flat: LlmSettingsState = {
-            provider: backendSettings.provider || DEFAULT_SETTINGS.provider,
-            gatewayUrl: gUrl,
-            baseUrl: gUrl,
-            apiKey: backendSettings.apiKey || backendSettings.api_key || '',
-            model: backendSettings.model || '',
-            compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
-            providers: backendProviders.length > 0 ? backendProviders : undefined,
-          };
-          const migrated = migrateFlatToProviders(flat);
-          loaded = syncFlatFromProviders(migrated.providers, flat);
-        }
+        loaded = mapBackendSettingsToLlmState(backendSettings);
       }
-    } catch {
-      // Ignore Tauri invoke error in browser
+    } catch (err) {
+      console.warn('get_llm_settings IPC unavailable or failed:', err);
     }
 
-    // 3. Try localStorage fallback if backend didn't provide a catalog
     if (!loaded) {
       try {
         const raw = localStorage.getItem('cvh_llm_settings');
         if (raw) {
-          const parsed = JSON.parse(raw);
-          const gUrl = parsed.gatewayUrl || parsed.baseUrl || DEFAULT_SETTINGS.gatewayUrl;
-          const flat: LlmSettingsState = {
-            provider: parsed.provider || DEFAULT_SETTINGS.provider,
-            gatewayUrl: gUrl,
-            baseUrl: gUrl,
-            apiKey: parsed.apiKey || '',
-            model: parsed.model || DEFAULT_SETTINGS.model,
-            compactorModel: parsed.compactorModel || 'inherit',
-            providers: Array.isArray(parsed.providers) ? parsed.providers : undefined,
-          };
-          loaded = syncFlatFromProviders(migrateFlatToProviders(flat).providers, flat);
+          const parsed = JSON.parse(raw) as BackendLlmSettingsDTO;
+          loaded = mapBackendSettingsToLlmState(parsed);
         }
-      } catch {
-        // Ignore JSON error
+      } catch (err) {
+        console.debug('Failed to parse cvh_llm_settings from localStorage:', err);
       }
     }
 
@@ -346,13 +231,12 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
   saveSettings: async (newSettings) => {
     const current = get().settings;
-    const target: LlmSettingsState = newSettings ? { ...current, ...newSettings } : current;
+    const target: LlmSettingsState = newSettings ? { ...current, ...newSettings } : { ...current };
     if (target.baseUrl && !target.gatewayUrl) target.gatewayUrl = target.baseUrl;
     if (target.gatewayUrl && !target.baseUrl) target.baseUrl = target.gatewayUrl;
 
     set({ isSaving: true, saveStatus: 'idle', errorMessage: null });
 
-    // Always persist to localStorage as reliable backup
     try {
       localStorage.setItem('cvh_llm_settings', JSON.stringify(target));
       localStorage.setItem('cvh_available_models', JSON.stringify(get().availableModels));
@@ -360,7 +244,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       console.warn('Failed to save to localStorage:', e);
     }
 
-    // Try saving to backend
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('save_llm_settings', {
@@ -374,12 +257,13 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           providers: get().providers,
         },
       });
-      set({ settings: target, isSaving: false, saveStatus: 'saved' });
+      set({ settings: target, isSaving: false, saveStatus: 'saved', errorMessage: null });
       return true;
-    } catch (err: any) {
-      console.warn('Backend save_llm_settings warning (saved in localStorage):', err);
-      set({ settings: target, isSaving: false, saveStatus: 'saved' });
-      return true;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('Backend save_llm_settings failed:', err);
+      set({ isSaving: false, saveStatus: 'error', errorMessage: errMsg });
+      return false;
     }
   },
 
@@ -394,75 +278,34 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       throw new Error(errMessage);
     }
 
-    // 1. Try Tauri invoke: fetch_available_models({ baseUrl, apiKey })
-    let tauriError: any = null;
+    let tauriError: unknown = null;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<any>('fetch_available_models', { baseUrl, apiKey });
-      if (Array.isArray(result) && result.length > 0) {
-        const models = result
-          .map((item: any) => (typeof item === 'string' ? item : item.id || item.name || String(item)))
-          .filter(Boolean);
-        if (models.length > 0) {
-          const unique = Array.from(new Set(models));
-          set({ errorMessage: null });
-          return unique;
-        }
+      const result = await invoke<ModelCandidateItem[]>('fetch_available_models', { baseUrl, apiKey });
+      const unique = extractModelIds(result);
+      if (unique.length > 0) {
+        set({ errorMessage: null });
+        return unique;
       }
     } catch (err) {
       tauriError = err;
       console.info('Tauri fetch_available_models fallback to client fetch:', err);
     }
 
-    // 2. Client-side direct fetch fallback
-    const cleanBase = baseUrl.replace(/\/+$/, '');
-    const endpointsToTry = [
-      ...(cleanBase.startsWith('https://opencode.ai/inference/go/')
-        ? ['https://opencode.ai/inference/go/v1/models'] : []),
-      `${cleanBase}/models`,
-      cleanBase.endsWith('/v1') ? `${cleanBase}/models` : `${cleanBase}/v1/models`,
-    ];
-
-    let lastFetchError: any = null;
-    for (const url of endpointsToTry) {
-      try {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-        const res = await fetch(url, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          const rawList = Array.isArray(data) ? data : data.data || data.models || [];
-          if (Array.isArray(rawList) && rawList.length > 0) {
-            const models = rawList
-              .map((m: any) => (typeof m === 'string' ? m : m.id || m.name || ''))
-              .filter(Boolean);
-            if (models.length > 0) {
-              const unique = Array.from(new Set(models));
-              set({ errorMessage: null });
-              return unique;
-            }
-          }
-        } else {
-          const errText = await res.text().catch(() => res.statusText);
-          lastFetchError = new Error(`HTTP ${res.status}: ${errText}`);
-        }
-      } catch (err) {
-        lastFetchError = err;
-      }
+    const { models, lastError } = await fetchModelsFromClientEndpoints(baseUrl, apiKey);
+    if (models && models.length > 0) {
+      set({ errorMessage: null });
+      return models;
     }
 
-    // Never silently mask errors with hardcoded models!
-    const errMessage = `Failed to fetch models from ${baseUrl}: ${
-      lastFetchError instanceof Error
-        ? lastFetchError.message
+    const detail = lastError instanceof Error
+      ? lastError.message
+      : tauriError instanceof Error
+        ? tauriError.message
         : tauriError
-        ? String(tauriError)
-        : 'Network or endpoint unreachable'
-    }`;
+          ? String(tauriError)
+          : 'Network or endpoint unreachable';
+    const errMessage = `Failed to fetch models from ${baseUrl}: ${detail}`;
     set({ errorMessage: errMessage });
     throw new Error(errMessage);
   },

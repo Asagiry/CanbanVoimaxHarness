@@ -1,4 +1,4 @@
-import type { BackendTaskDTO, TodoItem } from '../../types';
+import type { ActivityItem, BackendTaskDTO, TodoItem } from '../../types';
 import type { AgentSessionSummary } from '../../stores/agentSessionStore';
 import type { TaskAdvancedPayload } from '../notificationService';
 
@@ -104,11 +104,26 @@ export interface AgentCompactedPayload {
   taskId?: string;
   currentTokens?: number;
   previousTokens?: number;
+  tokens_before?: number;
   tokens_after?: number;
+  tokensBefore?: number;
   tokensAfter?: number;
   saved_tokens?: number;
   estimatedSavedTokens?: number;
   savedTokens?: number;
+  savedChars?: number;
+  evaporatedCount?: number;
+}
+
+export interface AgentAbortedPayload {
+  taskId?: string;
+}
+
+export interface AgentSteerPayload {
+  taskId?: string;
+  content?: string;
+  type?: string;
+  images?: string[];
 }
 
 export interface TaskCreatedPayload {
@@ -127,6 +142,22 @@ export interface TaskMovedPayload {
   verdict?: string;
   status?: string;
   projectPath?: string;
+}
+
+export interface TaskDeletedPayload {
+  taskId?: string;
+  deletedIds?: string[];
+  projectPath?: string;
+}
+
+export interface TaskActivityPayload {
+  taskId?: string;
+  item?: ActivityItem;
+}
+
+export interface DialogUpdatedPayload {
+  taskId?: string;
+  deletedItemId?: string;
 }
 
 export interface HookStartPayload {
@@ -158,7 +189,13 @@ export interface TaskUpdatedPayload {
 
 export interface TasksUpdatedPayload {
   tasks?: BackendTaskDTO[];
+  taskId?: string;
   projectPath?: string;
+}
+
+export interface ProjectSwitchedPayload {
+  projectPath?: string;
+  path?: string;
 }
 
 export interface SubagentSpawnedPayload {
@@ -199,7 +236,7 @@ export interface SubagentAbortedPayload {
 export interface SubagentActivityPayload {
   parentTaskId?: string;
   subagentId?: string;
-  activity?: any;
+  activity?: ActivityItem;
 }
 
 export interface TextBuffer {
@@ -224,24 +261,28 @@ export interface AgentEventMap {
   'agent:finished': AgentFinishedPayload;
   'agent:error': AgentErrorPayload;
   'agent:status': AgentStatusPayload;
+  'agent:aborted': AgentAbortedPayload;
+  'agent:steer': AgentSteerPayload;
   'agent:session_status': AgentSessionSummary;
   'agent:autorun': AgentAutoRunPayload;
   'agent:compacted': AgentCompactedPayload;
   'task:created': TaskCreatedPayload;
   'task:moved': TaskMovedPayload;
+  'task:deleted': TaskDeletedPayload;
   'task:advanced': TaskAdvancedPayload;
-  'task:activity': { taskId?: string; item?: any };
-  'task:dialog': { taskId?: string; item?: any };
+  'task:activity': TaskActivityPayload;
+  'task:dialog': TaskActivityPayload;
+  'dialog:updated': DialogUpdatedPayload;
   'task:updated': TaskUpdatedPayload;
   'tasks:updated': TasksUpdatedPayload;
   'hook:start': HookStartPayload;
   'hook:finish': HookFinishPayload;
-  'project:changed': unknown;
-  'project:switched': unknown;
-  'agent:personas_updated': unknown;
-  'boards:updated': unknown;
-  'pipeline:updated': unknown;
-  'cortex:rules_updated': unknown;
+  'project:changed': ProjectSwitchedPayload;
+  'project:switched': ProjectSwitchedPayload;
+  'agent:personas_updated': Record<string, unknown> | undefined;
+  'boards:updated': Record<string, unknown> | undefined;
+  'pipeline:updated': Record<string, unknown> | undefined;
+  'cortex:rules_updated': Record<string, unknown> | undefined;
   'subagent:spawned': SubagentSpawnedPayload;
   'subagent:activity': SubagentActivityPayload;
   'subagent:finished': SubagentFinishedPayload;

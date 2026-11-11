@@ -52,7 +52,7 @@ export const createTasksMoveSlice: StateCreator<BoardState, [], [], TasksMoveSli
         const mapped = mapBackendTaskToKanban(backendTask);
         if (!mapped) return;
         const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
-        const sourceColId = (options as any)?.sourceStageId ?? options?.sourceColumnId ?? prev.stageId;
+        const sourceColId = options?.sourceStageId ?? options?.sourceColumnId ?? prev.stageId;
         const sourceCol = columns.find((c) => c.id === sourceColId);
         const sourceHasLeaveHook = Boolean(
           getHookScript(sourceCol?.hooks?.['on_leave']) ||

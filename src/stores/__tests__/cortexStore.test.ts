@@ -868,5 +868,72 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(useCortexStore.getState().stages.every((s) => !s.isExpanded)).toBe(true);
       expect(useCortexStore.getState().agentStages.every((s) => !s.isExpanded)).toBe(true);
     });
+
+    it('saveRules preserves isDirty and surfaces cvhGitError when save_cortex_file fails', async () => {
+      const file = useCortexStore.getState().globalRules[0] || {
+        id: 'global-rule-err.md',
+        name: 'err.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/err.md',
+        content: '# Fail',
+        isDirty: true,
+      };
+      useCortexStore.setState({
+        globalRules: [file],
+        activeFile: { ...file, content: '# Modified', isDirty: true },
+        isEditorOpen: true,
+      });
+      mockInvoke.mockRejectedValueOnce(new Error('permission denied'));
+
+      await useCortexStore.getState().saveRules();
+
+      const state = useCortexStore.getState();
+      expect(state.activeFile?.isDirty).toBe(true);
+      expect(state.saveFeedback).toBeNull();
+      expect(state.cvhGitError).toContain('permission denied');
+    });
+
+    it('saveCvhToGit flushes dirty activeFile to disk before cvh_git_save', async () => {
+      const callOrder: string[] = [];
+      const file = {
+        id: 'global-rule-flush.md',
+        name: 'flush.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/flush.md',
+        content: '# Unsaved edits',
+        isDirty: true,
+      };
+      useCortexStore.setState({
+        globalRules: [file],
+        activeFile: file,
+        isEditorOpen: true,
+      });
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        callOrder.push(cmd);
+        if (cmd === 'cvh_git_save') return { hasChanges: false, changedPaths: [], branch: 'main', ahead: false };
+        return true;
+      });
+
+      await useCortexStore.getState().saveCvhToGit();
+
+      expect(callOrder.indexOf('save_cortex_file')).toBeGreaterThanOrEqual(0);
+      expect(callOrder.indexOf('cvh_git_save')).toBeGreaterThan(callOrder.indexOf('save_cortex_file'));
+      expect(useCortexStore.getState().activeFile?.isDirty).toBe(false);
+    });
+
+    it('loadAgentPersonas does not invoke save_board write on read', async () => {
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'list_agent_personas') {
+          return [{ role: 'cvh-dev', color: '#f59e0b', icon: 'Terminal', rules: [], hooks: [] }];
+        }
+        return null;
+      });
+
+      await useCortexStore.getState().loadAgentPersonas();
+
+      expect(mockInvoke).not.toHaveBeenCalledWith('save_board', expect.anything());
+    });
   });
 });

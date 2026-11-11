@@ -1,10 +1,24 @@
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useAgentSessionStore } from '../../stores/agentSessionStore';
 import { showAdvanceTaskNotification, showRejectTaskNotification } from '../notificationService';
 import type { AddListenerFn } from './agentEventRouter';
 import type { TextBufferManager } from './textBuffer';
+import type { TaskActivityPayload } from './types';
 import { isEventForCurrentProject } from './helpers';
+
+function waitForTasksLoadIdle(): Promise<void> {
+  if (!useBoardStore.getState().isLoadingTasks) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsub = useBoardStore.subscribe((state) => {
+      if (!state.isLoadingTasks) {
+        unsub();
+        resolve();
+      }
+    });
+  });
+}
 
 export async function registerTaskEventListeners(
   addListener: AddListenerFn,
@@ -13,7 +27,7 @@ export async function registerTaskEventListeners(
 ): Promise<void> {
   // 11. task:created
   await addListener('task:created', (payload) => {
-    const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+    const eventRoot = payload?.projectPath || payload?.task?.projectPath || payload?.task?.project_path;
     if (!isEventForCurrentProject(eventRoot)) return;
     if (payload?.task) {
       useBoardStore.getState().upsertBackendTask(payload.task);
@@ -22,7 +36,7 @@ export async function registerTaskEventListeners(
 
   // 12. task:moved
   await addListener('task:moved', (payload) => {
-    const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+    const eventRoot = payload?.projectPath || payload?.task?.projectPath || payload?.task?.project_path;
     if (!isEventForCurrentProject(eventRoot)) return;
     if (payload?.task) {
       const rawTask = payload.task;
@@ -37,9 +51,42 @@ export async function registerTaskEventListeners(
         void showRejectTaskNotification({
           taskId,
           reason: payload.reason,
-          toStage: payload.toStage || payload.stageId || payload.task?.stage_id,
+          toStage: payload.toStage || payload.stageId || payload.task?.stageId || payload.task?.stage_id,
         });
       }
+    }
+  });
+
+  // 12b. task:deleted
+  await addListener('task:deleted', (payload) => {
+    if (!isEventForCurrentProject(payload?.projectPath)) return;
+    const ids = new Set<string>();
+    if (payload?.taskId) ids.add(payload.taskId);
+    if (Array.isArray(payload?.deletedIds)) {
+      for (const id of payload.deletedIds) {
+        if (id) ids.add(id);
+      }
+    }
+    if (ids.size === 0) return;
+
+    for (const id of ids) {
+      bufferManager.clearTask(id);
+    }
+    const drawer = useDrawerStore.getState();
+    if (drawer.activeTaskId && ids.has(drawer.activeTaskId)) {
+      drawer.closeDrawer();
+    }
+    for (const id of ids) {
+      drawer.clearTaskDraft(id);
+    }
+
+    const board = useBoardStore.getState();
+    const remaining = board.tasks.filter((t) => !ids.has(t.id));
+    if (remaining.length !== board.tasks.length) {
+      useBoardStore.setState({
+        tasks: remaining,
+        selectedTaskId: ids.has(board.selectedTaskId ?? '') ? null : board.selectedTaskId,
+      });
     }
   });
 
@@ -50,9 +97,9 @@ export async function registerTaskEventListeners(
     }
   });
 
-  // 13b. task:activity / task:dialog (real-time task activities emitted by backend transitions & tools)
+  // 13b. task:activity / task:dialog
   const seenItemIds = new Set<string>();
-  const handleTaskActivity = (payload: { taskId?: string; item?: any }) => {
+  const handleTaskActivity = (payload: TaskActivityPayload) => {
     const { taskId, item } = payload || {};
     if (taskId && item) {
       const dedupKey = item.id ? `${taskId}:${item.id}` : null;
@@ -70,6 +117,17 @@ export async function registerTaskEventListeners(
   };
   await addListener('task:activity', handleTaskActivity);
   await addListener('task:dialog', handleTaskActivity);
+
+  // 13c. dialog:updated
+  await addListener('dialog:updated', (payload) => {
+    const taskId = payload?.taskId;
+    if (!taskId) return;
+    const drawer = useDrawerStore.getState();
+    const isLoadedOrActive = drawer.activeTaskId === taskId || taskId in drawer.activityFeed;
+    if (isLoadedOrActive && !drawer.activeAgentTaskIds[taskId]) {
+      void drawer.loadTaskActivity(taskId);
+    }
+  });
 
   // 14. hook:start
   await addListener('hook:start', (payload) => {
@@ -109,7 +167,7 @@ export async function registerTaskEventListeners(
 
   // 16. task:updated
   await addListener('task:updated', (payload) => {
-    const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+    const eventRoot = payload?.projectPath || payload?.task?.projectPath || payload?.task?.project_path;
     if (!isEventForCurrentProject(eventRoot)) return;
     const { taskId, todos, task } = payload || {};
     if (taskId) {
@@ -137,16 +195,35 @@ export async function registerTaskEventListeners(
     }
   });
 
-  // 19. project:changed & project:switched
+  // 19. project:changed & project:switched (coalesced, never dropped during active load)
+  let isSyncingProject = false;
+  let hasPendingProjectSync = false;
   const handleProjectSwitched = async () => {
-    if (useBoardStore.getState().isLoadingTasks) {
+    if (isSyncingProject) {
+      hasPendingProjectSync = true;
       return;
     }
-    await useBoardStore.getState().loadBoards();
-    await useBoardStore.getState().loadTasks();
-    await useCortexStore.getState().loadAgentPersonas();
-    await useCortexStore.getState().loadGlobalRules();
-    useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    isSyncingProject = true;
+    try {
+      do {
+        hasPendingProjectSync = false;
+        if (useBoardStore.getState().isLoadingTasks) {
+          await waitForTasksLoadIdle();
+          if (isDisposedRef.current) return;
+        }
+        useDrawerStore.getState().resetProjectContext();
+        useCortexStore.getState().closeEditor?.();
+        useAgentSessionStore.getState().reset();
+        await useBoardStore.getState().loadBoards();
+        await useBoardStore.getState().loadTasks();
+        await useCortexStore.getState().loadAgentPersonas();
+        await useCortexStore.getState().loadGlobalRules();
+        useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+        await useAgentSessionStore.getState().syncActiveSessions();
+      } while (hasPendingProjectSync && !isDisposedRef.current);
+    } finally {
+      isSyncingProject = false;
+    }
   };
 
   await addListener('project:changed', handleProjectSwitched);

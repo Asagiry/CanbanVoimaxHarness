@@ -14,9 +14,10 @@ export type TasksMutateSlice = Pick<
 
 export const createTasksMutateSlice: StateCreator<BoardState, [], [], TasksMutateSlice> = (set, get) => ({
   updateTask: (taskId, partial) => {
+    const prevTask = get().tasks.find((t) => t.id === taskId);
     set((state) => {
       const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
-      return { tasks: updatedTasks };
+      return { tasks: updatedTasks, boardError: null };
     });
     void (async () => {
       try {
@@ -31,9 +32,18 @@ export const createTasksMutateSlice: StateCreator<BoardState, [], [], TasksMutat
           status: partial.status ?? null,
           verdict: partial.verdict ?? null,
         });
-      } catch {
-        const tasks = get().tasks;
-        await syncTasksBackend(tasks);
+      } catch (err) {
+        const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : String(err);
+        console.error(`[updateTask] Backend update_task failed for "${taskId}", rolling back:`, err);
+        logEvent('ERROR', 'BOARD_STORE', `updateTask: backend update_task failed for "${taskId}"`, errMsg);
+        if (prevTask) {
+          set((state) => ({
+            tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, ...prevTask } : t)),
+            boardError: errMsg,
+          }));
+        } else {
+          set({ boardError: errMsg });
+        }
       }
     })();
   },
@@ -73,7 +83,20 @@ export const createTasksMutateSlice: StateCreator<BoardState, [], [], TasksMutat
     }
     const ids = [...toDelete];
 
-    // Invariant § 2.25: Unconditional drawer auto-close and memory eviction BEFORE backend IPC
+    logEvent('INFO', 'BOARD_STORE', `deleteTask: requesting backend delete for "${resolvedId}"`, JSON.stringify(ids));
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_task', { taskId: resolvedId });
+    } catch (err) {
+      const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      console.error(`[deleteTask] Backend delete_task failed for "${resolvedId}":`, err);
+      logEvent('ERROR', 'BOARD_STORE', `deleteTask: backend delete_task failed for "${resolvedId}"`, errMsg);
+      set({ boardError: `Не удалось удалить задачу: ${errMsg}` });
+      return;
+    }
+
+    // Close drawer and clear local logs/drafts ONLY after backend delete_task succeeds
     const drawerActiveTaskId = useDrawerStore.getState().activeTaskId;
     if (drawerActiveTaskId && toDelete.has(drawerActiveTaskId)) {
       useDrawerStore.getState().closeDrawer();
@@ -90,19 +113,6 @@ export const createTasksMutateSlice: StateCreator<BoardState, [], [], TasksMutat
       } catch (draftErr) {
         console.warn('Failed to clear task draft for deleted task:', id, draftErr);
       }
-    }
-
-    logEvent('INFO', 'BOARD_STORE', `deleteTask: requesting backend delete for "${resolvedId}"`, JSON.stringify(ids));
-
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_task', { taskId: resolvedId });
-    } catch (err) {
-      const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
-      console.error(`[deleteTask] Backend delete_task failed for "${resolvedId}":`, err);
-      logEvent('ERROR', 'BOARD_STORE', `deleteTask: backend delete_task failed for "${resolvedId}"`, errMsg);
-      alert(`Не удалось удалить задачу:\n${errMsg}`);
-      return;
     }
 
     const currentTasks = get().tasks;
@@ -129,6 +139,7 @@ export const createTasksMutateSlice: StateCreator<BoardState, [], [], TasksMutat
       tasks: updatedTasks,
       hookStates: nextHookStates,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
+      boardError: null,
     });
   },
 

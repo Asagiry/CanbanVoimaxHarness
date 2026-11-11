@@ -1,5 +1,5 @@
 import { useDrawerStore } from '../../stores/drawerStore';
-import { flushStreamChunks } from '../../stores/drawer/slices/streamSlice';
+import { flushStreamChunks, clearStreamChunkBuffer } from '../../stores/drawer/slices/streamSlice';
 import type { TextBuffer } from './types';
 
 /**
@@ -85,6 +85,12 @@ export class TextBufferManager {
   }
 
   public dispose(): void {
-    this.flushAll();
+    for (const buffer of this.buffers.values()) {
+      if (buffer.timer) {
+        clearTimeout(buffer.timer);
+      }
+    }
+    this.buffers.clear();
+    clearStreamChunkBuffer();
   }
 }

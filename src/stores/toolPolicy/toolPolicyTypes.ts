@@ -38,8 +38,10 @@ export interface ToolPolicyState {
   toolSettings: ToolSettings;
   toolDescriptions: Record<string, string>;
   toolCustomSchemas: Record<string, unknown>;
+  policyError: string | null;
 
   // Actions
+  clearPolicyError: () => void;
   openModal: () => void;
   closeModal: () => void;
   setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;

@@ -69,7 +69,7 @@ export const createTasksCreateSlice: StateCreator<BoardState, [], [], TasksCreat
       const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
       console.error('[addTask] Backend create_task failed:', err);
       logEvent('ERROR', 'BOARD_STORE', 'addTask: backend create_task failed', errMsg);
-      alert(`Не удалось создать задачу:\n${errMsg}`);
+      set({ boardError: `Не удалось создать задачу: ${errMsg}` });
       return null;
     }
   },
@@ -140,7 +140,7 @@ export const createTasksCreateSlice: StateCreator<BoardState, [], [], TasksCreat
       const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
       console.error(`[createSubtask] Backend create_subtask failed for parent "${parentId}":`, err);
       logEvent('ERROR', 'BOARD_STORE', `createSubtask: backend create_subtask failed for parent "${parentId}"`, errMsg);
-      alert(`Не удалось создать подзадачу:\n${errMsg}`);
+      set({ boardError: `Не удалось создать подзадачу: ${errMsg}` });
       return null;
     }
   },

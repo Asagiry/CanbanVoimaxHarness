@@ -13,9 +13,10 @@ export * from './taskEventRouter';
 
 /**
  * Initializes all typed Tauri IPC event listeners and manages streaming micro-batching.
- * Returns a synchronous cleanup function to unsubscribe all registered listeners and flush pending buffers.
+ * Returns a synchronous cleanup function safe under React.StrictMode double-mount/unmount.
  */
 export function setupTauriEventGateway(): () => void {
+  const controller = new AbortController();
   const disposedRef = { current: false };
   const unlisteners: (() => void)[] = [];
   const bufferManager = new TextBufferManager();
@@ -23,15 +24,19 @@ export function setupTauriEventGateway(): () => void {
   const registerListeners = async () => {
     try {
       const { listen } = await import('@tauri-apps/api/event');
-      if (disposedRef.current) return;
+      if (disposedRef.current || controller.signal.aborted) return;
 
-      const addListener: AddListenerFn = async (event, handler) => {
-        const unlisten = await listen(event, (e) => {
-          if (!disposedRef.current) {
-            void handler(e.payload as any);
+      const addListener: AddListenerFn = async <K extends keyof AgentEventMap>(
+        event: K,
+        handler: (payload: AgentEventMap[K]) => void | Promise<void>,
+      ) => {
+        if (disposedRef.current || controller.signal.aborted) return;
+        const unlisten = await listen<AgentEventMap[K]>(event, (e) => {
+          if (!disposedRef.current && !controller.signal.aborted) {
+            void handler(e.payload);
           }
         });
-        if (disposedRef.current) {
+        if (disposedRef.current || controller.signal.aborted) {
           unlisten();
         } else {
           unlisteners.push(unlisten);
@@ -39,11 +44,17 @@ export function setupTauriEventGateway(): () => void {
       };
 
       await registerAgentEventListeners(addListener, bufferManager);
-      await registerTaskEventListeners(addListener, bufferManager, disposedRef);
+      if (disposedRef.current || controller.signal.aborted) return;
 
-      // 23. Unified subagent listeners
-      const cleanupSubagents = await initSubagentListeners(useDrawerStore);
-      unlisteners.push(cleanupSubagents);
+      await registerTaskEventListeners(addListener, bufferManager, disposedRef);
+      if (disposedRef.current || controller.signal.aborted) return;
+
+      const cleanupSubagents = await initSubagentListeners(useDrawerStore, controller.signal);
+      if (disposedRef.current || controller.signal.aborted) {
+        cleanupSubagents();
+      } else {
+        unlisteners.push(cleanupSubagents);
+      }
     } catch (e) {
       console.info('Tauri event listeners not active in web mode:', e);
     }
@@ -53,8 +64,12 @@ export function setupTauriEventGateway(): () => void {
 
   return () => {
     disposedRef.current = true;
+    controller.abort();
     bufferManager.dispose();
-    unlisteners.forEach((u) => u());
+    while (unlisteners.length > 0) {
+      const unlisten = unlisteners.pop();
+      unlisten?.();
+    }
   };
 }
 
@@ -65,7 +80,7 @@ export function setupTauriEventGateway(): () => void {
  */
 export async function listenToEvent<K extends keyof AgentEventMap>(
   event: K,
-  handler: (payload: AgentEventMap[K]) => void | Promise<void>
+  handler: (payload: AgentEventMap[K]) => void | Promise<void>,
 ): Promise<() => void> {
   const { listen } = await import('@tauri-apps/api/event');
   return listen<AgentEventMap[K]>(event, (e) => {

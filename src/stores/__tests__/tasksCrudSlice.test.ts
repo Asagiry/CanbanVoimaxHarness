@@ -933,5 +933,36 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       useBoardStore.getState().setHoveredTaskId('CVH-002');
       expect(useBoardStore.getState().hoveredTaskId).toBe('CVH-002');
     });
+
+    it('updateTask rolls back task on update_task IPC failure without calling save_tasks', async () => {
+      const task = createSampleTask({ id: 'CVH-501', title: 'Original' });
+      useBoardStore.getState().setTasks([task]);
+      mockInvoke.mockRejectedValueOnce(new Error('update failed'));
+
+      useBoardStore.getState().updateTask('CVH-501', { title: 'Changed' });
+
+      await vi.waitFor(() => {
+        expect(useBoardStore.getState().boardError).toContain('update failed');
+      });
+      expect(useBoardStore.getState().tasks[0].title).toBe('Original');
+      expect(mockInvoke).not.toHaveBeenCalledWith('save_tasks', expect.anything());
+    });
+
+    it('deleteTask keeps drawer open and preserves task when delete_task IPC fails', async () => {
+      const task = createSampleTask({ id: 'CVH-502' });
+      useBoardStore.getState().setTasks([task]);
+      useDrawerStore.setState({ activeTaskId: 'CVH-502', isOpen: true });
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'delete_task') throw new Error('delete denied');
+        return null;
+      });
+
+      await useBoardStore.getState().deleteTask('CVH-502');
+
+      expect(useBoardStore.getState().tasks).toHaveLength(1);
+      expect(useDrawerStore.getState().isOpen).toBe(true);
+      expect(useDrawerStore.getState().activeTaskId).toBe('CVH-502');
+      expect(useBoardStore.getState().boardError).toContain('delete denied');
+    });
   });
 });

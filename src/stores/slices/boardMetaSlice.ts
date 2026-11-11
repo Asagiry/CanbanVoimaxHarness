@@ -12,13 +12,14 @@ export const createBoardMetaSlice: StateCreator<
   boards: [DEFAULT_BOARD],
   activeBoardId: 'development',
   stages: CANONICAL_BOARD_STAGES,
-  get columns() {
-    return get()?.stages ?? CANONICAL_BOARD_STAGES;
-  },
+  columns: CANONICAL_BOARD_STAGES,
   isLoadingBoards: false,
   isBoardsLoaded: false,
   isTauriConnected: false,
+  boardError: null,
 
+  setBoardError: (error) => set({ boardError: error }),
+  clearBoardError: () => set({ boardError: null }),
   setBoards: (boards) => set({ boards }),
 
   setActiveBoard: async (boardId: string) => {
@@ -26,11 +27,7 @@ export const createBoardMetaSlice: StateCreator<
     const targetBoard = boards.find((b) => b.id === boardId);
     if (!targetBoard) return;
     const stages = targetBoard.stages ?? targetBoard.columns ?? CANONICAL_BOARD_STAGES;
-    set({
-      activeBoardId: boardId,
-      stages,
-      columns: stages,
-    });
+    set({ activeBoardId: boardId, stages, columns: stages, boardError: null });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('set_active_board', { boardId });
@@ -43,25 +40,23 @@ export const createBoardMetaSlice: StateCreator<
     set({ isLoadingBoards: true });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const [rawBoards, rawActiveId] = await Promise.all([
-        invoke<BoardDef[]>('list_boards'),
-        invoke<string>('get_active_board_id').catch(() => 'development'),
-      ]);
+      const rawBoards = await invoke<BoardDef[]>('list_boards');
+      let rawActiveId = 'development';
+      try {
+        rawActiveId = await invoke<string>('get_active_board_id');
+      } catch (activeErr) {
+        console.warn('get_active_board_id failed, using fallback:', activeErr);
+      }
       if (Array.isArray(rawBoards) && rawBoards.length > 0) {
         const normalizedBoards: BoardDef[] = rawBoards.map((b) => {
           const boardStages = b.stages ?? b.columns ?? CANONICAL_BOARD_STAGES;
-          return {
-            ...b,
-            stages: boardStages,
-            columns: boardStages,
-          };
+          return { ...b, stages: boardStages, columns: boardStages };
         });
         const activeId = normalizedBoards.some((b) => b.id === rawActiveId)
           ? rawActiveId
           : normalizedBoards[0].id;
         const currentBoard = normalizedBoards.find((b) => b.id === activeId) ?? normalizedBoards[0];
 
-        // Dynamic Self-Healing: Verify all tasks in store against the loaded boards
         const currentTasks = get().tasks;
         let healedTasks = currentTasks;
         if (!get().isLoadingTasks && currentTasks.length > 0) {
@@ -124,16 +119,13 @@ export const createBoardMetaSlice: StateCreator<
       });
       if (rawBoard) {
         const boardStages = rawBoard.stages ?? rawBoard.columns ?? CANONICAL_BOARD_STAGES;
-        const newBoard: BoardDef = {
-          ...rawBoard,
-          stages: boardStages,
-          columns: boardStages,
-        };
+        const newBoard: BoardDef = { ...rawBoard, stages: boardStages, columns: boardStages };
         set((state) => ({
           boards: [...state.boards, newBoard],
           activeBoardId: newBoard.id,
           stages: newBoard.stages,
           columns: newBoard.stages,
+          boardError: null,
         }));
         return newBoard;
       }
@@ -159,21 +151,17 @@ export const createBoardMetaSlice: StateCreator<
   },
 
   saveBoard: async (board: BoardDef) => {
-    const { isBoardsLoaded } = get();
+    const { isBoardsLoaded, boards: prevBoards, stages: prevStages, columns: prevColumns, tasks: prevTasks } = get();
     if (!isBoardsLoaded) {
       console.warn('[boardStore] saveBoard aborted: boards are not loaded yet!');
       return;
     }
     const boardStages = board.stages ?? board.columns ?? CANONICAL_BOARD_STAGES;
-    const normalizedBoard: BoardDef = {
-      ...board,
-      stages: boardStages,
-      columns: boardStages,
-    };
+    const normalizedBoard: BoardDef = { ...board, stages: boardStages, columns: boardStages };
+
     set((state) => {
       const nextBoards = state.boards.map((b) => (b.id === normalizedBoard.id ? normalizedBoard : b));
       const isCurrent = state.activeBoardId === normalizedBoard.id;
-      // Heal tasks on this board whose stages may have been removed
       const nextTasks = state.tasks.map((t) => {
         if (t.boardId === normalizedBoard.id) {
           const stageExists = normalizedBoard.stages.some((c) => c.id === t.stageId);
@@ -190,24 +178,31 @@ export const createBoardMetaSlice: StateCreator<
         stages: activeStages,
         columns: activeStages,
         tasks: nextTasks,
+        boardError: null,
       };
     });
+
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const ipcBoard = {
-        id: normalizedBoard.id,
-        name: normalizedBoard.name,
-        stages: normalizedBoard.stages,
-      };
-      await invoke('save_board', { board: ipcBoard });
+      await invoke('save_board', {
+        board: { id: normalizedBoard.id, name: normalizedBoard.name, stages: normalizedBoard.stages },
+      });
     } catch (err) {
-      console.error('save_board IPC failed:', err);
-      throw err instanceof Error ? err : new Error(String(err));
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('save_board IPC failed, rolling back:', err);
+      set({
+        boards: prevBoards,
+        stages: prevStages,
+        columns: prevColumns,
+        tasks: prevTasks,
+        boardError: errMsg,
+      });
+      throw err instanceof Error ? err : new Error(errMsg);
     }
   },
 
   deleteBoard: async (boardId: string) => {
-    const { boards, activeBoardId, tasks } = get();
+    const { boards, activeBoardId, stages: prevStages, columns: prevColumns, tasks } = get();
     if (boards.length <= 1) return;
 
     const filtered = boards.filter((b) => b.id !== boardId);
@@ -230,13 +225,23 @@ export const createBoardMetaSlice: StateCreator<
       stages: nextStages,
       columns: nextStages,
       tasks: updatedTasks,
+      boardError: null,
     });
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('delete_board', { boardId });
     } catch (err) {
-      console.info('delete_board IPC failed or in web mode:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('delete_board IPC failed, rolling back:', err);
+      set({
+        boards,
+        activeBoardId,
+        stages: prevStages,
+        columns: prevColumns,
+        tasks,
+        boardError: errMsg,
+      });
     }
   },
 
@@ -251,8 +256,7 @@ export const createBoardMetaSlice: StateCreator<
       set({ stages, columns: stages });
       return;
     }
-    const updated: BoardDef = { ...current, stages, columns: stages };
-    await get().saveBoard(updated);
+    await get().saveBoard({ ...current, stages, columns: stages });
   },
 
   setStages: (stages) => {
@@ -266,27 +270,37 @@ export const createBoardMetaSlice: StateCreator<
   },
 
   updateStage: async (stageId: string, partial: Partial<PipelineStage>) => {
-    const { stages, activeBoardId, boards } = get();
-    const nextStages = stages.map((c) => (c.id === stageId ? { ...c, ...partial } : c));
-    const updatedBoards = boards.map((b) => (b.id === activeBoardId ? { ...b, stages: nextStages, columns: nextStages } : b));
-    set({ stages, columns: nextStages, boards: updatedBoards });
+    const { stages: prevStages, columns: prevColumns, activeBoardId, boards: prevBoards } = get();
+    const nextStages = prevStages.map((c) => (c.id === stageId ? { ...c, ...partial } : c));
+    const updatedBoards = prevBoards.map((b) =>
+      b.id === activeBoardId ? { ...b, stages: nextStages, columns: nextStages } : b,
+    );
+    set({ stages: nextStages, columns: nextStages, boards: updatedBoards, boardError: null });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await get().saveCurrentBoard(nextStages);
       let cfg: PipelineConfig | null = null;
       try {
         cfg = await invoke<PipelineConfig>('get_pipeline');
-      } catch {
-        cfg = null;
+      } catch (cfgErr) {
+        console.warn('get_pipeline failed, using defaults:', cfgErr);
       }
-      const pipeline = {
-        id: cfg?.id ?? 'default-engineering',
-        title: cfg?.title ?? 'Инженерный пайплайн',
-        stages: nextStages,
-      };
-      await invoke('save_pipeline', { pipeline });
+      await invoke('save_pipeline', {
+        pipeline: {
+          id: cfg?.id ?? 'default-engineering',
+          title: cfg?.title ?? 'Инженерный пайплайн',
+          stages: nextStages,
+        },
+      });
     } catch (err) {
-      console.info('updateStage failed or in web mode:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('updateStage IPC failed, rolling back:', err);
+      set({
+        stages: prevStages,
+        columns: prevColumns,
+        boards: prevBoards,
+        boardError: errMsg,
+      });
     }
   },
 
@@ -295,14 +309,12 @@ export const createBoardMetaSlice: StateCreator<
   },
 
   addStage: async (stage: PipelineStage) => {
-    const { stages } = get();
-    const nextStages = [...stages, stage];
+    const nextStages = [...get().stages, stage];
     await get().saveCurrentBoard(nextStages);
   },
 
   deleteStage: async (stageId: string) => {
-    const { stages } = get();
-    const nextStages = stages.filter((c) => c.id !== stageId);
+    const nextStages = get().stages.filter((c) => c.id !== stageId);
     await get().saveCurrentBoard(nextStages);
   },
 
