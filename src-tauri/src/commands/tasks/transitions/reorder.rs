@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::commands::tasks::healing::{stage_id_matches, task_id_matches};
-use crate::commands::tasks::storage::load_tasks_from_disk;
+use crate::commands::tasks::storage::try_load_tasks_from_disk;
 use super::transition_hooks::sync_single_task_in_app_state;
 use super::move_stage::internal_move_task_stage;
 
@@ -18,7 +18,7 @@ pub async fn reorder_task(
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
 
     let task_idx = tasks
         .iter()
@@ -41,7 +41,7 @@ pub async fn reorder_task(
             None,
         )
         .await?;
-        tasks = load_tasks_from_disk(&root).await;
+        tasks = try_load_tasks_from_disk(&root).await?;
     }
 
     let mut stage_tuples: Vec<(String, f64, i64)> = tasks

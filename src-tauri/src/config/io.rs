@@ -10,20 +10,21 @@ use crate::config::models::*;
 pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsConfig> {
     let root = root_path.as_ref();
     let boards_file = root.join(".cvh").join("boards.json");
-    if boards_file.exists() {
-        if let Ok(content) = tokio::fs::read_to_string(&boards_file).await {
-            if content.trim().is_empty() {
-                eprintln!("CVH [load_boards_config]: boards file is empty at {:?}. Falling back to default.", boards_file);
-            }
-            if let Ok(cfg) = serde_json::from_str::<BoardsConfig>(&content) {
-                if !cfg.boards.is_empty() {
-                    return Ok(cfg);
-                }
-            }
-        }
+    if !boards_file.exists() {
+        return Ok(default_boards_config());
     }
-
-    Ok(default_boards_config())
+    let content = tokio::fs::read_to_string(&boards_file)
+        .await
+        .with_context(|| format!("Failed to read boards config at {:?}", boards_file))?;
+    if content.trim().is_empty() {
+        anyhow::bail!("Boards config file is empty at {:?}", boards_file);
+    }
+    let cfg: BoardsConfig = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse boards config JSON at {:?}", boards_file))?;
+    if cfg.boards.is_empty() {
+        anyhow::bail!("Boards config at {:?} contains no boards", boards_file);
+    }
+    Ok(cfg)
 }
 
 
@@ -98,16 +99,21 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
         .await
         .with_context(|| format!("Failed to write global LLM settings to {:?}", global_path))?;
 
-    // If repo has .cvh directory, also mirror to .cvh/llm.json and .cvh/settings/llm.json
+    // Never silently create new plaintext api_key files inside repo .cvh/;
+    // only update existing repo-local overrides and propagate any write error.
     let repo_cvh = repo_root.join(".cvh");
     if repo_cvh.exists() {
         let local_path = repo_cvh.join("llm.json");
-        let _ = atomic_write_file(&local_path, &serialized).await;
-
-        let settings_dir = repo_cvh.join("settings");
-        if settings_dir.exists() {
-            let settings_path = settings_dir.join("llm.json");
-            let _ = atomic_write_file(&settings_path, &serialized).await;
+        if local_path.exists() {
+            atomic_write_file(&local_path, &serialized)
+                .await
+                .with_context(|| format!("Failed to update repo-local LLM settings at {:?}", local_path))?;
+        }
+        let settings_path = repo_cvh.join("settings").join("llm.json");
+        if settings_path.exists() {
+            atomic_write_file(&settings_path, &serialized)
+                .await
+                .with_context(|| format!("Failed to update repo-local LLM settings at {:?}", settings_path))?;
         }
     }
 
@@ -167,31 +173,34 @@ pub async fn atomic_write_file(path: &Path, content: &str) -> Result<()> {
     }
 
     let tmp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-    let atomic_res: Result<()> = async {
-        tokio::fs::write(&tmp_path, content)
-            .await
-            .with_context(|| format!("Failed to write temporary file {:?}", tmp_path))?;
+    tokio::fs::write(&tmp_path, content)
+        .await
+        .with_context(|| format!("Failed to write temporary file {:?}", tmp_path))?;
 
-        tokio::fs::rename(&tmp_path, path)
-            .await
-            .with_context(|| format!("Failed to replace destination file {:?} with temporary file {:?}", path, tmp_path))?;
-
-        Ok(())
-    }
-    .await;
-
-    if let Err(atomic_err) = atomic_res {
-        eprintln!(
-            "CVH [atomic_write_file]: Atomic write failed for {:?} ({:#}), falling back to direct write",
-            path, atomic_err
-        );
-        let _ = tokio::fs::remove_file(&tmp_path).await;
-        tokio::fs::write(path, content)
-            .await
-            .with_context(|| format!("Failed to write file directly to {:?} (fallback after atomic error: {:#})", path, atomic_err))?;
+    let mut last_err = None;
+    for attempt in 0..5u64 {
+        match tokio::fs::rename(&tmp_path, path).await {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < 4 {
+                    tokio::time::sleep(std::time::Duration::from_millis(15 * (attempt + 1))).await;
+                }
+            }
+        }
     }
 
-    Ok(())
+    if let Err(rm_err) = tokio::fs::remove_file(&tmp_path).await {
+        if rm_err.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("CVH [atomic_write_file]: Failed to remove temp file {:?}: {}", tmp_path, rm_err);
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Failed to atomically replace {:?} from {:?}: {}",
+        path,
+        tmp_path,
+        last_err.map(|e| e.to_string()).unwrap_or_else(|| "unknown rename error".to_string())
+    ))
 }
 
 
@@ -213,54 +222,21 @@ pub async fn load_project_config(root_path: impl AsRef<Path>) -> Result<ProjectC
 
 pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<PipelineConfig> {
     let root = root_path.as_ref();
-    let boards_file = root.join(".cvh").join("boards.json");
-    if !boards_file.exists() {
-        return Ok(default_pipeline_config());
-    }
-    match tokio::fs::read_to_string(&boards_file).await {
-        Ok(content) if content.trim().is_empty() => {
-            eprintln!(
-                "CVH [load_pipeline_config]: boards file is empty at {:?}. Falling back to default 5-stage pipeline.",
-                boards_file
-            );
-            Ok(default_pipeline_config())
-        }
-        Ok(content) => match serde_json::from_str::<BoardsConfig>(&content) {
-            Ok(boards_cfg) => {
-                if boards_cfg.boards.is_empty() {
-                    return Ok(default_pipeline_config());
-                }
-                let active = boards_cfg
-                    .boards
-                    .iter()
-                    .find(|b| b.id == boards_cfg.active_board_id)
-                    .cloned()
-                    .unwrap_or_else(|| boards_cfg.boards[0].clone());
-                Ok(PipelineConfig {
-                    id: "default-engineering".to_string(),
-                    title: active.name.clone(),
-                    tool_permissions: None,
-                    stages: active.stages.clone(),
-                    boards: Some(boards_cfg.boards.clone()),
-                    active_board_id: Some(boards_cfg.active_board_id.clone()),
-                })
-            }
-            Err(e) => {
-                eprintln!(
-                    "CVH [load_pipeline_config]: Failed to parse boards JSON at {:?}: {}. Falling back to default 5-stage pipeline.",
-                    boards_file, e
-                );
-                Ok(default_pipeline_config())
-            }
-        },
-        Err(e) => {
-            eprintln!(
-                "CVH [load_pipeline_config]: Failed to read boards file at {:?}: {}. Falling back to default 5-stage pipeline.",
-                boards_file, e
-            );
-            Ok(default_pipeline_config())
-        }
-    }
+    let boards_cfg = load_boards_config(root).await?;
+    let active = boards_cfg
+        .boards
+        .iter()
+        .find(|b| b.id == boards_cfg.active_board_id)
+        .cloned()
+        .unwrap_or_else(|| boards_cfg.boards[0].clone());
+    Ok(PipelineConfig {
+        id: "default-engineering".to_string(),
+        title: active.name.clone(),
+        tool_permissions: None,
+        stages: active.stages.clone(),
+        boards: Some(boards_cfg.boards.clone()),
+        active_board_id: Some(boards_cfg.active_board_id.clone()),
+    })
 }
 
 pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &PipelineConfig) -> Result<()> {
@@ -274,7 +250,7 @@ pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &Pipeline
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }
     }
-    let mut boards_cfg = load_boards_config(root).await.unwrap_or_else(|_| default_boards_config());
+    let mut boards_cfg = load_boards_config(root).await?;
     if let Some(boards) = normalized.boards.clone() {
         if !boards.is_empty() {
             boards_cfg.boards = boards;
@@ -356,7 +332,7 @@ pub async fn register_or_update_project(
         registry.active_project_id = Some(id);
     }
 
-    let _ = save_project_registry(registry_path, &registry).await;
+    save_project_registry(registry_path, &registry).await?;
     Ok(registry)
 }
 
@@ -364,7 +340,7 @@ pub async fn remove_project_from_registry(
     registry_path: Option<PathBuf>,
     project_path: &Path,
 ) -> Result<ProjectRegistry> {
-    let mut registry = load_project_registry(registry_path.clone()).await.unwrap_or_default();
+    let mut registry = load_project_registry(registry_path.clone()).await?;
     let norm = project_path.to_string_lossy().to_lowercase();
     let before = registry.projects.len();
     let removed_active = registry
@@ -385,7 +361,7 @@ pub async fn remove_project_from_registry(
         if removed_active {
             registry.active_project_id = registry.projects.first().map(|e| e.id.clone());
         }
-        let _ = save_project_registry(registry_path, &registry).await;
+        save_project_registry(registry_path, &registry).await?;
     }
     Ok(registry)
 }

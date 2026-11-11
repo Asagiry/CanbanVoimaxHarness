@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::commands::state::{ActiveAgentHandle, AppState};
 use crate::commands::healing::{stage_id_matches, task_id_matches};
-use crate::commands::tasks::storage::{load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
 use super::execution::run_agent_inner;
 
 pub fn persist_or_queue_steer(
@@ -45,7 +45,7 @@ pub async fn steer_agent(
     };
 
     if !task_found {
-        let tasks = load_tasks_from_disk(&root).await;
+        let tasks = try_load_tasks_from_disk(&root).await?;
         if !tasks.iter().any(|t| task_id_matches(&t.id, &task_id)) {
             return Err(format!("Task {} not found", task_id));
         }
@@ -54,7 +54,19 @@ pub async fn steer_agent(
     let previous = state.get_active_agent(&root, &task_id);
     let was_aborted = previous.as_ref().is_some_and(|entry| entry.abort_flag.load(Ordering::SeqCst));
     let message_id = message_id.filter(|id| !id.trim().is_empty()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let (queued, item) = persist_or_queue_steer(&root, &task_id, &message, images.clone(), Some(&message_id), previous.as_ref())?;
+    let (queued, item) = {
+        let root_b = root.clone();
+        let tid_b = task_id.clone();
+        let msg_b = message.clone();
+        let imgs_b = images.clone();
+        let mid_b = message_id.clone();
+        let prev_b = previous.clone();
+        tokio::task::spawn_blocking(move || {
+            persist_or_queue_steer(&root_b, &tid_b, &msg_b, imgs_b, Some(&mid_b), prev_b.as_ref())
+        })
+        .await
+        .map_err(|e| format!("Steer persist join error: {}", e))??
+    };
     let inserted = item.is_some();
     if let Some(item) = item {
         let payload = serde_json::json!({ "taskId": task_id, "item": item });
@@ -71,8 +83,19 @@ pub async fn steer_agent(
     let _ = app_handle.emit("agent:steer", steer_payload);
 
     if !inserted {
-        let cursor = crate::db::load_conversation_context(&root, &task_id)?.map(|context| context.dialog_cursor).unwrap_or(0);
-        if !crate::db::load_dialog_items_after(&root, &task_id, cursor)?.iter().any(|item| item.id == message_id) {
+        let root_b = root.clone();
+        let tid_b = task_id.clone();
+        let mid_b = message_id.clone();
+        let already_delivered = tokio::task::spawn_blocking(move || -> Result<bool, String> {
+            let cursor = crate::db::load_conversation_context(&root_b, &tid_b)?
+                .map(|context| context.dialog_cursor)
+                .unwrap_or(0);
+            let items = crate::db::load_dialog_items_after(&root_b, &tid_b, cursor)?;
+            Ok(!items.iter().any(|item| item.id == mid_b))
+        })
+        .await
+        .map_err(|e| format!("Steer check join error: {}", e))??;
+        if already_delivered {
             return Ok(format!("Steer message {} was already delivered", message_id));
         }
     }
@@ -89,9 +112,22 @@ pub async fn steer_agent(
         if !was_aborted && entry.abort_flag.load(Ordering::SeqCst) && !entry.advance_aborted.load(Ordering::SeqCst) {
             return Ok(format!("Steer saved for stopped task {}", task_id));
         }
+        // Wait for any aborting/unwinding prior JoinHandle to exit cleanly before restarting.
+        let maybe_handle = {
+            let mut guard = entry.join_handle.lock().await;
+            guard.take()
+        };
+        if let Some(handle) = maybe_handle {
+            if !handle.is_finished()
+                && tokio::time::timeout(std::time::Duration::from_secs(3), handle).await.is_err()
+            {
+                eprintln!("CVH [steer_agent]: Timed out waiting for prior agent JoinHandle for task {}", task_id);
+            }
+        }
+        state.remove_active_agent_if_same(&root, &task_id, &entry.abort_flag);
     }
 
-    let disk_tasks = load_tasks_from_disk(&root).await;
+    let disk_tasks = try_load_tasks_from_disk(&root).await?;
     let current_task = disk_tasks.iter().find(|t| task_id_matches(&t.id, &task_id)).cloned();
     if let Some(ref t) = current_task {
         let is_terminal_stage = stage_id_matches(&t.stage_id, "ready") || stage_id_matches(&t.stage_id, "done");
@@ -107,14 +143,14 @@ pub async fn steer_agent(
     }
 
     {
-        let mut current_tasks = load_tasks_from_disk(&root).await;
+        let mut current_tasks = try_load_tasks_from_disk(&root).await?;
         if let Some(t) = current_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
             t.updated_at = Utc::now().timestamp_millis();
             t.waiting_for_subtask_id = None;
             t.completed_at = None;
-            let _ = save_tasks_to_disk(&root, &current_tasks).await;
+            save_tasks_to_disk(&root, &current_tasks).await?;
         }
-        if state.get_root() == root {
+        if state.is_same_root(&root) {
             let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                 t.updated_at = Utc::now().timestamp_millis();

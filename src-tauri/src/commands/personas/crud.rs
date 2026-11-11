@@ -293,11 +293,26 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
 /// пустыми per-role aux-директориями `rules/`, `hooks/` и `setting` (`{}`).
 /// Возвращает относительный путь `.cvh/agents/<role>/persona.md`.
 pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String, String> {
+    create_agent_persona_file_with_options(root, role, None, None, None).await
+}
+
+pub async fn create_agent_persona_file_with_options(
+    root: &Path,
+    role: &str,
+    persona: Option<&str>,
+    icon: Option<&str>,
+    color: Option<&str>,
+) -> Result<String, String> {
     if !is_valid_persona_role(role) {
         return Err(format!(
             "Недопустимое имя роли '{}': разрешены только строчные латинские буквы, цифры и дефис (шаблон ^[a-z0-9][a-z0-9-]*$)",
             role
         ));
+    }
+    if let Some(c) = color.map(str::trim).filter(|s| !s.is_empty()) {
+        if FORBIDDEN_AGENT_COLORS.contains(&c.to_lowercase().as_str()) {
+            return Err("Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов".to_string());
+        }
     }
     let role_dir = crate::config::agent_dir(root, role);
     let persona_file = role_dir.join("persona.md");
@@ -309,36 +324,34 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         ));
     }
 
-    // Собираем уже занятые иконки у существующих персон
-    let mut used_icons = HashSet::new();
-    let agents_dir = root.join(".cvh").join("agents");
-    if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let p = entry.path();
-            if p.is_dir() {
-                if let Some(r_name) = entry.file_name().to_str() {
-                    if let Some(ic) = read_persona_icon_from_dir(&p, r_name).await {
-                        used_icons.insert(ic);
+    let chosen_icon: String = match icon.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(ic) => ic.to_string(),
+        None => {
+            let mut used_icons = HashSet::new();
+            let agents_dir = root.join(".cvh").join("agents");
+            if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        if let Some(r_name) = entry.file_name().to_str() {
+                            if let Some(ic) = read_persona_icon_from_dir(&p, r_name).await {
+                                used_icons.insert(ic);
+                            }
+                        }
                     }
                 }
             }
+            used_icons.insert("Cpu".to_string());
+            let available: Vec<&'static str> = AGENT_ICONS.iter().copied().filter(|&i| !used_icons.contains(i)).collect();
+            let pool = if !available.is_empty() { &available[..] } else { AGENT_ICONS };
+            pool[(uuid::Uuid::new_v4().as_u128() as usize) % pool.len()].to_string()
         }
-    }
-    used_icons.insert("Cpu".to_string());
-
-    // Выбираем случайную иконку из свободных (или из всех, если свободных не осталось)
-    let available: Vec<&'static str> = AGENT_ICONS
-        .iter()
-        .copied()
-        .filter(|&icon| !used_icons.contains(icon))
-        .collect();
-    let pool = if !available.is_empty() {
-        &available[..]
-    } else {
-        AGENT_ICONS
     };
-    let chosen_icon = pool[(uuid::Uuid::new_v4().as_u128() as usize) % pool.len()];
-    let chosen_color = deterministic_color_for_role(role);
+    let chosen_color = color
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| deterministic_color_for_role(role));
 
     tokio::fs::create_dir_all(role_dir.join("rules"))
         .await
@@ -346,7 +359,14 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
     tokio::fs::create_dir_all(role_dir.join("hooks"))
         .await
         .map_err(|e| format!("Не удалось создать hooks для персоны '{}': {}", role, e))?;
-    let content = persona_placeholder_template(role, chosen_icon, &chosen_color);
+    let content = match persona.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(body) if body.starts_with("---") => {
+            let with_icon = insert_or_update_frontmatter_icon(body, &chosen_icon);
+            insert_or_update_frontmatter_color(&with_icon, &chosen_color)
+        }
+        Some(body) => format!("---\nname: {role}\nicon: {chosen_icon}\ncolor: {chosen_color}\n---\n\n{body}\n"),
+        None => persona_placeholder_template(role, &chosen_icon, &chosen_color),
+    };
     atomic_write_file(&persona_file, &content)
         .await
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
@@ -380,58 +400,53 @@ pub async fn list_agent_personas(
 #[tauri::command]
 pub async fn create_agent_persona(
     role: String,
+    persona: Option<String>,
+    icon: Option<String>,
+    color: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<String, String> {
     let root = state.get_root();
-    let res = create_agent_persona_file(&root, &role).await?;
+    let res = create_agent_persona_file_with_options(
+        &root,
+        &role,
+        persona.as_deref(),
+        icon.as_deref(),
+        color.as_deref(),
+    )
+    .await?;
     let list = list_agent_personas_in(&root).await;
     let _ = app.emit("agent:personas_updated", &list);
     Ok(res)
 }
 
-#[tauri::command]
-pub async fn delete_agent_persona(
-    role: String,
-    state: State<'_, AppState>,
-    app: AppHandle,
-) -> Result<(), String> {
-    let root = state.get_root();
-    delete_agent_persona_file(&root, &role).await?;
-    let list = list_agent_personas_in(&root).await;
+async fn emit_persona_updates(app: &AppHandle, root: &Path, include_board: bool) {
+    let list = list_agent_personas_in(root).await;
     let _ = app.emit("agent:personas_updated", &list);
-    if let Ok(bc) = load_boards_config(&root).await {
-        let _ = app.emit(
-            "boards:updated",
-            serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
-        );
+    if !include_board {
+        return;
     }
-    if let Ok(pipe) = load_pipeline_config(&root).await {
+    if let Ok(bc) = load_boards_config(root).await {
+        let _ = app.emit("boards:updated", serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }));
+    }
+    if let Ok(pipe) = load_pipeline_config(root).await {
         let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
     }
+}
+
+#[tauri::command]
+pub async fn delete_agent_persona(role: String, state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
+    let root = state.get_root();
+    delete_agent_persona_file(&root, &role).await?;
+    emit_persona_updates(&app, &root, true).await;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn rename_agent_persona(
-    old_role: String,
-    new_role: String,
-    state: State<'_, AppState>,
-    app: AppHandle,
-) -> Result<(), String> {
+pub async fn rename_agent_persona(old_role: String, new_role: String, state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     let root = state.get_root();
     rename_agent_persona_file(&root, &old_role, &new_role).await?;
-    let list = list_agent_personas_in(&root).await;
-    let _ = app.emit("agent:personas_updated", &list);
-    if let Ok(bc) = load_boards_config(&root).await {
-        let _ = app.emit(
-            "boards:updated",
-            serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
-        );
-    }
-    if let Ok(pipe) = load_pipeline_config(&root).await {
-        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
-    }
+    emit_persona_updates(&app, &root, true).await;
     Ok(())
 }
 

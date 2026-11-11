@@ -7,11 +7,11 @@ use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::config::resolve_actual_repo_root;
 use crate::commands::healing::stage_id_matches;
-use crate::commands::tasks::storage::{load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
 
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     let root = resolve_actual_repo_root(&state.get_root());
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
 
     // Self-healing orphan running tasks: if a task is marked "running" in SQLite
     // but has no active Tokio execution in AppState (e.g. after desktop restart or crash),
@@ -82,7 +82,7 @@ pub async fn internal_save_tasks(
         valid_incoming.retain(|t| !foreign_incoming.contains(&t.id));
     }
 
-    let disk_tasks = load_tasks_from_disk(root).await;
+    let disk_tasks = try_load_tasks_from_disk(root).await?;
     let boards_cfg = crate::config::load_boards_config(root).await.ok();
 
     // Defensive reconciliation: prevent stale frontend saves from destroying newly created

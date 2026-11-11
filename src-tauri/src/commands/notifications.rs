@@ -331,9 +331,9 @@ public class CvhShortcutManager {{
 }
 
 /// Ensures a Start Menu shortcut exists on Windows, assigning the application icon location and AUMID.
+/// Cached via `shortcut_state.txt` so PowerShell + C# Add-Type only runs on first install or binary/icon change.
 #[cfg(target_os = "windows")]
 pub fn ensure_windows_start_menu_shortcut() {
-    register_windows_aumid();
     let _ = std::thread::spawn(|| {
         let app_data = match std::env::var("APPDATA") {
             Ok(v) => v,
@@ -355,9 +355,38 @@ pub fn ensure_windows_start_menu_shortcut() {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| exe_str.clone());
 
+        let state_marker = format!("{exe_str}|{icon_str}");
+        let state_file = get_cache_directory().map(|d| d.join("shortcut_state.txt"));
+        if shortcut_path.exists() {
+            if let Some(ref sf) = state_file {
+                if std::fs::read_to_string(sf).map(|s| s.trim() == state_marker).unwrap_or(false) {
+                    return;
+                }
+            }
+        }
+
+        register_windows_aumid();
         let ps_script = build_windows_shortcut_script(&shortcut_str, &exe_str, &parent_str, &icon_str);
         let encoded = encode_powershell_script(&ps_script);
-        let _ = run_encoded_powershell(&encoded);
+        match run_encoded_powershell(&encoded) {
+            Ok(out) if out.status.success() => {
+                if let Some(ref sf) = state_file {
+                    if let Err(e) = std::fs::write(sf, &state_marker) {
+                        eprintln!("[Notification] Failed to write shortcut state cache: {}", e);
+                    }
+                }
+            }
+            Ok(out) => {
+                eprintln!(
+                    "[Notification] Failed to create Start Menu shortcut (exit {:?}): {}",
+                    out.status.code(),
+                    crate::agent::decode_output_bytes(&out.stderr)
+                );
+            }
+            Err(e) => {
+                eprintln!("[Notification] Failed to spawn PowerShell for Start Menu shortcut: {}", e);
+            }
+        }
     });
 }
 

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use chrono::Utc;
@@ -6,16 +6,82 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::AgentEvent;
 use crate::commands::state::AppState;
-use crate::commands::tasks::storage::{load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
 
-pub fn build_agent_event_sink(
+enum EventDbJob {
+    AppendDialog { root: PathBuf, task_id: String, item: crate::db::ActivityItem },
+    UpdateToolResult {
+        root: PathBuf,
+        task_id: String,
+        tool_id: String,
+        tool_name: String,
+        result: String,
+        success: bool,
+        duration_ms: Option<f64>,
+        batch: Option<serde_json::Value>,
+    },
+    RecordTelemetry { root: PathBuf, record: crate::db::TelemetryRecord },
+}
+
+fn spawn_event_db_worker() -> (tokio::sync::mpsc::UnboundedSender<EventDbJob>, tokio::task::JoinHandle<()>) {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<EventDbJob>();
+    let handle = tokio::spawn(async move {
+        while let Some(job) = rx.recv().await {
+            let res = tokio::task::spawn_blocking(move || match job {
+                EventDbJob::AppendDialog { root, task_id, item } => {
+                    if let Err(e) = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(&item)) {
+                        eprintln!("CVH [WARN]: Failed to append dialog item: {}", e);
+                    }
+                }
+                EventDbJob::UpdateToolResult { root, task_id, tool_id, tool_name, result, success, duration_ms, batch } => {
+                    let status_str = if success { "success" } else { "failed" };
+                    let mut tool_obj = crate::db::db_get_dialog_tool_json(&root, &task_id, &tool_id)
+                        .unwrap_or_else(|| serde_json::json!({
+                            "id": &tool_id,
+                            "toolName": &tool_name,
+                            "name": &tool_name,
+                            "timestamp": chrono::Utc::now().to_rfc3339(),
+                        }));
+                    if let Some(obj) = tool_obj.as_object_mut() {
+                        obj.insert("status".to_string(), serde_json::json!(status_str));
+                        obj.insert("stdout".to_string(), serde_json::json!(&result));
+                        obj.insert("result".to_string(), serde_json::json!(&result));
+                        obj.insert("durationMs".to_string(), serde_json::json!(duration_ms.unwrap_or(0.0)));
+                        if !success {
+                            obj.insert("stderr".to_string(), serde_json::json!(&result));
+                        }
+                        if let Some(ref b) = batch {
+                            obj.insert("batch".to_string(), b.clone());
+                        }
+                    }
+                    let tool_json_str = serde_json::to_string(&tool_obj).unwrap_or_default();
+                    if let Err(e) = crate::db::db_update_dialog_tool_result(&root, &task_id, &tool_id, &tool_json_str, duration_ms) {
+                        eprintln!("CVH [WARN]: Failed to update dialog tool result: {}", e);
+                    }
+                }
+                EventDbJob::RecordTelemetry { root, record } => {
+                    if let Err(e) = crate::db::db_record_telemetry(&root, &record) {
+                        eprintln!("CVH [WARN]: Failed to record telemetry: {}", e);
+                    }
+                }
+            }).await;
+            if let Err(e) = res {
+                eprintln!("CVH [WARN]: Event DB worker blocking task panicked: {}", e);
+            }
+        }
+    });
+    (tx, handle)
+}
+
+pub fn build_agent_event_sink_with_worker(
     app: AppHandle,
     tid: String,
     root: PathBuf,
     model: String,
-) -> impl Fn(AgentEvent) + Send + Sync + 'static {
+) -> (impl Fn(AgentEvent) + Send + Sync + 'static, tokio::task::JoinHandle<()>) {
+    let (db_tx, db_worker) = spawn_event_db_worker();
     let active_stream_id = std::sync::Mutex::new(None::<String>);
-    move |event: AgentEvent| {
+    let sink = move |event: AgentEvent| {
         match event {
             AgentEvent::StreamStart { id } => {
                 *active_stream_id.lock().unwrap_or_else(|p| p.into_inner()) = Some(id.clone());
@@ -29,23 +95,13 @@ pub fn build_agent_event_sink(
                 }));
                 *active_stream_id.lock().unwrap_or_else(|p| p.into_inner()) = None;
             }
-            AgentEvent::Token(token) => {
+            AgentEvent::Token(text) | AgentEvent::Output(text) => {
                 let payload = serde_json::json!({
                     "taskId": tid,
                     "streamId": active_stream_id.lock().unwrap_or_else(|p| p.into_inner()).clone(),
-                    "output": &token,
-                    "content": &token,
-                    "token": &token
-                });
-                let _ = app.emit("agent:output", &payload);
-            }
-            AgentEvent::Output(output) => {
-                let payload = serde_json::json!({
-                    "taskId": tid,
-                    "streamId": active_stream_id.lock().unwrap_or_else(|p| p.into_inner()).clone(),
-                    "output": &output,
-                    "content": &output,
-                    "token": &output
+                    "output": &text,
+                    "content": &text,
+                    "token": &text
                 });
                 let _ = app.emit("agent:output", &payload);
             }
@@ -109,71 +165,35 @@ pub fn build_agent_event_sink(
                     duration_ms: None,
                     images: None,
                 };
-                if let Err(e) = crate::db::append_dialog_items(&root, &tid, std::slice::from_ref(&tool_item)) {
-                    eprintln!("CVH [WARN]: Failed to append tool dialog item: {}", e);
-                }
+                let _ = db_tx.send(EventDbJob::AppendDialog {
+                    root: root.clone(),
+                    task_id: tid.clone(),
+                    item: tool_item,
+                });
             }
             AgentEvent::ToolResult { id, name, result, success, duration_ms, batch } => {
                 let sanitized_result = if result.len() > 65536 {
                     let half = 32768;
-                    let head_end = result
-                        .char_indices()
-                        .map(|(i, _)| i)
-                        .take_while(|&i| i <= half)
-                        .last()
-                        .unwrap_or(0);
-                    let tail_target = result.len() - half;
-                    let tail_start = result
-                        .char_indices()
-                        .map(|(i, _)| i)
-                        .find(|&i| i >= tail_target)
-                        .unwrap_or(result.len());
-                    format!(
-                        "{}\n\n... [IPC payload truncated ({} bytes total). Full output in SQLite] ...\n\n{}",
-                        &result[..head_end],
-                        result.len(),
-                        &result[tail_start..]
-                    )
+                    let head_end = result.char_indices().map(|(i, _)| i).take_while(|&i| i <= half).last().unwrap_or(0);
+                    let tail_start = result.char_indices().map(|(i, _)| i).find(|&i| i >= result.len() - half).unwrap_or(result.len());
+                    format!("{}\n\n... [IPC payload truncated ({} bytes total). Full output in SQLite] ...\n\n{}", &result[..head_end], result.len(), &result[tail_start..])
                 } else {
                     result.clone()
                 };
-                let _ = app.emit(
-                    "agent:tool_result",
-                    serde_json::json!({
-                        "taskId": tid,
-                        "id": id,
-                        "name": name,
-                        "result": &sanitized_result,
-                        "success": success,
-                        "durationMs": duration_ms,
-                        "batch": batch,
-                    }),
-                );
+                let _ = app.emit("agent:tool_result", serde_json::json!({
+                    "taskId": tid, "id": id, "name": name, "result": &sanitized_result, "success": success, "durationMs": duration_ms, "batch": batch,
+                }));
 
-                let status_str = if success { "success" } else { "failed" };
-                let mut tool_obj = crate::db::db_get_dialog_tool_json(&root, &tid, &id)
-                    .unwrap_or_else(|| serde_json::json!({
-                        "id": &id,
-                        "toolName": &name,
-                        "name": &name,
-                        "timestamp": chrono::Utc::now().to_rfc3339(),
-                    }));
-
-                if let Some(obj) = tool_obj.as_object_mut() {
-                    obj.insert("status".to_string(), serde_json::json!(status_str));
-                    obj.insert("stdout".to_string(), serde_json::json!(&result));
-                    obj.insert("result".to_string(), serde_json::json!(&result));
-                    obj.insert("durationMs".to_string(), serde_json::json!(duration_ms.unwrap_or(0.0)));
-                    if !success {
-                        obj.insert("stderr".to_string(), serde_json::json!(&result));
-                    }
-                    if let Some(ref b) = batch {
-                        obj.insert("batch".to_string(), b.clone());
-                    }
-                }
-
-                let tool_json_str = serde_json::to_string(&tool_obj).unwrap_or_default();
-                let _ = crate::db::db_update_dialog_tool_result(&root, &tid, &id, &tool_json_str, duration_ms);
+                let _ = db_tx.send(EventDbJob::UpdateToolResult {
+                    root: root.clone(),
+                    task_id: tid.clone(),
+                    tool_id: id,
+                    tool_name: name,
+                    result,
+                    success,
+                    duration_ms,
+                    batch,
+                });
             }
             AgentEvent::TurnStart { turn } => {
                 let _ = app.emit(
@@ -222,7 +242,10 @@ pub fn build_agent_event_sink(
                     duration_ms,
                     created_at: chrono::Utc::now().timestamp_millis(),
                 };
-                let _ = crate::db::db_record_telemetry(&root, &telem_record);
+                let _ = db_tx.send(EventDbJob::RecordTelemetry {
+                    root: root.clone(),
+                    record: telem_record,
+                });
             }
             AgentEvent::Compacted {
                 saved_chars,
@@ -267,9 +290,11 @@ pub fn build_agent_event_sink(
                         duration_ms: None,
                         images: None,
                     };
-                    if let Err(e) = crate::db::append_dialog_items(&root, &tid, std::slice::from_ref(&resp_item)) {
-                        eprintln!("CVH [WARN]: Failed to append response dialog item: {}", e);
-                    }
+                    let _ = db_tx.send(EventDbJob::AppendDialog {
+                        root: root.clone(),
+                        task_id: tid.clone(),
+                        item: resp_item,
+                    });
                 }
             }
             AgentEvent::TaskUpdated { task_id, todos } => {
@@ -299,6 +324,75 @@ pub fn build_agent_event_sink(
                 eprintln!("CVH [agent]: {}", err);
             }
         }
+    };
+    (sink, db_worker)
+}
+
+async fn finalize_task_on_stop(
+    root_task: &Path,
+    tid: &str,
+    new_status: &str,
+    unlock_parent: bool,
+    app: &AppHandle,
+    project_path_str: &str,
+) {
+    let mut tasks = match try_load_tasks_from_disk(root_task).await {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("CVH [run_agent]: Failed to reload tasks on completion for {}: {}", tid, e);
+            return;
+        }
+    };
+    let Some(task_idx) = tasks.iter().position(|t| t.id == tid) else {
+        return;
+    };
+    let mut changed = false;
+    if new_status != "idle" || tasks[task_idx].status.as_deref() != Some("done") {
+        tasks[task_idx].status = Some(new_status.to_string());
+        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+        let root_b = root_task.to_path_buf();
+        let task_b = tasks[task_idx].clone();
+        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || crate::db::db_upsert_task(&root_b, &task_b)).await {
+            eprintln!("CVH [run_agent]: Failed to upsert task {} on completion: {}", tid, e);
+        }
+        changed = true;
+    }
+    if unlock_parent {
+        let parent_id = tasks[task_idx].parent_id.clone();
+        if let Some(parent_idx) = tasks.iter().position(|t| {
+            t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(tid)).unwrap_or(false)
+                || parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
+        }) {
+            tasks[parent_idx].waiting_for_subtask_id = None;
+            if tasks[parent_idx].status.as_deref() == Some("waiting_subtask") {
+                tasks[parent_idx].status = Some("idle".to_string());
+            }
+            tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+            let root_b = root_task.to_path_buf();
+            let parent_b = tasks[parent_idx].clone();
+            if let Ok(Err(e)) = tokio::task::spawn_blocking(move || crate::db::db_upsert_task(&root_b, &parent_b)).await {
+                eprintln!("CVH [run_agent]: Failed to upsert parent task on completion: {}", e);
+            }
+            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[parent_idx], "projectPath": project_path_str }));
+            changed = true;
+        }
+    }
+    if !changed {
+        return;
+    }
+    if let Err(e) = save_tasks_to_disk(root_task, &tasks).await {
+        eprintln!("CVH [run_agent]: Failed to persist tasks on completion: {}", e);
+    }
+    if let Some(state_ref) = app.try_state::<AppState>() {
+        if state_ref.is_same_root(root_task) {
+            let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
+            *guard = tasks.clone();
+        }
+    }
+    let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": project_path_str }));
+    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": project_path_str }));
+    if new_status == "idle" && !unlock_parent {
+        let _ = app.emit("agent:status", serde_json::json!({ "taskId": tid, "status": "idle", "projectPath": project_path_str }));
     }
 }
 
@@ -325,47 +419,17 @@ pub async fn handle_agent_run_completion(
                 "agent:status",
                 serde_json::json!({ "taskId": tid, "status": "finished", "projectPath": &project_path_str }),
             );
-
             if let Some(state_ref) = app.try_state::<AppState>() {
                 state_ref.remove_agent_context(&root_task, &tid);
             }
-
-            let mut tasks = load_tasks_from_disk(&root_task).await;
-            if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                let mut task_changed = false;
-
-                if tasks[task_idx].status.as_deref() != Some("done") {
-                    tasks[task_idx].status = Some("idle".to_string());
-                    tasks[task_idx].updated_at = Utc::now().timestamp_millis();
-                    task_changed = true;
-                }
-
-                if task_changed {
-                    let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
-                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == root_task {
-                            let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
-                            *guard = tasks.clone();
-                        }
-                    }
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
-                    let _ = app.emit(
-                        "agent:status",
-                        serde_json::json!({ "taskId": tid, "status": "idle", "projectPath": &project_path_str }),
-                    );
-                }
-            }
+            finalize_task_on_stop(&root_task, &tid, "idle", false, &app, &project_path_str).await;
         }
         Err(err) => {
             let is_aborted = abort_flag_task.load(Ordering::SeqCst);
             let err_str = err.to_string();
-
             if let Some(state_ref) = app.try_state::<AppState>() {
                 state_ref.remove_agent_context(&root_task, &tid);
             }
-
             if is_aborted {
                 crate::logger::cvh_log(
                     Some(&root_task),
@@ -378,36 +442,7 @@ pub async fn handle_agent_run_completion(
                     "agent:status",
                     serde_json::json!({ "taskId": tid, "status": "idle", "projectPath": &project_path_str }),
                 );
-                let mut tasks = load_tasks_from_disk(&root_task).await;
-                if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                    if tasks[task_idx].status.as_deref() != Some("done") {
-                        tasks[task_idx].status = Some("idle".to_string());
-                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
-                        let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
-                    }
-                    let parent_id = tasks[task_idx].parent_id.clone();
-                    if let Some(parent_idx) = tasks.iter().position(|t| {
-                        t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(&tid)).unwrap_or(false)
-                            || parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
-                    }) {
-                        tasks[parent_idx].waiting_for_subtask_id = None;
-                        if tasks[parent_idx].status.as_deref() == Some("waiting_subtask") {
-                            tasks[parent_idx].status = Some("idle".to_string());
-                        }
-                        tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
-                        let _ = crate::db::db_upsert_task(&root_task, &tasks[parent_idx]);
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[parent_idx], "projectPath": &project_path_str }));
-                    }
-                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == root_task {
-                            let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
-                            *guard = tasks.clone();
-                        }
-                    }
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
-                }
+                finalize_task_on_stop(&root_task, &tid, "idle", true, &app, &project_path_str).await;
             } else {
                 eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
                 let _ = app.emit(
@@ -418,35 +453,7 @@ pub async fn handle_agent_run_completion(
                     "agent:error",
                     serde_json::json!({ "taskId": tid, "error": &err_str, "projectPath": &project_path_str }),
                 );
-
-                let mut tasks = load_tasks_from_disk(&root_task).await;
-                if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                    tasks[task_idx].status = Some("error".to_string());
-                    tasks[task_idx].updated_at = Utc::now().timestamp_millis();
-                    let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
-                    let parent_id = tasks[task_idx].parent_id.clone();
-                    if let Some(parent_idx) = tasks.iter().position(|t| {
-                        t.waiting_for_subtask_id.as_deref().map(|s| s.eq_ignore_ascii_case(&tid)).unwrap_or(false)
-                            || parent_id.as_deref().map(|pid| t.id.eq_ignore_ascii_case(pid) && t.waiting_for_subtask_id.is_some()).unwrap_or(false)
-                    }) {
-                        tasks[parent_idx].waiting_for_subtask_id = None;
-                        if tasks[parent_idx].status.as_deref() == Some("waiting_subtask") {
-                            tasks[parent_idx].status = Some("idle".to_string());
-                        }
-                        tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
-                        let _ = crate::db::db_upsert_task(&root_task, &tasks[parent_idx]);
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[parent_idx], "projectPath": &project_path_str }));
-                    }
-                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == root_task {
-                            let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
-                            *guard = tasks.clone();
-                        }
-                    }
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
-                }
+                finalize_task_on_stop(&root_task, &tid, "error", true, &app, &project_path_str).await;
             }
         }
     }

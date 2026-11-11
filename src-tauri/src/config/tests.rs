@@ -907,3 +907,57 @@ use std::path::{Path, PathBuf};
         assert_eq!(get_canonical_board_stages(), get_canonical_board_columns());
         assert_eq!(get_board_template_stages("modeler"), get_board_template_columns("modeler"));
     }
+
+    #[test]
+    fn test_strip_windows_verbatim_prefix_preserves_unc_shares() {
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\UNC\fileserver\share\repo"),
+            r"\\fileserver\share\repo"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix("//?/UNC/fileserver/share/repo"),
+            "//fileserver/share/repo"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\C:\Users\Alice\repo"),
+            r"C:\Users\Alice\repo"
+        );
+    }
+
+    #[test]
+    fn test_is_binary_or_target_dir_allows_user_release_ancestor() {
+        assert!(!is_binary_or_target_dir(Path::new(r"C:\Users\Alice\release\my-app")));
+        assert!(!is_binary_or_target_dir(Path::new(r"C:\workspace\target\my-project")));
+        assert!(is_binary_or_target_dir(Path::new(r"C:\workspace\my-project\target")));
+        assert!(is_binary_or_target_dir(Path::new(r"C:\workspace\my-project\target\release")));
+        assert!(is_binary_or_target_dir(Path::new(r"C:\workspace\my-project\node_modules")));
+    }
+
+    #[tokio::test]
+    async fn test_load_boards_config_errors_on_corrupt_boards_json() {
+        let dir = std::env::temp_dir().join(format!("cvh_boards_err_{}", uuid::Uuid::new_v4()));
+        let cvh_dir = dir.join(".cvh");
+        std::fs::create_dir_all(&cvh_dir).unwrap();
+        std::fs::write(cvh_dir.join("boards.json"), "{not-valid-json").unwrap();
+
+        let err = load_boards_config(&dir).await.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse"), "unexpected error: {err}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_tool_policy_serialization_is_deterministic() {
+        let mut policy = ToolPolicyConfig::default();
+        policy.stage_overrides.insert("stage_b".to_string(), Default::default());
+        policy.stage_overrides.insert("stage_a".to_string(), Default::default());
+        policy.tool_descriptions.insert("zeta_tool".to_string(), "desc z".to_string());
+        policy.tool_descriptions.insert("alpha_tool".to_string(), "desc a".to_string());
+
+        let first = serde_json::to_string_pretty(&policy).unwrap();
+        let second = serde_json::to_string_pretty(&policy).unwrap();
+        assert_eq!(first, second);
+        let alpha_pos = first.find("alpha_tool").unwrap();
+        let zeta_pos = first.find("zeta_tool").unwrap();
+        assert!(alpha_pos < zeta_pos);
+    }

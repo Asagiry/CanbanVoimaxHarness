@@ -10,7 +10,7 @@ use crate::commands::state::AppState;
 use crate::config::{load_boards_config, load_pipeline_config, resolve_actual_repo_root};
 use crate::commands::tasks::healing::{stage_id_matches, task_id_matches};
 use crate::commands::tasks::runner::internal_abort_agent;
-use crate::commands::tasks::storage::load_tasks_from_disk;
+use crate::commands::tasks::storage::try_load_tasks_from_disk;
 use crate::commands::tasks::timing::freeze_stage_duration;
 use super::transition_hooks::{
     auto_complete_task_todos, sync_single_task_in_app_state, trigger_column_on_enter_script,
@@ -43,7 +43,7 @@ pub async fn internal_move_task_stage(
         ),
         Some(&format!("actual_root='{}'", root.display())),
     );
-    let mut initial_tasks = load_tasks_from_disk(root).await;
+    let mut initial_tasks = try_load_tasks_from_disk(root).await?;
 
     // In-memory fallback: if task was just created and not yet on disk,
     // or if memory has tasks not yet on disk, retrieve from AppState (§ 2.22).
@@ -167,30 +167,25 @@ pub async fn internal_move_task_stage(
     )
     .await;
 
-    // --- LOST UPDATE FIX ---
-    // Re-load the fresh task list from SQLite AFTER all async hooks complete so that
-    // any concurrent updates to other tasks (or to this task's todos/metadata) are preserved.
-    let mut tasks = load_tasks_from_disk(root).await;
-    if !tasks.iter().any(|t| task_id_matches(&t.id, &moving_task.id)) {
-        if let Some(app) = app_handle {
-            if let Some(state) = app.try_state::<AppState>() {
-                let guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
-                for mem_t in guard.iter() {
-                    if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
-                        tasks.push(mem_t.clone());
+    // --- LOST UPDATE & RESURRECTION GUARD ---
+    // Re-load the fresh task list from SQLite AFTER all async hooks complete.
+    // Do NOT resurrect the task from memory if it was deleted while hooks ran.
+    let mut tasks = try_load_tasks_from_disk(root).await?;
+
+    let task_idx = match tasks.iter().position(|t| task_id_matches(&t.id, &moving_task.id)) {
+        Some(idx) => idx,
+        None => {
+            if let Some(app) = app_handle {
+                if let Some(state) = app.try_state::<AppState>() {
+                    if state.is_same_root(root) {
+                        let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
+                        guard.retain(|t| !task_id_matches(&t.id, &moving_task.id));
                     }
                 }
             }
+            return Err(format!("Task {} not found after stage transition hooks (may have been deleted)", task_id));
         }
-        if !tasks.iter().any(|t| task_id_matches(&t.id, &moving_task.id)) {
-            tasks.push(moving_task.clone());
-        }
-    }
-
-    let task_idx = tasks
-        .iter()
-        .position(|t| task_id_matches(&t.id, &moving_task.id))
-        .ok_or_else(|| format!("Task {} not found after stage transition hooks", task_id))?;
+    };
 
     let old_stage = source_stage_id.clone();
     {
@@ -331,10 +326,8 @@ pub async fn internal_move_task_stage(
         }
 
         for t in tasks.iter_mut() {
-            if mutated_ids.contains(&t.id) {
-                if t.status.as_deref() == Some("done") {
-                    auto_complete_task_todos(root, t, app_handle);
-                }
+            if mutated_ids.contains(&t.id) && t.status.as_deref() == Some("done") {
+                auto_complete_task_todos(root, t, app_handle);
             }
         }
     }

@@ -15,7 +15,7 @@ pub fn resolve_board_for_stage(
     let mut effective_board: Option<BoardDef> = None;
     let mut assigned_board_id = current_board_id.map(|s| s.to_string());
 
-    if let Some(ref bc) = boards_cfg {
+    if let Some(bc) = boards_cfg {
         let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
         let override_board = board_id_override.and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
@@ -139,7 +139,7 @@ pub async fn resolve_source_and_target_columns(
                             term
                         } else {
                             let mut available_stages: Vec<String> = Vec::new();
-                            if let Some(ref b) = effective_board {
+                            if let Some(b) = effective_board {
                                 for c in &b.stages {
                                     if !available_stages.contains(&c.id) {
                                         available_stages.push(c.id.clone());

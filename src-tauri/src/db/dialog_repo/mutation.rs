@@ -311,17 +311,53 @@ pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<V
     Ok(ids)
 }
 
-/// Deletes all dialog items for a specific task and its cascaded subagents.
+/// Deletes all dialog items for a specific task and its cascaded subagents,
+/// including any context snapshot files on disk.
 pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
-    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
-    let sub_colon = format!("{}:sub:%", task_id);
-    let sub_dot = format!("{}.sub-%", task_id);
-    conn.execute(
-        "DELETE FROM dialog_items WHERE task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3",
+    let mut conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let escaped = crate::db::escape_like(task_id);
+    let sub_colon = format!("{}:sub:%", escaped);
+    let sub_dot = format!("{}.sub-%", escaped);
+
+    let mut tids_to_clean: Vec<String> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT DISTINCT task_id FROM dialog_items
+                 WHERE task_id = ?1 OR task_id LIKE ?2 ESCAPE '\\' OR task_id LIKE ?3 ESCAPE '\\'",
+            )
+            .map_err(|e| format!("Failed to query dialog task IDs: {}", e))?;
+        let rows = stmt
+            .query_map(params![task_id, sub_colon, sub_dot], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("Failed to list dialog task IDs: {}", e))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(|e| format!("Failed to read dialog task ID: {}", e))?);
+        }
+        out
+    };
+    if !tids_to_clean.iter().any(|id| id == task_id) {
+        tids_to_clean.push(task_id.to_string());
+    }
+
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+    tx.execute(
+        "DELETE FROM dialog_items WHERE task_id = ?1 OR task_id LIKE ?2 ESCAPE '\\' OR task_id LIKE ?3 ESCAPE '\\'",
         params![task_id, sub_colon, sub_dot],
     )
     .map_err(|e| format!("Failed to delete dialog items: {}", e))?;
-    let _ = std::fs::remove_file(crate::db::context_file_path(root, task_id));
+    tx.commit()
+        .map_err(|e| format!("Failed to commit clear_dialog_items: {}", e))?;
+
+    for tid in tids_to_clean {
+        let ctx_path = crate::db::context_file_path(root, &tid);
+        if let Err(e) = std::fs::remove_file(&ctx_path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(format!("Failed to remove context file {:?}: {}", ctx_path, e));
+            }
+        }
+    }
     Ok(())
 }
 
