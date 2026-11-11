@@ -12,7 +12,7 @@ if "%CVH_TASK_ID%"=="" (
 )
 
 REM Ensure shared Cargo build cache across all worktrees to prevent cold compilations
-if "%CARGO_TARGET_DIR%"=="" set "CARGO_TARGET_DIR=%~dp0..\..\src-tauri\target"
+if "%CARGO_TARGET_DIR%"=="" set "CARGO_TARGET_DIR=%TEMP%\cvh-cargo-target"
 
 if /i "%CVH_SKIP_WORKTREE%"=="true" (
     echo [CVH Worktree Hook] CVH_SKIP_WORKTREE is true. Skipping worktree creation.
