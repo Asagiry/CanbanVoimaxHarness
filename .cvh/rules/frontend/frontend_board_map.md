@@ -63,3 +63,4 @@ Choose checks for the changed behavior; use the active role's `sensors` rule for
 - `src/components/board/__tests__/StageContextMenu.test.tsx` — Stage context menu interactions.
 - `src/components/card/__tests__/KanbanCard.test.tsx` — Kanban card rendering and layout.
 - `src/stores/__tests__/tasksCrudSlice.test.ts` — Task CRUD and stage transition slice tests.
+- `src/stores/__tests__/boardMetaSlice.test.ts` — Board metadata, stage update, and column order slice tests.

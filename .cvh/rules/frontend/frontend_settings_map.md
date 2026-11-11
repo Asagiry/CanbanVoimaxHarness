@@ -19,6 +19,7 @@ Cortex edits personas, rules and stage settings (also indexed in `frontend_corte
 | `src/components/settings/tool-policy/ToolSchemaEditor.tsx` | Interactive JSON function schema override editor with format, save, and reset-to-default controls. |
 | `src/components/settings/tool-policy/toolPolicyConstants.ts` | `CustomTool` & `AgentMatrixItem` types, `CATEGORY_ORDER`, `buildAgentMatrix`, and `applyAgentToolToggle`. |
 | `src/stores/settings/providers.ts` | Provider types, `migrateFlatToProviders`, `catalogModelOptions`/`catalogModelLabel`, normalization and boundary validation. |
+| `src/stores/settings/settingsHelpers.ts` | `LlmSettingsState`, `NotificationSettings`, `DEFAULT_SETTINGS`, normalization and persistence helpers for `settingsStore`. |
 | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings; provider CRUD + `fetchProviderModels`; `availableModels` cache. |
 | `src/stores/toolPolicyStore.ts` | Re-export facade preserving tool policy store, types, and default constants. |
 | `src/stores/toolPolicy/index.ts` | Barrel module composing `useToolPolicyStore` and metadata helpers. |

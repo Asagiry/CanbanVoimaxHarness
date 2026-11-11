@@ -31,6 +31,7 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | `src/services/gateway/taskEventRouter.ts` | Task lifecycle, timer, and stage transition event routing to board stores. |
 | `src/services/gateway/index.ts` | Barrel re-exports for event gateway service. |
 | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
+| `src/stores/project/projectHelpers.ts` | `DEFAULT_PROJECT`, `isInvalidProjectPath`, opened-projects storage and store reset helpers for `projectStore`. |
 | `src/stores/themeStore.ts` | Theme selection and persistence. |
 | `src/stores/languageStore.ts` | Russian/English localization switching. |
 | `src/i18n/translations.ts` | Localized translation resolver. |
@@ -49,6 +50,7 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `ProviderId`, `TaskState`, `StageLike`, `CANONICAL_TERMINAL_STAGES`, `CANONICAL_INTAKE_STAGES`, `isTerminalStage`, `isIntakeStage`. |
 | `src/types/index.ts` | Main types barrel (re-exports `domain.ts`); `ReasoningEffort`, `REASONING_EFFORTS`, `normalizeReasoningEffort`. |
 | `src/types/kanban.ts` | Kanban task/board domain types. |
+| `src/types/runtime.ts` | Extracted runtime types (`ReasoningEffort`, `CortexAgentFile`, `CortexAgentStage`, `ToolExecution`, etc.) re-exported by `src/types/index.ts`. |
 
 ## Related checks
 
@@ -57,3 +59,4 @@ Choose checks for the changed behavior; use the active role's `sensors` rule for
 - `src/hooks/__tests__/useUiZoom.test.ts` — Vitest suite for UI zoom scaling, modal overlays, and wheel listeners.
 - `src/components/common/__tests__/HookIcon.test.tsx` — Vitest suite for hook moment resolution and visual icon rendering.
 - `src/services/__tests__/notificationFormatter.test.ts` — Notification markdown formatter checks.
+- `src/services/__tests__/tauriEventGateway.test.ts` — Tauri event gateway routing, buffer disposal, and project switch reset tests.

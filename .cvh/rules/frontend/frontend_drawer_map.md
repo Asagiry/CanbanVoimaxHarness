@@ -100,6 +100,7 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/stores/drawerStore.ts` | Composed Zustand drawer store (`useDrawerStore`) wiring drawer slices. |
 | `src/stores/drawer/types.ts` | Drawer state, activity item, tab and telemetry contracts. |
 | `src/stores/drawer/drawerHelpers.ts` | Drawer helper utilities. |
+| `src/stores/drawer/activityLoadHelpers.ts` | `buildLoadedTaskActivityPatch`, `MAX_LOAD_ROLLBACK_RETRIES`, and SQLite activity hydration helpers for `activitySlice`. |
 | `src/stores/drawer/activityDedup.ts` | Re-export facade for drawer activity deduplication and rolling-window helpers. |
 | `src/stores/drawer/dedup/windowing.ts` | 500-item rolling-window caps (`capActivityFeed`, `capToolExecutions`) and log evaporation. |
 | `src/stores/drawer/dedup/feedMerge.ts` | Final response merging and optimistic user/steer deduplication helpers. |
