@@ -10,6 +10,7 @@ use crate::agent::tool_dispatch::execute_tool;
 use crate::db::ActivityItem;
 use crate::llm::{ChatMessage, ToolCall};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_subagent_turn_tools(
     ctx: &OwnedToolContext,
     role: &str,

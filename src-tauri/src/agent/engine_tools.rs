@@ -18,6 +18,7 @@ pub enum TurnToolOutcome {
     Terminated(String),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_agent_turn_tools<F>(
     config: &AgentSessionConfig,
     tool_policy: &crate::config::ToolPolicyConfig,

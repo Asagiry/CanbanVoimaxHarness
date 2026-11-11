@@ -8,6 +8,7 @@ use crate::agent::subagent_runtime::{find_subagent_session, OwnedToolContext};
 use crate::db::ActivityItem;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_subagent_synthesis(
     ctx: &OwnedToolContext,
     subagent_id: &str,
