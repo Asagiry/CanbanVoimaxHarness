@@ -16,13 +16,14 @@ export const translations = {
 const STORAGE_KEY = 'cvh_language';
 
 function getInitialLanguage(): Language {
+  if (typeof localStorage === 'undefined') return 'en';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'en' || saved === 'ru') {
       return saved;
     }
-  } catch {
-    // localStorage not accessible
+  } catch (err) {
+    console.debug('[i18n] Failed to read saved language from localStorage:', err);
   }
   return 'en';
 }
@@ -36,10 +37,12 @@ export interface LanguageState {
 export const useLanguageStore = create<LanguageState>((set, get) => ({
   language: getInitialLanguage(),
   setLanguage: (lang: Language) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, lang);
-    } catch {
-      // ignore
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, lang);
+      } catch (err) {
+        console.debug('[i18n] Failed to persist language to localStorage:', err);
+      }
     }
     set({ language: lang });
   },

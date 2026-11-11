@@ -26,6 +26,19 @@ export default function ProviderModelPicker({ open, candidates, existing, onClos
     }
   }, [open, candidates]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [open, onClose]);
+
   const filtered = useMemo(() => {
     if (!searchFilter.trim()) return candidates;
     const q = searchFilter.toLowerCase();
@@ -88,10 +101,11 @@ export default function ProviderModelPicker({ open, candidates, existing, onClos
               const isChecked = selected.has(modelName);
               const isAdded = existingIds.has(modelName);
               return (
-                <div
+                <button
                   key={modelName}
+                  type="button"
                   onClick={() => toggle(modelName)}
-                  className={`flex items-center space-x-2.5 px-3 py-2 cursor-pointer select-none ${isChecked ? 'bg-[#f4f4f5] dark:bg-[#232328]' : 'hover:bg-[#fafafa] dark:hover:bg-[#232328]/50'}`}
+                  className={`w-full text-left flex items-center space-x-2.5 px-3 py-2 cursor-pointer select-none ${isChecked ? 'bg-[#f4f4f5] dark:bg-[#232328]' : 'hover:bg-[#fafafa] dark:hover:bg-[#232328]/50'}`}
                 >
                   {isChecked ? <CheckSquare className="h-4 w-4 shrink-0" /> : <Square className="h-4 w-4 shrink-0 text-[#8f8f8f]" />}
                   <span className="font-mono text-xs truncate flex-1">{modelName}</span>
@@ -100,7 +114,7 @@ export default function ProviderModelPicker({ open, candidates, existing, onClos
                       {t('settings.alreadyAdded')}
                     </span>
                   )}
-                </div>
+                </button>
               );
             })
           ) : (

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Folder, FolderOpen, Globe, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import type { CortexAgentFile } from '../../types';
 import type { ExpandAllSignal } from './types';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
-import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 import DirtyDot from './DirtyDot';
-import { isFileDirty, isGlobalRulesDirty } from '../../stores/cortex/cortexGitSave';
+import { GlobalRuleRow } from './GlobalRuleRow';
+import { GlobalRuleCreateForm } from './GlobalRuleCreateForm';
+import { isGlobalRulesDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface GlobalRulesSectionProps {
   rules: CortexAgentFile[];
@@ -17,12 +18,6 @@ export interface GlobalRulesSectionProps {
   expandAllSignal?: ExpandAllSignal;
 }
 
-/**
- * Deep component representing the Project Global Rules (.cvh/rules/):
- * - Section header with count and toggle.
- * - Inline global rule creation form with file naming validation.
- * - List of project-level markdown rule files with active selection and delete action.
- */
 export function GlobalRulesSection({
   rules,
   totalCount,
@@ -46,20 +41,23 @@ export function GlobalRulesSection({
   const [isCreating, setIsCreating] = useState(false);
   const [ruleName, setRuleName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createFolder, setCreateFolder] = useState<string | undefined>(undefined);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
+  // Only reset folder open states when expandAllSignal explicitly fires (not on allGlobalRules updates)
   useEffect(() => {
     if (!expandAllSignal || expandAllSignal.nonce === 0) return;
+    const currentRules = useCortexStore.getState().globalRules;
     const next: Record<string, boolean> = {};
-    for (const r of allGlobalRules) {
+    for (const r of currentRules) {
       if (r.folder) next[r.folder] = expandAllSignal.expanded;
     }
     setOpenFolders(next);
-  }, [expandAllSignal, allGlobalRules]);
+  }, [expandAllSignal]);
 
   const handleStartCreate = (e: React.MouseEvent, folder?: string) => {
     e.stopPropagation();
@@ -140,11 +138,12 @@ export function GlobalRulesSection({
     if (!window.confirm(t('cortex.deleteFolderConfirm', { name: folder }))) {
       return;
     }
+    setActionError(null);
     try {
       await deleteGlobalFolder(folder);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(t('cortex.deleteFolderError', { msg }));
+      setActionError(t('cortex.deleteFolderError', { msg }));
     }
   };
 
@@ -153,13 +152,19 @@ export function GlobalRulesSection({
     if (!window.confirm(t('cortex.deleteGlobalRuleConfirm', { name: fileName }))) {
       return;
     }
+    setActionError(null);
     try {
       await deleteGlobalRule(fileName);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(t('cortex.deleteGlobalRuleError', { msg }));
+      setActionError(t('cortex.deleteGlobalRuleError', { msg }));
     }
   };
+
+  const rootRules = rules.filter((r) => !r.folder && r.type !== 'folder');
+  const folders = [...new Set(rules.map((r) => r.folder).filter((f): f is string => !!f))].sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   return (
     <section aria-label={t('cortex.globalRulesSection')} className="mt-2">
@@ -204,193 +209,128 @@ export function GlobalRulesSection({
         </div>
       </div>
 
+      {actionError && (
+        <div className="mx-1 mt-1 px-2 py-1 rounded border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-[10px] text-red-700 dark:text-red-400 flex items-center justify-between gap-1 font-sans">
+          <span className="truncate">{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label={t('common.close')}
+            className="p-0.5 hover:opacity-75 cursor-pointer shrink-0"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       {isOpen && (
         <div className="space-y-1">
-          {/* Inline Form for creating a new global rule */}
           {(isCreating || isCreatingFolder) && (
-            <form
-              onSubmit={handleCreateSubmit}
-              className="mx-1 mt-1 p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] space-y-1.5 shadow-xs"
-            >
-              <div className="text-[10px] font-sans font-medium text-[#71717a] dark:text-[#71717a]">
-                {isCreatingFolder ? t('cortex.newFolder') : createFolder ? `${t('cortex.newRuleInFolder')} (${createFolder})` : t('cortex.newGlobalRule')}
-              </div>
-              {isCreatingFolder ? (
-                <input
-                  type="text"
-                  value={folderName}
-                  onChange={(e) => setFolderName(e.target.value)}
-                  placeholder={t('cortex.folderNamePlaceholder')}
-                  autoFocus
-                  className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5]"
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={ruleName}
-                  onChange={(e) => setRuleName(e.target.value)}
-                  placeholder="architecture.md"
-                  autoFocus
-                  className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5]"
-                />
-              )}
-              {createError && (
-                <div className="text-[10px] text-red-600 dark:text-red-400 font-sans">
-                  {createError}
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 pt-1">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-2 py-0.5 text-[10px] font-mono rounded bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? t('common.saving') : t('common.create')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setIsCreating(false); setIsCreatingFolder(false); setCreateFolder(undefined); }}
-                  className="px-2 py-0.5 text-[10px] font-mono rounded border border-[#ebebeb] dark:border-[#2c2c33] text-[#71717a] dark:text-[#71717a] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
-                >
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
+            <GlobalRuleCreateForm
+              isCreatingFolder={isCreatingFolder}
+              createFolder={createFolder}
+              folderName={folderName}
+              ruleName={ruleName}
+              createError={createError}
+              isSubmitting={isSubmitting}
+              onFolderNameChange={setFolderName}
+              onRuleNameChange={setRuleName}
+              onSubmit={(e) => void handleCreateSubmit(e)}
+              onCancel={() => {
+                setIsCreating(false);
+                setIsCreatingFolder(false);
+                setCreateFolder(undefined);
+              }}
+            />
           )}
 
-          {/* List of Global Rules */}
           {rules.length === 0 && !isSearching && !isCreating && !isCreatingFolder && (
             <div className="mx-1 mt-1 p-3 text-center rounded-md border border-dashed border-[#ebebeb] dark:border-[#2c2c33] text-[11px] text-[#8f8f8f] dark:text-[#71717a] font-sans">
               {t('cortex.noGlobalRules')}
             </div>
           )}
 
-          {(() => {
-            const rootRules = rules.filter((r) => !r.folder && r.type !== 'folder');
-            const folders = [...new Set(rules.map((r) => r.folder).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b));
-            const renderRule = (rule: CortexAgentFile) => {
-              if (rule.type === 'folder' || !rule.name) return null;
-            const isActive = activeFile?.id === rule.id;
-            const isRuntime = isRuntimeRule(rule.name);
-            return (
-              <div
-                key={rule.id}
-                className="group/rule flex items-center justify-between px-2 py-1 rounded-md text-left transition hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] cursor-pointer"
-                onClick={() => void openFile(rule.id)}
-              >
-                <button
-                  type="button"
-                  className={`flex-1 min-w-0 flex items-center space-x-1.5 text-left cursor-pointer ${
-                    isActive
-                      ? 'text-[#171717] dark:text-[#f4f4f5] font-semibold'
-                      : 'text-[#4d4d4d] dark:text-[#71717a]'
-                  }`}
-                  title={isRuntime ? t('cortex.runtimeRuleTooltip') : rule.path}
-                >
-                  {isRuntime ? (
-                    <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
-                  ) : (
-                    <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
-                  )}
-                  <span className={`text-xs font-mono truncate leading-none ${rule.isDeleted ? 'line-through text-[#a1a1aa]' : ''}`} title={rule.isDeleted ? t('cortex.deletedUnsaved') : undefined}>{rule.name}</span>
-                  {isRuntime && (
-                    <span
-                      title={t('cortex.runtimeRuleTooltip')}
-                      className="px-1 py-px rounded border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/50 text-[9px] font-mono font-medium text-indigo-600 dark:text-indigo-400 shrink-0 leading-tight"
-                    >
-                      {t('cortex.runtimeRuleBadge')}
-                    </span>
-                  )}
-                  {isFileDirty(rule, cvhGitStatus) && (
-                    <span
-                      className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
-                      title={t('cortex.unsavedChanges')}
-                    />
-                  )}
-                </button>
+          {rootRules.map((rule) => (
+            <GlobalRuleRow
+              key={rule.id}
+              rule={rule}
+              isActive={activeFile?.id === rule.id}
+              cvhGitStatus={cvhGitStatus}
+              onOpen={(id) => void openFile(id)}
+              onDelete={(e, name) => void handleDeleteRule(e, name)}
+              onRestore={restorePendingDelete}
+            />
+          ))}
 
-                {rule.isDeleted ? (
+          {folders.map((folder) => {
+            const folderRules = rules.filter((r) => r.folder === folder && r.type !== 'folder' && r.name !== '');
+            const expanded = isSearching || openFolders[folder] !== false;
+            return (
+              <div key={folder}>
+                <div className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition group/folder">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); restorePendingDelete(`file:${rule.id}`); }}
-                    aria-label={t('cortex.restoreDeleted')}
-                    title={t('cortex.restoreDeleted')}
-                    className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-emerald-600 dark:hover:text-emerald-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
+                    onClick={() => setOpenFolders((prev) => ({ ...prev, [folder]: !(prev[folder] !== false) }))}
+                    aria-expanded={expanded}
+                    className="flex-1 flex items-center gap-1.5 text-left cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
                   >
-                    <RotateCcw className="h-3 w-3" />
+                    {expanded ? (
+                      <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
+                    ) : (
+                      <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
+                    )}
+                    <span className="text-xs font-sans font-semibold leading-none">{folder}</span>
+                    <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">
+                      ({folderRules.length})
+                    </span>
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => void handleDeleteRule(e, rule.name)}
-                    aria-label={t('common.delete')}
-                    className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => handleStartCreate(e, folder)}
+                      aria-label={t('cortex.newRuleInFolder')}
+                      title={t('cortex.newRuleInFolder')}
+                      className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                    {folderRules.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => void handleDeleteFolder(e, folder)}
+                        aria-label={t('common.delete')}
+                        title={t('common.delete')}
+                        className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/folder:opacity-100 transition cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {expanded && (
+                  <div className="ml-3">
+                    {folderRules.length === 0 ? (
+                      <div className="px-2 py-1 text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans italic">
+                        {t('cortex.emptyFolder')}
+                      </div>
+                    ) : (
+                      folderRules.map((rule) => (
+                        <GlobalRuleRow
+                          key={rule.id}
+                          rule={rule}
+                          isActive={activeFile?.id === rule.id}
+                          cvhGitStatus={cvhGitStatus}
+                          onOpen={(id) => void openFile(id)}
+                          onDelete={(e, name) => void handleDeleteRule(e, name)}
+                          onRestore={restorePendingDelete}
+                        />
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             );
-            };
-            return (
-              <>
-                {rootRules.map(renderRule)}
-                {folders.map((folder) => {
-                  const folderRules = rules.filter((r) => r.folder === folder && r.type !== 'folder' && r.name !== '');
-                  const expanded = isSearching || openFolders[folder] !== false;
-                  return (
-                    <div key={folder}>
-                      <div className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition group/folder">
-                        <button
-                          type="button"
-                          onClick={() => setOpenFolders((prev) => ({ ...prev, [folder]: !(prev[folder] !== false) }))}
-                          aria-expanded={expanded}
-                          className="flex-1 flex items-center gap-1.5 text-left cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
-                        >
-                          {expanded ? <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" /> : <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />}
-                          <span className="text-xs font-sans font-semibold leading-none">{folder}</span>
-                          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none">({folderRules.length})</span>
-                        </button>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartCreate(e, folder)}
-                            aria-label={t('cortex.newRuleInFolder')}
-                            title={t('cortex.newRuleInFolder')}
-                            className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                          {folderRules.length === 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => void handleDeleteFolder(e, folder)}
-                              aria-label={t('common.delete')}
-                              title={t('common.delete')}
-                              className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/folder:opacity-100 transition cursor-pointer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {expanded && (
-                        <div className="ml-3">
-                          {folderRules.length === 0 ? (
-                            <div className="px-2 py-1 text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans italic">
-                              {t('cortex.emptyFolder')}
-                            </div>
-                          ) : (
-                            folderRules.map(renderRule)
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
-            );
-          })()}
+          })}
         </div>
       )}
     </section>

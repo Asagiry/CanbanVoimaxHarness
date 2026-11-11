@@ -28,8 +28,8 @@ export default function TodoToolCard({ tool, isExpanded: controlledExpanded, onT
     try {
       const parsed = JSON.parse(params.todos);
       if (Array.isArray(parsed)) rawTodos = parsed;
-    } catch {
-      // ignore JSON parse error
+    } catch (err) {
+      console.debug('[TodoToolCard] todos JSON parse skipped:', err);
     }
   }
 
@@ -48,35 +48,32 @@ export default function TodoToolCard({ tool, isExpanded: controlledExpanded, onT
     <div
       className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#17171b] ${
         isRunning
-          ? 'border-indigo-500/40 dark:border-indigo-500/30 bg-indigo-500/[0.02]'
+          ? 'border-sky-500/40 dark:border-sky-500/30 bg-sky-500/[0.02]'
           : 'border-[#ebebeb] dark:border-[#212126]'
       } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors select-none gap-2 text-xs min-h-[30px] ${
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
-          <button
-            type="button"
-            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer btn-tactile"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            aria-label={isExpanded ? t('tools.todo_write.collapse') : t('tools.todo_write.expand')}
-          >
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? t('tools.todo_write.collapse') : t('tools.todo_write.expand')}
+          className="flex items-center gap-1.5 min-w-0 flex-1 leading-none text-left cursor-pointer"
+        >
+          <span className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition">
             <ChevronRight
               className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
                 isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
               }`}
             />
-          </button>
+          </span>
 
-          <span className="flex items-center shrink-0 select-none text-indigo-600 dark:text-indigo-400">
+          <span className="flex items-center shrink-0 select-none text-sky-600 dark:text-sky-400">
             <ListTodo className="h-3.5 w-3.5 block shrink-0" />
           </span>
 
@@ -105,7 +102,7 @@ export default function TodoToolCard({ tool, isExpanded: controlledExpanded, onT
               </span>
             </>
           )}
-        </div>
+        </button>
 
         <div className="flex items-center space-x-1.5 shrink-0">
           <BatchBadge tool={tool} />

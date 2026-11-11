@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { X } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
 import { useTranslation } from '../../../stores/languageStore';
@@ -10,11 +11,11 @@ import AgentIcon from '../../common/AgentIcon';
 import { slugifyTitle, uniqueColumnId } from '../../../lib/slug';
 import {
   AGENT_PALETTE,
-  AGENT_ICONS,
   getDeterministicAgentColor,
   isAllowedAgentColor,
 } from '../../../lib/agentPalette';
 import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
+import StageAppearancePicker from './StageAppearancePicker';
 
 interface AgentPersonaOption {
   role: string;
@@ -45,7 +46,9 @@ export default function CreateColumnModal({
   columns,
 }: CreateColumnModalProps) {
   const effectiveStages = stages ?? columns ?? [];
-  const { setStages, saveCurrentBoard } = useBoardStore();
+  const { setStages, saveCurrentBoard } = useBoardStore(
+    useShallow((s) => ({ setStages: s.setStages, saveCurrentBoard: s.saveCurrentBoard }))
+  );
   const { t } = useTranslation();
   const { zoom } = useUiZoom();
 
@@ -74,7 +77,8 @@ export default function CreateColumnModal({
       } else {
         setUsePersonaSelect(false);
       }
-    } catch {
+    } catch (err) {
+      console.debug('[CreateColumnModal] list_agent_personas unavailable:', err);
       setUsePersonaSelect(false);
     } finally {
       setPersonasLoading(false);
@@ -99,16 +103,17 @@ export default function CreateColumnModal({
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  // Determine active preview / auto color & icon
   const targetPersona = (isNewAgentSelected ? slugifyTitle(newAgentName) : newColumnPersona) || 'developer';
   const matchedPersona = agentPersonas.find((p) => p.role === targetPersona);
   const autoColor = (() => {
@@ -188,8 +193,6 @@ export default function CreateColumnModal({
       setIsSubmitting(false);
     }
   };
-
-  if (!isOpen) return null;
 
   const modalContent = (
     <div
@@ -288,84 +291,16 @@ export default function CreateColumnModal({
             </div>
           )}
 
-          {/* Color Selection Palette */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
-                {t('board.autoColor')}
-              </label>
-              {selectedColor && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedColor(null)}
-                  className="text-[10px] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] underline cursor-pointer"
-                >
-                  Авто ({autoColor})
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33]">
-              {AGENT_PALETTE.map((c) => {
-                const isSelected = effectiveColor === c;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSelectedColor(c)}
-                    className="relative w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-2xs border border-black/10 dark:border-white/10"
-                    style={{ backgroundColor: c }}
-                    aria-label={c}
-                  >
-                    {isSelected && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Icon Selection Grid */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
-                Иконка [{effectiveIcon}]
-              </label>
-              {selectedIcon && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedIcon(null)}
-                  className="text-[10px] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] underline cursor-pointer"
-                >
-                  Авто ({autoIcon})
-                </button>
-              )}
-            </div>
-            <div className="p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33]">
-              <div className="grid grid-cols-6 gap-1.5 max-h-32 overflow-y-auto p-0.5">
-                {AGENT_ICONS.map((ic) => {
-                  const isSelected = effectiveIcon === ic;
-                  return (
-                    <button
-                      key={ic}
-                      type="button"
-                      onClick={() => setSelectedIcon(ic)}
-                      className={`flex items-center justify-center p-1.5 rounded-md transition cursor-pointer ${
-                        isSelected
-                          ? 'bg-white dark:bg-[#232328] border-2 border-[#171717] dark:border-[#f4f4f5] shadow-xs'
-                          : 'hover:bg-white/80 dark:hover:bg-[#232328]/80 border border-transparent text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
-                      }`}
-                      aria-label={ic}
-                    >
-                      <AgentIcon
-                        name={ic}
-                        className="h-4 w-4"
-                        style={{ color: isSelected ? effectiveColor : undefined }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <StageAppearancePicker
+            selectedColor={selectedColor}
+            autoColor={autoColor}
+            effectiveColor={effectiveColor}
+            onSelectColor={setSelectedColor}
+            selectedIcon={selectedIcon}
+            autoIcon={autoIcon}
+            effectiveIcon={effectiveIcon}
+            onSelectIcon={setSelectedIcon}
+          />
 
           {columnFormError && (
             <div className="w-full text-xs font-sans text-[#ef4444] bg-[#fef2f2] dark:bg-[#17171b] border border-[#fecaca] dark:border-[#3b1219] rounded-md px-3 py-1.5">

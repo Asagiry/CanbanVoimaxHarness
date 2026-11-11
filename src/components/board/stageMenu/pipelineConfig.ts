@@ -19,7 +19,8 @@ export async function savePipelineConfig(next: PipelineStage[]): Promise<boolean
     let cfg: PipelineConfig | null = null;
     try {
       cfg = await invoke<PipelineConfig>('get_pipeline');
-    } catch {
+    } catch (err) {
+      console.debug('[pipelineConfig] get_pipeline unavailable, using fallback:', err);
       cfg = null;
     }
     const pipeline = {

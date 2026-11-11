@@ -10,7 +10,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [progressPct, setProgressPct] = useState(25);
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const isRunning = tool.status === 'running';
   const isSuccess = tool.status === 'success';
@@ -18,15 +18,16 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
   const isSkipped = isToolSkipped(tool);
 
   const params = (tool.params && typeof tool.params === 'object' ? tool.params : {}) as Record<string, unknown>;
-  const savedTokens = typeof params.savedTokens === 'number'
-    ? params.savedTokens
-    : typeof (tool as any).savedTokens === 'number'
-    ? (tool as any).savedTokens
-    : 0;
-  const formattedSaved = savedTokens > 0 ? savedTokens.toLocaleString('ru-RU') : '';
+  const legacyTool = tool as unknown as { savedTokens?: unknown };
+  const savedTokens =
+    typeof params.savedTokens === 'number'
+      ? params.savedTokens
+      : typeof legacyTool.savedTokens === 'number'
+      ? legacyTool.savedTokens
+      : 0;
+  const formattedSaved =
+    savedTokens > 0 ? savedTokens.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US') : '';
 
-  // Animated stages progression when running:
-  // 1. Анализ диалога → 2. Испарение логов тулов → 3. Сборка выжимки
   useEffect(() => {
     if (!isRunning) {
       if (isSuccess) {
@@ -66,7 +67,9 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     const content = tool.stdout || tool.stderr || 'compact_context';
-    navigator.clipboard.writeText(content);
+    void navigator.clipboard.writeText(content).catch((err) => {
+      console.warn('[CompactContextToolCard] clipboard copy failed:', err);
+    });
     setCopied(true);
     if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
     copiedTimeoutRef.current = setTimeout(() => {
@@ -76,17 +79,17 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
   };
 
   const stages = [
-    { num: 1, label: '1. Анализ диалога' },
-    { num: 2, label: '2. Испарение логов тулов' },
-    { num: 3, label: '3. Сборка выжимки' },
+    { num: 1, label: t('compact.stage1') },
+    { num: 2, label: t('compact.stage2') },
+    { num: 3, label: t('compact.stage3') },
   ];
 
   const currentStageLabel =
     activeStep === 1
-      ? 'Анализ диалога...'
+      ? t('compact.stage1Running')
       : activeStep === 2
-      ? 'Испарение логов тулов...'
-      : 'Сборка выжимки...';
+      ? t('compact.stage2Running')
+      : t('compact.stage3Running');
 
   const durationText = formatDurationCompact(tool.durationMs);
 
@@ -100,49 +103,39 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
     >
       {/* Header Strip */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors select-none gap-2 text-xs min-h-[30px] ${
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1 leading-none">
-          <button
-            type="button"
-            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
-          >
-            <ChevronRight
-              className={`h-3 w-3 block shrink-0 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
-              }`}
-            />
-          </button>
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? t('compact.collapseDetails') : t('compact.expandDetails')}
+          className="flex items-center gap-1.5 min-w-0 flex-1 leading-none text-left cursor-pointer"
+        >
+          <ChevronRight
+            className={`h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a] transition-transform duration-150 ${
+              isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
+            }`}
+          />
 
-          {/* Icon */}
-          <Minimize2 className="h-3.5 w-3.5 block shrink-0 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <Minimize2 className="h-3.5 w-3.5 block shrink-0 text-sky-600 dark:text-sky-400" />
 
-          {/* Badge */}
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
-            Оптимизация
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
+            {t('compact.badge')}
           </span>
 
-          {/* Title */}
           <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] shrink-0 font-sans">
-            Оптимизация контекста
+            {t('compact.title')}
           </span>
 
-          {/* Saved tokens badge when finished */}
           {isSuccess && formattedSaved && (
             <span className="inline-flex items-center font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.5 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium leading-none shrink-0">
-              Освобождено -{formattedSaved} токенов
+              {t('compact.freedTokens', { tokens: formattedSaved })}
             </span>
           )}
 
-          {/* Duration */}
           {durationText && (
             <>
               <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px] leading-none">•</span>
@@ -151,7 +144,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
               </span>
             </>
           )}
-        </div>
+        </button>
 
         {/* Right side status indicator & copy */}
         <div className="flex items-center space-x-2 shrink-0">
@@ -162,7 +155,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
             className={`p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-white dark:hover:bg-[#17171b] transition cursor-pointer ${
               isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             }`}
-            aria-label="Скопировать вывод"
+            aria-label={t('compact.copyOutput')}
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -173,8 +166,8 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
 
           {isRunning ? (
             <div className="flex items-center space-x-1.5">
-              <span className="inline-flex rounded-full h-2 w-2 bg-indigo-500 animate-pulse shrink-0" />
-              <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">{t('tools.status.running')}</span>
+              <span className="inline-flex rounded-full h-2 w-2 bg-sky-500 animate-pulse shrink-0" />
+              <span className="text-[11px] font-mono text-sky-600 dark:text-sky-400">{t('tools.status.running')}</span>
             </div>
           ) : isSuccess ? (
             <div className="flex items-center space-x-1.5">
@@ -190,29 +183,27 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
         </div>
       </div>
 
-      {/* Running State: Animated Progress Bar & Stages Stepper */}
+      {/* Running State */}
       {isRunning && (
         <div className="px-3 pb-3 pt-1 border-t border-[#ebebeb]/70 dark:border-[#212126]/70 space-y-2.5">
-          {/* Progress bar with percentage */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[11px] font-mono">
               <span className="text-[#52525b] dark:text-[#71717a] flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping" />
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-500 animate-ping" />
                 {currentStageLabel}
               </span>
-              <span className="text-indigo-600 dark:text-indigo-400 font-semibold tabular-nums">
+              <span className="text-sky-600 dark:text-sky-400 font-semibold tabular-nums">
                 {progressPct}%
               </span>
             </div>
             <div className="h-1.5 w-full bg-[#f4f4f5] dark:bg-[#17171b] border border-transparent dark:border-[#2c2c33] rounded-full overflow-hidden">
               <div
-                className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-300 ease-out rounded-full"
+                className="h-full bg-sky-600 dark:bg-sky-500 transition-all duration-300 ease-out rounded-full"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
           </div>
 
-          {/* 3 Stages pill indicator */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[10px] font-mono">
             {stages.map((st) => {
               const isPassed = isSuccess || activeStep > st.num;
@@ -222,7 +213,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
                   key={st.num}
                   className={`flex items-center space-x-1.5 px-2 py-1 rounded transition-colors ${
                     isCurrent
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 font-semibold'
+                      ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80 font-semibold'
                       : isPassed
                       ? 'bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-medium border border-emerald-200/50 dark:border-emerald-800/40'
                       : 'text-[#8f8f8f] dark:text-[#52525b] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-transparent'
@@ -231,7 +222,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
                   {isPassed ? (
                     <Check className="h-3 w-3 shrink-0 stroke-[2.5] text-emerald-600 dark:text-emerald-400" />
                   ) : isCurrent ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse shrink-0" />
                   ) : (
                     <span className="h-1.5 w-1.5 rounded-full bg-[#d4d4d8] dark:bg-[#2c2c33] shrink-0" />
                   )}
@@ -243,15 +234,15 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
         </div>
       )}
 
-      {/* Completed Success State: Compact Stages Completed Strip */}
+      {/* Completed Success State */}
       {!isRunning && isSuccess && (
         <div className="px-3 py-1.5 border-t border-[#ebebeb]/60 dark:border-[#212126]/60 flex items-center justify-between text-[11px] font-mono text-[#52525b] dark:text-[#71717a]">
           <div className="flex items-center space-x-1.5">
             <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
-            <span>1. Анализ диалога → 2. Испарение логов тулов → 3. Сборка выжимки</span>
+            <span>{`${t('compact.stage1')} → ${t('compact.stage2')} → ${t('compact.stage3')}`}</span>
           </div>
           <span className="text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
-            готово
+            {t('compact.done')}
           </span>
         </div>
       )}
@@ -262,7 +253,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
           {tool.stdout && (
             <div>
               <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
-                Результат оптимизации
+                {t('compact.resultTitle')}
               </span>
               <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stdout}
@@ -273,7 +264,7 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
           {tool.stderr && (
             <div>
               <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] block mb-1">
-                Ошибки оптимизации
+                {t('compact.errorsTitle')}
               </span>
               <pre className="p-2.5 rounded-md bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] text-[11px] text-[#991b1b] dark:text-[#ff7b72] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stderr}
@@ -282,8 +273,8 @@ export default function CompactContextToolCard({ tool, isExpanded: controlledExp
           )}
 
           <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#212126] text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
-            <span>{isFailed ? `failed (код ${tool.exitCode ?? 1})` : `Этапы завершены`}</span>
-            {durationText && <span>Длительность: {durationText}</span>}
+            <span>{isFailed ? t('compact.failedCode', { code: tool.exitCode ?? 1 }) : t('compact.stagesCompleted')}</span>
+            {durationText && <span className="tabular-nums">{t('compact.duration', { duration: durationText })}</span>}
           </div>
         </div>
       )}

@@ -70,7 +70,7 @@ export function useUnifiedActivities(
         id: out?.id ?? `out-${Date.now()}`,
         type: (out?.type === 'steer' || out?.type === 'system' || out?.type === 'error' || out?.type === 'user'
           ? out.type
-          : 'output') as any,
+          : 'output') as DrawerActivityItem['type'],
         timestamp: out?.timestamp ?? '',
         content: out?.content ?? '',
       })),

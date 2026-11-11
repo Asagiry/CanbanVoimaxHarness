@@ -29,8 +29,9 @@ export async function compressImageFile(
     let objectUrl: string | null = null;
     try {
       objectUrl = URL.createObjectURL(file);
-    } catch {
+    } catch (err) {
       // Fallback if createObjectURL is unavailable
+      console.debug('[imageCompression] createObjectURL fallback:', err);
       readFileAsDataUrl(file).then(resolve).catch(reject);
       return;
     }
@@ -88,8 +89,9 @@ export async function compressImageFile(
                 break;
               }
             }
-          } catch {
+          } catch (err) {
             // In case of security/canvas read restriction, treat as standard
+            console.debug('[imageCompression] alpha pixel sampling skipped:', err);
           }
 
           if (hasAlpha) {

@@ -50,7 +50,7 @@ export default function AgentSettingVisualEditor({
   const resolveFallbackColor = (parsedColor?: string) => {
     if (parsedColor && isAllowedAgentColor(parsedColor)) return parsedColor;
     if (assignedPersona?.color && isAllowedAgentColor(assignedPersona.color)) return assignedPersona.color;
-    return role ? getDeterministicAgentColor(role) : '#6366f1';
+    return role ? getDeterministicAgentColor(role) : '#0ea5e9';
   };
 
   const lastEmittedRef = useRef<string | null>(null);

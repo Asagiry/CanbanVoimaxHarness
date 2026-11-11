@@ -1,9 +1,10 @@
 import { useState, useId, useEffect, useRef, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCortexStore } from '../../stores/cortexStore';
 import type { AgentPersonaInfo } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { Search, RotateCw, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
+import { Search, RotateCw, ChevronsUpDown, ChevronsDownUp, X } from 'lucide-react';
 import type { CortexAgentStage } from '../../types';
 import type { ExpandAllSignal } from './types';
 import GlobalRulesSection from './GlobalRulesSection';
@@ -24,30 +25,40 @@ export interface CortexExplorerProps {
 }
 
 export default function CortexExplorer({ className = '' }: CortexExplorerProps = {}) {
+  const cortex = useCortexStore(
+    useShallow((s) => ({
+      stages: s.stages,
+      agentStages: s.agentStages,
+      agentPersonas: s.agentPersonas,
+      globalRules: s.globalRules,
+      activeFile: s.activeFile,
+      expandStage: s.expandStage,
+      setAllStagesExpanded: s.setAllStagesExpanded,
+      focusStage: s.focusStage,
+      openFile: s.openFile,
+      loadAgentPersonas: s.loadAgentPersonas,
+      loadGlobalRules: s.loadGlobalRules,
+      renameAgentPersona: s.renameAgentPersona,
+      deleteAgentPersona: s.deleteAgentPersona,
+      setAgentPersonaColor: s.setAgentPersonaColor,
+      setAgentPersonaIcon: s.setAgentPersonaIcon,
+      syncStagesFromColumns: s.syncStagesFromColumns,
+      refreshCvhGitStatus: s.refreshCvhGitStatus,
+    }))
+  );
   const {
-    stages,
-    agentStages,
-    agentPersonas,
-    globalRules,
-    expandStage,
-    setAllStagesExpanded,
-    focusStage,
-    openFile,
-    loadAgentPersonas,
-    loadGlobalRules,
-    renameAgentPersona,
-    deleteAgentPersona,
-    setAgentPersonaColor,
-    setAgentPersonaIcon,
-  } = useCortexStore();
-
-  const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
-  const refreshCvhGitStatus = useCortexStore((s) => s.refreshCvhGitStatus);
-  const activeFile = useCortexStore((s) => s.activeFile);
-  const { columns, boards } = useBoardStore();
+    stages, agentStages, agentPersonas, globalRules, activeFile,
+    expandStage, setAllStagesExpanded, focusStage, openFile,
+    loadAgentPersonas, loadGlobalRules, renameAgentPersona, deleteAgentPersona,
+    setAgentPersonaColor, setAgentPersonaIcon, syncStagesFromColumns, refreshCvhGitStatus,
+  } = cortex;
+  const { columns, boards } = useBoardStore(
+    useShallow((s) => ({ columns: s.columns, boards: s.boards }))
+  );
   const { t } = useTranslation();
 
   const [filterQuery, setFilterQuery] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({
     columns: true,
     agents: true,
@@ -111,8 +122,9 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
   };
 
   const handleDeleteAgent = async (role: string) => {
+    setActionError(null);
     if (role === 'cvh-dev') {
-      alert(t('cortex.deleteBuiltinForbidden'));
+      setActionError(t('cortex.deleteBuiltinForbidden'));
       return;
     }
 
@@ -138,7 +150,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
       await deleteAgentPersona(role);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(t('cortex.deleteAgentError', { msg }));
+      setActionError(t('cortex.deleteAgentError', { msg }));
     }
   };
 
@@ -254,6 +266,19 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
 
       {/* Sections Tree */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 font-mono text-xs">
+        {actionError && (
+          <div className="px-2 py-1.5 rounded border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-[11px] text-red-700 dark:text-red-400 flex items-center justify-between gap-1 font-sans">
+            <span className="truncate">{actionError}</span>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              aria-label={t('common.close')}
+              className="p-0.5 hover:opacity-75 cursor-pointer shrink-0"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         <ColumnsExplorerSection
           stages={filteredColumnStages}
           totalCount={stages.length}

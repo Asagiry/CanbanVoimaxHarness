@@ -79,15 +79,15 @@ export default function KanbanBoard() {
     const prev = curCols;
     const next = prev.filter((c) => c.id !== columnId);
 
+    for (const doomedTask of doomedTasks) {
+      await curMoveTask(doomedTask.id, neighbor.id);
+    }
     curSetCols(next);
     const saved = await savePipelineConfig(next);
     if (!saved) {
       curSetCols(prev);
       setColumnsError(t('board.errDeleteColumnRollback'));
       return;
-    }
-    for (const doomedTask of doomedTasks) {
-      await curMoveTask(doomedTask.id, neighbor.id);
     }
   }, [savePipelineConfig, setColumnsError, t]);
 

@@ -92,8 +92,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               onMouseLeave={() => setHoveredTaskId(null)}
               style={{
                 ...provided.draggableProps.style,
-                transform: snapshot.isDragging && baseTransform
-                  ? `${baseTransform} rotate(1.8deg) scale(1.025)`
+                transform: snapshot.isDragging
+                  ? baseTransform
+                    ? `${baseTransform} rotate(1.5deg) scale(1.02)`
+                    : 'rotate(1.5deg) scale(1.02)'
                   : baseTransform,
                 transition: provided.draggableProps.style?.transition
                   ? `${provided.draggableProps.style.transition}, transform 0.08s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out`
@@ -111,7 +113,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               }}
               className={`group relative mb-2 rounded-md border p-3 select-none ${
                 snapshot.isDragging
-                  ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#2c2c33] bg-white dark:bg-[#17171b]'
+                  ? 'shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#2c2c33] bg-white dark:bg-[#17171b]'
                   : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] bg-white dark:bg-[#17171b] ${
                       isHighlighted
                         ? 'shadow-md'
@@ -131,24 +133,15 @@ function KanbanCard({ task, index }: KanbanCardProps) {
 
               {/* Active Agent Question Alert Badge */}
               {activeQuestion && (
-                <div
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (activeQuestionTargetId) {
                       openDrawer(activeQuestionTargetId, 'thoughts');
                     }
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                      if (activeQuestionTargetId) {
-                        openDrawer(activeQuestionTargetId, 'thoughts');
-                      }
-                    }
-                  }}
-                  className="mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition cursor-pointer text-left overflow-hidden shadow-xs"
+                  className="w-full mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition cursor-pointer text-left overflow-hidden shadow-xs"
                 >
                   <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -162,7 +155,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                       {activeQuestion.text}
                     </span>
                   </div>
-                </div>
+                </button>
               )}
 
               {/* Title */}

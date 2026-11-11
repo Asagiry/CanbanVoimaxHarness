@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { PipelineStage, HookDefinition } from '../../types';
 import { getHookScript } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
@@ -45,7 +46,9 @@ export default function StageContextMenu({
   onDeleteStage,
   onDeleteColumn,
 }: StageContextMenuProps) {
-  const { stages, setStages, updateStage } = useBoardStore();
+  const { stages, setStages, updateStage } = useBoardStore(
+    useShallow((s) => ({ stages: s.stages, setStages: s.setStages, updateStage: s.updateStage }))
+  );
   const currentStage = stages.find((s) => s.id === (stage?.id ?? column?.id)) ?? stage ?? column!;
   const menuRef = useRef<HTMLDivElement>(null);
   const pos = useContextMenuPosition({ x, y, menuRef, onClose, defaultWidth: MENU_WIDTH, viewportMargin: VIEWPORT_MARGIN });
@@ -95,7 +98,8 @@ export default function StageContextMenu({
           setPersonas(list);
           setUsePersonaSelect(true);
         }
-      } catch {
+      } catch (err) {
+        console.debug('[StageContextMenu] list_agent_personas unavailable in web mode:', err);
         if (!cancelled) setUsePersonaSelect(false);
       } finally {
         if (!cancelled) setPersonasLoading(false);

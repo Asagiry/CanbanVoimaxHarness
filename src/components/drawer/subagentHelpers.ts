@@ -158,7 +158,8 @@ export function getSubagentsForTask(
   // 3. Subtasks on the Kanban board
   const childTasks = (boardTasks || []).filter((t) => t.parentId === taskId || (t.id.startsWith(taskId + '.') && !t.parentId));
   for (const child of childTasks) {
-    const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
+    const rawCreated = (child as KanbanTask & { createdAt?: unknown }).createdAt;
+    const childCreated = rawCreated ? Number(rawCreated) : undefined;
     const childStageId = child.stageId;
     const col = (cols || []).find((c) => c.id === childStageId);
     const resolvedRole = child.persona || col?.persona || col?.title || 'subtask';

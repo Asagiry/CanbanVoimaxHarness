@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ImagePlus, Paperclip, ZoomIn } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { X } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useTranslation } from '../../../stores/languageStore';
 import { compressImageFile } from '../../../lib/imageCompression';
 import { PipelineStage, PipelineColumn } from '../../../types';
 import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import ImageLightboxModal from './ImageLightboxModal';
+import TaskAttachmentPicker, { type TaskAttachmentItem } from './TaskAttachmentPicker';
 
 export interface CreateTaskModalProps {
   isOpen: boolean;
@@ -27,7 +29,9 @@ export default function CreateTaskModal({
   defaultStageId,
   defaultColumnId,
 }: CreateTaskModalProps) {
-  const { addTask, activeBoardId } = useBoardStore();
+  const { addTask, activeBoardId } = useBoardStore(
+    useShallow((s) => ({ addTask: s.addTask, activeBoardId: s.activeBoardId }))
+  );
   const { t } = useTranslation();
   const { zoom } = useUiZoom();
   const effectiveStages = stages ?? columns;
@@ -35,16 +39,16 @@ export default function CreateTaskModal({
 
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newAttachments, setNewAttachments] = useState<{ id: string; name: string; dataUrl: string }[]>([]);
+  const [newAttachments, setNewAttachments] = useState<TaskAttachmentItem[]>([]);
   const [selectedColumnId, setSelectedColumnId] = useState<string>('');
   const [previewLightbox, setPreviewLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const wasOpenRef = useRef(false);
 
-  // Initialize and reset fields on open
+  // Initialize and reset fields ONLY on open transition (never wipe user input if effectiveStages updates while open)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       setNewTitle('');
       setNewDescription('');
       setNewAttachments([]);
@@ -56,18 +60,20 @@ export default function CreateTaskModal({
       setPreviewLightbox(null);
       setIsSubmitting(false);
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, initialStage, effectiveStages]);
 
-  // Global Escape key listener (only when lightbox is not active)
   useEffect(() => {
     if (!isOpen) return;
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !previewLightbox) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
   }, [isOpen, onClose, previewLightbox]);
 
   const processAndAddImageFiles = useCallback(async (files: File[] | FileList) => {
@@ -93,9 +99,7 @@ export default function CreateTaskModal({
         })
       );
 
-      const successful = compressedList.filter(
-        (item): item is { id: string; name: string; dataUrl: string } => item !== null
-      );
+      const successful = compressedList.filter((item): item is TaskAttachmentItem => item !== null);
       if (successful.length > 0) {
         setNewAttachments((prev) => [...prev, ...successful]);
       }
@@ -114,9 +118,7 @@ export default function CreateTaskModal({
         const item = items[i];
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            pastedImageFiles.push(file);
-          }
+          if (file) pastedImageFiles.push(file);
         }
       }
 
@@ -130,12 +132,7 @@ export default function CreateTaskModal({
 
   const handleModalKeyDown = useCallback(
     async (e: React.KeyboardEvent) => {
-      const isV =
-        e.key === 'v' ||
-        e.key === 'V' ||
-        e.key === 'м' ||
-        e.key === 'М' ||
-        e.code === 'KeyV';
+      const isV = e.key === 'v' || e.key === 'V' || e.key === 'м' || e.key === 'М' || e.code === 'KeyV';
 
       if ((e.ctrlKey || e.metaKey) && isV) {
         const target = e.target as HTMLElement | null;
@@ -146,7 +143,7 @@ export default function CreateTaskModal({
             const clipboardItems = await navigator.clipboard.read();
             const files: File[] = [];
             for (const item of clipboardItems) {
-              const imageType = item.types.find((t) => t.startsWith('image/'));
+              const imageType = item.types.find((tp) => tp.startsWith('image/'));
               if (imageType) {
                 const blob = await item.getType(imageType);
                 files.push(
@@ -169,13 +166,6 @@ export default function CreateTaskModal({
     [processAndAddImageFiles]
   );
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      void processAndAddImageFiles(e.target.files);
-    }
-    e.target.value = '';
-  };
-
   const handleRemoveAttachment = (id: string) => {
     setNewAttachments((prev) => prev.filter((a) => a.id !== id));
   };
@@ -186,10 +176,10 @@ export default function CreateTaskModal({
 
     setIsSubmitting(true);
     try {
-      const intakeCol = columns?.find((c) => c.isIntake);
+      const intakeCol = effectiveStages?.find((c) => c.isIntake);
       const fallbackId =
         intakeCol?.id ||
-        (columns?.some((c) => c.id === 'backlog') ? 'backlog' : (columns?.[0]?.id ?? 'backlog'));
+        (effectiveStages?.some((c) => c.id === 'backlog') ? 'backlog' : (effectiveStages?.[0]?.id ?? 'backlog'));
       const targetColumnId = selectedColumnId || fallbackId;
 
       const created = await addTask({
@@ -269,8 +259,7 @@ export default function CreateTaskModal({
               />
             </div>
 
-            {/* Target Column Selection (if columns provided) */}
-            {columns && columns.length > 0 && (
+            {effectiveStages && effectiveStages.length > 0 && (
               <div>
                 <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                   {t('board.columnTitleLabel')}
@@ -280,7 +269,7 @@ export default function CreateTaskModal({
                   onChange={(e) => setSelectedColumnId(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans text-xs cursor-pointer transition"
                 >
-                  {columns.map((col) => (
+                  {effectiveStages.map((col) => (
                     <option key={col.id} value={col.id} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
                       {col.title}
                     </option>
@@ -289,83 +278,12 @@ export default function CreateTaskModal({
               </div>
             )}
 
-            {/* Attachments Section */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
-                  {t('newTask.attachmentsLabel')}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-sans text-[#4d4d4d] dark:text-[#a1a1aa] bg-[#fafafa] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer"
-                >
-                  <ImagePlus className="h-3 w-3" />
-                  <span>{t('newTask.pasteHint')}</span>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileInputChange}
-                />
-              </div>
-
-              {/* Thumbnail gallery */}
-              {newAttachments.length > 0 ? (
-                <div className="flex flex-wrap gap-2.5 p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b]/50 max-h-40 overflow-y-auto">
-                  {newAttachments.map((att, idx) => (
-                    <div
-                      key={att.id}
-                      className="group relative flex flex-col items-center w-24 rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] shadow-2xs hover:border-[#171717] dark:hover:border-[#f4f4f5] transition"
-                    >
-                      <div
-                        className="relative w-full h-16 cursor-pointer overflow-hidden bg-black/5 dark:bg-white/5"
-                        onClick={() => setPreviewLightbox({ src: att.dataUrl, alt: att.name })}
-                        title={att.name}
-                      >
-                        <img
-                          src={att.dataUrl}
-                          alt={att.name}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ZoomIn className="h-4 w-4 text-white drop-shadow" />
-                        </div>
-                      </div>
-                      <div className="w-full px-1.5 py-0.5 flex items-center justify-between text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] border-t border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b]">
-                        <span className="truncate max-w-[60px]" title={att.name}>
-                          #{idx + 1}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveAttachment(att.id);
-                          }}
-                          className="p-0.5 rounded text-[#8f8f8f] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
-                          aria-label={t('newTask.removeAttachment')}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center p-3 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#2c2c33] bg-[#fafafa]/50 dark:bg-[#17171b]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#17171b] transition"
-                >
-                  <Paperclip className="h-4 w-4 text-[#8f8f8f] dark:text-[#71717a] mb-1" />
-                  <span className="text-[11px] font-sans text-[#666666] dark:text-[#71717a]">
-                    {t('newTask.pasteHint')}
-                  </span>
-                </div>
-              )}
-            </div>
+            <TaskAttachmentPicker
+              attachments={newAttachments}
+              onFilesSelected={(files) => void processAndAddImageFiles(files)}
+              onRemoveAttachment={handleRemoveAttachment}
+              onPreview={setPreviewLightbox}
+            />
 
             <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126] shrink-0">
               <button
@@ -388,7 +306,6 @@ export default function CreateTaskModal({
         </div>
       </div>
 
-      {/* Image Preview Lightbox */}
       {previewLightbox && (
         <ImageLightboxModal
           src={previewLightbox.src}

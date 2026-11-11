@@ -78,6 +78,19 @@ export default function SettingsModal() {
     }
   }, [editingProvider]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeSettings();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isOpen, closeSettings]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -31,7 +31,7 @@ export function HookIcon({ moment, file, className }: HookIconProps) {
 
   return (
     <Zap
-      className={`text-[#666666] dark:text-[#8b949e] block shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
+      className={`text-[#666666] dark:text-[#71717a] block shrink-0 ${className ?? 'h-3.5 w-3.5'}`}
       aria-label="hook"
     />
   );

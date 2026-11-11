@@ -14,7 +14,9 @@ export function useSidebarResize(storageKey = 'cvh_subagents_sidebar_width') {
           return parsed;
         }
       }
-    } catch {}
+    } catch (err) {
+      console.debug('[useSidebarResize] Failed to read persisted width:', err);
+    }
     return DEFAULT_SIDEBAR_WIDTH;
   });
 
@@ -51,7 +53,9 @@ export function useSidebarResize(storageKey = 'cvh_subagents_sidebar_width') {
         setSidebarWidth((finalWidth) => {
           try {
             localStorage.setItem(storageKey, String(Math.round(finalWidth)));
-          } catch {}
+          } catch (err) {
+      console.debug('[useSidebarResize] Failed to read persisted width:', err);
+    }
           return finalWidth;
         });
       }

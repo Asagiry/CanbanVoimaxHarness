@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
-import { toProviderIdValue, type Provider, type ProviderModel, type ProviderProtocol } from '../../../stores/settings/providers';
+import { type Provider, type ProviderModel, type ProviderProtocol } from '../../../stores/settings/providers';
 import ProviderModelPicker from './ProviderModelPicker';
 import ProviderModelRow from './ProviderModelRow';
 
@@ -32,7 +32,6 @@ const PROTOCOLS: { value: ProviderProtocol; labelKey: string }[] = [
 
 export default function ProviderEditor({ provider, onCancel, onSaved }: ProviderEditorProps) {
   const upsertProvider = useSettingsStore((s) => s.upsertProvider);
-  const fetchProviderModels = useSettingsStore((s) => s.fetchProviderModels);
   const { t } = useTranslation();
 
   const [name, setName] = useState(provider.name);
@@ -69,7 +68,13 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
     setIsFetching(true);
     setError(null);
     try {
-      const candidates = await fetchProviderModels(provider.id);
+      // Use current form state (baseUrl/apiKey), not stale store values
+      const candidates = await useSettingsStore
+        .getState()
+        .fetchAvailableModels(
+          baseUrl.trim() || provider.baseUrl,
+          apiKey.trim() || provider.apiKey
+        );
       setFetchedCandidates(candidates);
       setIsPickerOpen(true);
     } catch (err) {
@@ -115,7 +120,7 @@ export default function ProviderEditor({ provider, onCancel, onSaved }: Provider
     try {
       const next: Provider = {
         ...provider,
-        id: toProviderIdValue(trimmedName),
+        id: provider.id, // preserve original ID; never regenerate on rename (would orphan saved state)
         name: trimmedName,
         apiKey: apiKey.trim() ? apiKey.trim() : provider.apiKey,
         baseUrl: trimmedUrl,

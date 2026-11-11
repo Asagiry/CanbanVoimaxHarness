@@ -60,7 +60,7 @@ export const CardSubtaskProgressBar = memo(function CardSubtaskProgressBar({
     <div className="w-full mt-1.5 mb-1 flex items-center gap-1.5">
       <div className="flex-1 h-1 bg-[#e5e7eb] dark:bg-[#212126] rounded-full overflow-hidden">
         <div
-          className="h-full bg-[#8b5cf6] transition-all duration-300 rounded-full"
+          className="h-full bg-[#0284c7] transition-all duration-300 rounded-full"
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -103,7 +103,7 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
         aria-label={t('card.expandSubtasks')}
       >
         <span className="flex items-center gap-1.5">
-          <GitFork className="h-3 w-3 block shrink-0 text-[#8b5cf6]" />
+          <GitFork className="h-3 w-3 block shrink-0 text-[#0284c7]" />
           <span>{t('card.completedSubtasks', { count: subtasks.length })}</span>
         </span>
         <ChevronDown
@@ -135,17 +135,18 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                 : 0;
 
             return (
-              <div
-                key={subId || Math.random().toString(36)}
+              <button
+                key={subId || `subtask-${subSuffix}-${stageTitle}`}
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (subId) openDrawer(subId);
                 }}
-                className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#111114] hover:bg-[#f1f3f5] dark:hover:bg-[#232328] border border-[#e9ecef] dark:border-[#2c2c33] cursor-pointer transition text-[10px] font-mono group"
+                className="w-full text-left flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#111114] hover:bg-[#f1f3f5] dark:hover:bg-[#232328] border border-[#e9ecef] dark:border-[#2c2c33] cursor-pointer transition text-[10px] font-mono group"
                 aria-label={t('card.openSubtaskDialog', { id: sub.id })}
               >
                 <div className="flex items-center gap-1.5 truncate min-w-0">
-                  <span className="font-semibold text-[#8b5cf6] shrink-0">
+                  <span className="font-semibold text-[#0284c7] shrink-0">
                     {subSuffix} {stageTitle}
                   </span>
                   <span className="text-[#666666] dark:text-[#71717a] truncate">
@@ -176,12 +177,12 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                     </span>
                   ) : (
                     <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33]">
-                      Готово
+                      {language === 'ru' ? 'Готово' : 'Done'}
                     </span>
                   )}
                   <MessageSquare className="h-3 w-3 block shrink-0 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition" />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

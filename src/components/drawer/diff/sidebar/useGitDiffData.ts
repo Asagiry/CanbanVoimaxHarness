@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TaskGitDiff } from '../../../../types';
 import { isCvhPath } from '../utils';
 import { listenToEvent } from '../../../../services/tauriEventGateway';
+import { t } from '../../../../stores/languageStore';
 
 export function useGitDiffData(taskId: string) {
   const [diff, setDiff] = useState<TaskGitDiff | null>(null);
@@ -13,22 +14,29 @@ export function useGitDiffData(taskId: string) {
   const hasInitialLoadedRef = useRef(false);
   const userCollapsedFilesRef = useRef<Set<string>>(new Set());
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeTaskIdRef = useRef(taskId);
+  activeTaskIdRef.current = taskId;
 
   // Reset initial tracking on task switch
   useEffect(() => {
+    activeTaskIdRef.current = taskId;
     hasInitialLoadedRef.current = false;
     setHasInitialLoaded(false);
+    setDiff(null);
+    setError(null);
     userCollapsedFilesRef.current.clear();
     setExpandedFiles(new Set());
   }, [taskId]);
 
   const fetchDiff = useCallback(async () => {
-    if (!taskId) return;
+    const capturedTaskId = taskId;
+    if (!capturedTaskId) return;
     setIsLoading(true);
     setError(null);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const data = await invoke<TaskGitDiff | null>('get_task_git_diff', { taskId });
+      const data = await invoke<TaskGitDiff | null>('get_task_git_diff', { taskId: capturedTaskId });
+      if (activeTaskIdRef.current !== capturedTaskId) return;
       setDiff(data ?? null);
 
       if (data?.files && data.files.length > 0) {
@@ -55,18 +63,21 @@ export function useGitDiffData(taskId: string) {
         setExpandedFiles(new Set());
       }
     } catch (err: unknown) {
+      if (activeTaskIdRef.current !== capturedTaskId) return;
       console.info('get_task_git_diff invoke failed or web mode:', err);
       const msg =
         typeof err === 'string'
           ? err
           : err instanceof Error
           ? err.message
-          : 'Ошибка загрузки Git Diff';
+          : t('gitDiff.loadError');
       setError(msg);
     } finally {
-      hasInitialLoadedRef.current = true;
-      setHasInitialLoaded(true);
-      setIsLoading(false);
+      if (activeTaskIdRef.current === capturedTaskId) {
+        hasInitialLoadedRef.current = true;
+        setHasInitialLoaded(true);
+        setIsLoading(false);
+      }
     }
   }, [taskId]);
 
@@ -131,8 +142,8 @@ export function useGitDiffData(taskId: string) {
         } else {
           unlistenFinish = uFinish;
         }
-      } catch {
-        // web fallback
+      } catch (err) {
+        console.debug('[useGitDiffData] listener setup skipped in web mode:', err);
       }
     };
 

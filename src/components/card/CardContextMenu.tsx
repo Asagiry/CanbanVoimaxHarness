@@ -1,4 +1,4 @@
-import { useRef, memo } from 'react';
+import { useRef, useState, memo } from 'react';
 import { useContextMenuPosition } from '../../hooks/useContextMenuPosition';
 import { createPortal } from 'react-dom';
 import type { KanbanTask } from '../../types';
@@ -28,6 +28,7 @@ export const CardContextMenu = memo(function CardContextMenu({
   const columns = useBoardStore(useShallow((s) => s.columns));
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { t } = useTranslation();
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const handleOpen = () => {
     openDrawer(task.id);
@@ -45,13 +46,18 @@ export const CardContextMenu = memo(function CardContextMenu({
   };
 
   const handleMove = async (targetStageId: string) => {
-    onClose();
-    if (targetStageId === task.stageId) return;
+    if (targetStageId === task.stageId) {
+      onClose();
+      return;
+    }
+    setMoveError(null);
     try {
       await useBoardStore.getState().moveTask(task.id, targetStageId);
+      onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Не удалось переместить задачу:\n${msg}`);
+      console.warn('[CardContextMenu] Failed to move task:', err);
+      setMoveError(t('taskMenu.moveError', { msg }));
     }
   };
 
@@ -122,6 +128,15 @@ export const CardContextMenu = memo(function CardContextMenu({
       })}
 
       <div className="my-1 border-t border-[#ebebeb] dark:border-[#212126]" />
+
+      {moveError && (
+        <div
+          role="alert"
+          className="mx-2 mb-1.5 rounded border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-2 py-1 text-[11px] font-sans text-red-700 dark:text-red-300 break-words"
+        >
+          {moveError}
+        </div>
+      )}
 
       <button
         type="button"

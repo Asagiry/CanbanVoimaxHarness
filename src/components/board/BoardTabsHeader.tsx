@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Search, Layout, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -31,7 +32,19 @@ export default function BoardTabsHeader({
     searchQuery,
     setSearchQuery,
     tasks,
-  } = useBoardStore();
+  } = useBoardStore(
+    useShallow((s) => ({
+      boards: s.boards,
+      activeBoardId: s.activeBoardId,
+      setActiveBoard: s.setActiveBoard,
+      createBoard: s.createBoard,
+      saveBoard: s.saveBoard,
+      deleteBoard: s.deleteBoard,
+      searchQuery: s.searchQuery,
+      setSearchQuery: s.setSearchQuery,
+      tasks: s.tasks,
+    }))
+  );
   const { t } = useTranslation();
 
   const [boardContextMenu, setBoardContextMenu] = useState<BoardContextMenuState | null>(null);

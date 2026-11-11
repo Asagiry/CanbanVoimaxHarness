@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../../types';
-import { Check, Copy, X, Clock } from 'lucide-react';
+import { Ban, Check, Copy, Link2, X, Clock } from 'lucide-react';
 import { formatDurationCompact } from '../ThinkingCard';
 import { useTranslation } from '../../../stores/languageStore';
 
@@ -54,7 +54,7 @@ export function BatchBadge({ tool }: { tool: ToolExecution }) {
       data-testid="batch-step-badge"
       className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center space-x-1 shrink-0 select-none"
     >
-      <span>🔗</span>
+      <Link2 className="h-2.5 w-2.5 block shrink-0" />
       <span>{t('drawer.batchStep', { index: tool.batch.index, total: tool.batch.total })}</span>
     </span>
   );
@@ -66,7 +66,7 @@ export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFai
     return (
       <span
         data-testid="batch-queued-badge"
-        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] dark:text-[#52525b] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-[#e4e4e7] dark:border-[#2c2c33] flex items-center space-x-1 shrink-0 select-none"
+        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#71717a] dark:text-[#71717a] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-[#e4e4e7] dark:border-[#2c2c33] flex items-center space-x-1 shrink-0 select-none"
       >
         <Clock className="h-2.5 w-2.5 block shrink-0" />
         <span>{t('drawer.batchQueued')}</span>
@@ -79,7 +79,7 @@ export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFai
         data-testid="batch-skipped-badge"
         className="px-1.5 py-0.5 rounded text-[10px] text-amber-600 dark:text-amber-400 font-mono flex items-center space-x-1 shrink-0 select-none bg-amber-500/10 border border-amber-500/20"
       >
-        <span>🚫</span>
+        <Ban className="h-2.5 w-2.5 block shrink-0" />
         <span>{t('drawer.batchSkipped')}</span>
       </span>
     );
@@ -140,7 +140,9 @@ export function CopyLogsButton({ tool, isExpanded }: { tool: ToolExecution; isEx
       .filter(Boolean)
       .join('\n\n');
 
-    navigator.clipboard.writeText(content);
+    void navigator.clipboard.writeText(content).catch((err) => {
+      console.warn('[CopyLogsButton] clipboard copy failed:', err);
+    });
     setCopied(true);
     if (copiedTimeoutRef.current) {
       clearTimeout(copiedTimeoutRef.current);

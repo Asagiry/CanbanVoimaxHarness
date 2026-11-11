@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import AgentSettingVisualEditor from './AgentSettingVisualEditor';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 import HookIcon from '../common/HookIcon';
+import { MarkdownContent } from '../drawer/stream';
 import { hookMomentOf } from './types';
 import {
   X,
@@ -17,215 +19,27 @@ import {
   Code2,
 } from 'lucide-react';
 
-function isValidInlineCode(code: string): boolean {
-  if (!code || code.length > 120) return false;
-  if (/[\r\n]/.test(code)) return false;
-  if (/[.!?]\s+/.test(code)) return false;
-  if (code.includes('`')) return false;
-  if (/[а-яА-ЯёЁ]{2,}\s+[а-яА-ЯёЁ]{2,}/.test(code) && !/^["'].*["']$/.test(code.trim())) {
-    return false;
-  }
-  return true;
-}
-
-function renderInlineMarkdown(text: string): React.ReactNode[] {
-  const nodes: React.ReactNode[] = [];
-  let i = 0;
-  let textBuf = '';
-
-  const flushText = () => {
-    if (textBuf) {
-      nodes.push(textBuf);
-      textBuf = '';
-    }
-  };
-
-  while (i < text.length) {
-    if (text[i] === '`') {
-      const closeIdx = text.indexOf('`', i + 1);
-      if (closeIdx !== -1) {
-        const candidate = text.slice(i + 1, closeIdx);
-        if (isValidInlineCode(candidate)) {
-          flushText();
-          nodes.push(
-            <code
-              key={`code-${i}`}
-              className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] rounded text-xs font-mono text-[#09090b] dark:text-[#f4f4f5]"
-            >
-              {candidate}
-            </code>
-          );
-          i = closeIdx + 1;
-          continue;
-        }
-      }
-      textBuf += text[i];
-      i++;
-      continue;
-    }
-
-    if (text.startsWith('**', i)) {
-      const closeIdx = text.indexOf('**', i + 2);
-      if (closeIdx !== -1) {
-        const candidate = text.slice(i + 2, closeIdx);
-        if (candidate.length > 0 && candidate.length <= 300) {
-          flushText();
-          nodes.push(
-            <strong key={`bold-${i}`} className="font-semibold text-[#171717] dark:text-[#f4f4f5]">
-              {candidate}
-            </strong>
-          );
-          i = closeIdx + 2;
-          continue;
-        }
-      }
-    }
-
-    textBuf += text[i];
-    i++;
-  }
-
-  flushText();
-  return nodes;
-}
-
-function renderMarkdownBlocks(content: string) {
-  const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = cleanContent.split('\n');
-  const elements: React.ReactNode[] = [];
-  let inCodeBlock = false;
-  let codeBuffer: string[] = [];
-  let codeLang = '';
-
-  const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
-  const numberedRegex = /^(\s*)(\d+(\.\d+)*[.)])\s+(.*)$/;
-
-  for (let idx = 0; idx < lines.length; idx++) {
-    const line = lines[idx];
-    const trimmedLine = line.trim();
-
-    if (trimmedLine.startsWith('```')) {
-      if (inCodeBlock) {
-        const codeText = codeBuffer.join('\n');
-        elements.push(
-          <div
-            key={`code-${idx}`}
-            className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#212126] bg-[#f8fafc] dark:bg-[#17171b] overflow-hidden"
-          >
-            {codeLang && (
-              <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#232328] border-b border-[#e4e4e7] dark:border-[#2c2c33] text-xs font-mono text-[#64748b] dark:text-[#71717a]">
-                {codeLang}
-              </div>
-            )}
-            <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed">
-              <code>{codeText}</code>
-            </pre>
-          </div>
-        );
-        codeBuffer = [];
-        inCodeBlock = false;
-        codeLang = '';
-      } else {
-        inCodeBlock = true;
-        codeLang = trimmedLine.slice(3).trim();
-      }
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeBuffer.push(line);
-      continue;
-    }
-
-    if (trimmedLine.startsWith('# ')) {
-      elements.push(
-        <h1 key={idx} className="text-base font-bold text-[#171717] dark:text-[#f4f4f5] mt-3.5 mb-1.5">
-          {renderInlineMarkdown(trimmedLine.slice(2))}
-        </h1>
-      );
-      continue;
-    }
-    if (trimmedLine.startsWith('## ')) {
-      elements.push(
-        <h2
-          key={idx}
-          className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] mt-2.5 mb-1 pb-1 border-b border-[#f4f4f5] dark:border-[#212126]"
-        >
-          {renderInlineMarkdown(trimmedLine.slice(3))}
-        </h2>
-      );
-      continue;
-    }
-    if (trimmedLine.startsWith('### ')) {
-      elements.push(
-        <h3 key={idx} className="text-sm font-medium text-[#4d4d4d] dark:text-[#a1a1aa] mt-2 mb-0.5">
-          {renderInlineMarkdown(trimmedLine.slice(4))}
-        </h3>
-      );
-      continue;
-    }
-    if (numberedRegex.test(line)) {
-      const numMatch = line.match(numberedRegex)!;
-      const indent = numMatch[1].length;
-      const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
-      elements.push(
-        <div key={idx} className={`flex items-start space-x-2 py-0.5 text-xs text-[#171717] dark:text-[#f4f4f5] ${mlClass}`}>
-          <span className="text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs shrink-0 font-medium">
-            {numMatch[2]}
-          </span>
-          <span className="flex-1 min-w-0">{renderInlineMarkdown(numMatch[4])}</span>
-        </div>
-      );
-      continue;
-    }
-    if (bulletRegex.test(line)) {
-      const bulletMatch = line.match(bulletRegex)!;
-      const indent = bulletMatch[1].length;
-      const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
-      elements.push(
-        <div key={idx} className={`flex items-start space-x-1.5 py-0.5 text-xs text-[#171717] dark:text-[#f4f4f5] ${mlClass}`}>
-          <span className="text-[#8f8f8f] dark:text-[#71717a] shrink-0 leading-relaxed">•</span>
-          <span className="flex-1 min-w-0">{renderInlineMarkdown(bulletMatch[3])}</span>
-        </div>
-      );
-      continue;
-    }
-    if (line.trim().length === 0) {
-      elements.push(<div key={idx} className="h-1.5" />);
-      continue;
-    }
-    elements.push(
-      <p key={idx} className="text-sm text-[#171717] dark:text-[#f4f4f5] py-0.5 leading-relaxed">
-        {renderInlineMarkdown(line)}
-      </p>
-    );
-  }
-
-  if (inCodeBlock) {
-    elements.push(
-      <div
-        key="code-tail"
-        className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#212126] bg-[#f8fafc] dark:bg-[#17171b] overflow-hidden"
-      >
-        {codeLang && (
-          <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#232328] border-b border-[#e4e4e7] dark:border-[#2c2c33] text-xs font-mono text-[#64748b] dark:text-[#71717a]">
-            {codeLang}
-          </div>
-        )}
-        <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed">
-          <code>{codeBuffer.join('\n')}</code>
-        </pre>
-      </div>
-    );
-  }
-
-  return elements;
-}
-
 export default function RuleEditorModal() {
   const { zoom } = useUiZoom();
-  const { activeFile, isEditorOpen, isSaving, saveFeedback, updateActiveFileContent, saveRules, closeEditor } =
-    useCortexStore();
+  const {
+    activeFile,
+    isEditorOpen,
+    isSaving,
+    saveFeedback,
+    updateActiveFileContent,
+    saveRules,
+    closeEditor,
+  } = useCortexStore(
+    useShallow((s) => ({
+      activeFile: s.activeFile,
+      isEditorOpen: s.isEditorOpen,
+      isSaving: s.isSaving,
+      saveFeedback: s.saveFeedback,
+      updateActiveFileContent: s.updateActiveFileContent,
+      saveRules: s.saveRules,
+      closeEditor: s.closeEditor,
+    }))
+  );
   const { t } = useTranslation();
 
   const [previewMode, setPreviewMode] = useState(true);
@@ -243,7 +57,6 @@ export default function RuleEditorModal() {
     return activeFile.stageId;
   }, [activeFile]);
 
-  // По умолчанию открываем файл: если settings -> visual, иначе previewMode -> true
   useEffect(() => {
     if (activeFile) {
       if (activeFile.type === 'settings') {
@@ -255,6 +68,7 @@ export default function RuleEditorModal() {
   }, [activeFile?.id, activeFile?.type]);
 
   useEffect(() => {
+    if (!isEditorOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -263,13 +77,15 @@ export default function RuleEditorModal() {
         }
       }
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         closeEditor();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFile, saveRules, closeEditor]);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isEditorOpen, activeFile, saveRules, closeEditor]);
 
   if (!isEditorOpen || !activeFile) return null;
 
@@ -280,17 +96,17 @@ export default function RuleEditorModal() {
   const isRuntime = isRuntimeRule(activeFile.name);
 
   return (
-    <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
+    <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
       <div className="relative flex flex-col h-[85%] max-h-[calc(100%-2rem)] w-[860px] max-w-[95%] rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md overflow-hidden">
         {/* Editor Top Bar */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] px-4 py-2.5">
           <div className="flex items-center space-x-2 min-w-0">
             {isSettings ? (
-              <SlidersHorizontal className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8] shrink-0" />
+              <SlidersHorizontal className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
             ) : isHook ? (
               <HookIcon file={activeFile} className="h-4 w-4" />
             ) : isRuntime ? (
-              <RuntimeRuleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
+              <RuntimeRuleIcon className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
             ) : (
               <FileText className="h-4 w-4 text-[#666666] dark:text-[#71717a] shrink-0" />
             )}
@@ -305,7 +121,7 @@ export default function RuleEditorModal() {
             {isRuntime && (
               <span
                 title={t('cortex.runtimeRuleTooltip')}
-                className="px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/50 text-[10px] font-mono font-medium text-indigo-600 dark:text-indigo-400 shrink-0"
+                className="px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800/80 bg-sky-50 dark:bg-sky-950/50 text-[10px] font-mono font-medium text-sky-700 dark:text-sky-300 shrink-0"
               >
                 {t('cortex.runtimeRuleBadge')}
               </span>
@@ -331,7 +147,7 @@ export default function RuleEditorModal() {
                       : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-[#6366f1] dark:text-[#818cf8]" />
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                   <span>{t('ruleEditor.settingsTabVisual')}</span>
                 </button>
                 <button
@@ -349,6 +165,7 @@ export default function RuleEditorModal() {
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => setPreviewMode(!previewMode)}
                 className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer"
                 aria-label={t('ruleEditor.togglePreview')}
@@ -359,6 +176,7 @@ export default function RuleEditorModal() {
             )}
 
             <button
+              type="button"
               onClick={() => saveRules()}
               disabled={isSaving}
               className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-medium transition cursor-pointer shadow-xs disabled:opacity-50"
@@ -370,6 +188,7 @@ export default function RuleEditorModal() {
             </button>
 
             <button
+              type="button"
               onClick={closeEditor}
               className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
               aria-label={t('common.close')}
@@ -391,14 +210,12 @@ export default function RuleEditorModal() {
               />
             ) : (
               <div className="flex w-full h-full">
-                {/* Line Numbers */}
                 <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#17171b] border-r border-[#ebebeb] dark:border-[#212126] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs leading-5 tabular-nums">
                   {lines.map((_, i) => (
-                    <div key={i}>{i + 1}</div>
+                    <div key={`settings-ln-${i + 1}`}>{i + 1}</div>
                   ))}
                 </div>
 
-                {/* Textarea */}
                 <textarea
                   value={activeFile.content}
                   onChange={(e) => updateActiveFileContent(e.target.value)}
@@ -410,14 +227,12 @@ export default function RuleEditorModal() {
             )
           ) : !previewMode ? (
             <div className="flex w-full h-full">
-              {/* Line Numbers */}
               <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#17171b] border-r border-[#ebebeb] dark:border-[#212126] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs leading-5 tabular-nums">
                 {lines.map((_, i) => (
-                  <div key={i}>{i + 1}</div>
+                  <div key={`md-ln-${i + 1}`}>{i + 1}</div>
                 ))}
               </div>
 
-              {/* Textarea */}
               <textarea
                 value={activeFile.content}
                 onChange={(e) => updateActiveFileContent(e.target.value)}
@@ -429,7 +244,7 @@ export default function RuleEditorModal() {
           ) : (
             <div className="w-full h-full overflow-y-auto bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-sans leading-relaxed">
               <div className="w-full max-w-4xl px-5 py-4 space-y-2 text-sm">
-                {renderMarkdownBlocks(activeFile.content)}
+                <MarkdownContent content={activeFile.content} />
               </div>
             </div>
           )}
@@ -440,7 +255,7 @@ export default function RuleEditorModal() {
           <div className="flex items-center space-x-3">
             <span>{t('ruleEditor.stage')} <strong className="text-[#171717] dark:text-[#f4f4f5] uppercase">{activeFile.stageId}</strong></span>
             {isSettings && settingsTab === 'visual' ? (
-              <span className="text-[#6366f1] dark:text-[#818cf8] font-medium">UI Editor</span>
+              <span className="text-sky-600 dark:text-sky-400 font-medium">UI Editor</span>
             ) : (
               <>
                 <span>{t('ruleEditor.lines')} <strong className="text-[#171717] dark:text-[#f4f4f5] tabular-nums">{lineCount}</strong></span>

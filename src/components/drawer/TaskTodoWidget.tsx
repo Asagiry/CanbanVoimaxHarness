@@ -1,11 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import {
-  ListTodo,
-  ChevronDown,
-  X,
-} from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { ListTodo, ChevronDown, X } from 'lucide-react';
 import { KanbanTask, TodoItem } from '../../types';
-import { useDrawerStore } from '../../stores/drawerStore';
+import { useDrawerStore, type DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
 import TodoChecklist from './tools/TodoChecklist';
@@ -17,11 +14,57 @@ interface TaskTodoWidgetProps {
   defaultOpen?: boolean;
 }
 
-// Floating overlay popover todo widget:
-// - Pill trigger sits compactly adjacent to steer bar / input controls with zero vertical layout shift
-// - Collapsible plan floats as an overlay popover (z-30 shadow-xl) above the steer bar without displacing chat feed
-// - Read-only plan strip: ONLY the agent fills it via todo_write tool
-// - When activeSubagentId is active, displays the subagent's own todos from its dialogue/session!
+function normalizeTodoEntry(raw: unknown, idx: number): TodoItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  if (typeof rec.content !== 'string' || rec.content.trim().length === 0) return null;
+  const statusRaw = typeof rec.status === 'string' ? rec.status : 'pending';
+  const status: TodoItem['status'] =
+    statusRaw === 'completed' || statusRaw === 'done'
+      ? 'completed'
+      : statusRaw === 'in_progress' || statusRaw === 'running'
+      ? 'in_progress'
+      : 'pending';
+  return {
+    id: typeof rec.id === 'string' && rec.id ? rec.id : `todo-${idx + 1}`,
+    content: rec.content.trim(),
+    status,
+  };
+}
+
+function extractTodosFromFeed(feed: DrawerActivityItem[]): TodoItem[] | null {
+  for (let i = feed.length - 1; i >= 0; i--) {
+    const item = feed[i];
+    const itemRecord = item as unknown as Record<string, unknown>;
+    if (item && (itemRecord.item_type === 'todos' || itemRecord.type === 'todos')) {
+      try {
+        const parsed: unknown =
+          typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const items = parsed
+            .map((entry, idx) => normalizeTodoEntry(entry, idx))
+            .filter((entry): entry is TodoItem => entry !== null);
+          if (items.length > 0) return items;
+        }
+      } catch (err) {
+        console.debug('[TaskTodoWidget] Failed to parse todos item payload:', err);
+      }
+    }
+    const tool = item?.tool;
+    const toolName = tool?.toolName;
+    if (toolName === 'todo_write' && tool?.params) {
+      const rawTodos = (tool.params as Record<string, unknown>).todos;
+      if (Array.isArray(rawTodos) && rawTodos.length > 0) {
+        const items = rawTodos
+          .map((entry, idx) => normalizeTodoEntry(entry, idx))
+          .filter((entry): entry is TodoItem => entry !== null);
+        if (items.length > 0) return items;
+      }
+    }
+  }
+  return null;
+}
+
 const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
   task,
   align = 'left',
@@ -38,58 +81,23 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
     activityFeed,
     toolIdToSubagentId,
     subagentIdToToolId,
-  } = useDrawerStore();
-
-  const extractTodosFromFeed = (feed: any[]): TodoItem[] | null => {
-    for (let i = feed.length - 1; i >= 0; i--) {
-      const item = feed[i];
-      if (item && (item.item_type === 'todos' || item.type === 'todos')) {
-        try {
-          const parsed = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed.map((t: any, idx: number) => ({
-              id: t.id || `todo-${idx + 1}`,
-              content: String(t.content).trim(),
-              status: (t.status === 'completed' || t.status === 'done'
-                ? 'completed'
-                : t.status === 'in_progress' || t.status === 'running'
-                ? 'in_progress'
-                : 'pending') as TodoItem['status'],
-            }));
-          }
-        } catch {}
-      }
-      const tool = item?.tool;
-      const toolName = tool?.toolName || item?.toolName;
-      if (toolName === 'todo_write' && tool?.params) {
-        const rawTodos = (tool.params as Record<string, unknown>)?.todos;
-        if (Array.isArray(rawTodos) && rawTodos.length > 0) {
-          return rawTodos
-            .filter((t: any) => t && typeof t.content === 'string' && t.content.trim().length > 0)
-            .map((t: any, idx: number) => ({
-              id: t.id || `todo-${idx + 1}`,
-              content: String(t.content).trim(),
-              status: (t.status === 'completed' || t.status === 'done'
-                ? 'completed'
-                : t.status === 'in_progress' || t.status === 'running'
-                ? 'in_progress'
-                : 'pending') as TodoItem['status'],
-            }));
-        }
-      }
-    }
-    return null;
-  };
+  } = useDrawerStore(
+    useShallow((s) => ({
+      activeSubagentId: s.activeSubagentId,
+      activeSubagentTitle: s.activeSubagentTitle,
+      activityFeed: s.activityFeed,
+      toolIdToSubagentId: s.toolIdToSubagentId,
+      subagentIdToToolId: s.subagentIdToToolId,
+    }))
+  );
 
   const todos: TodoItem[] = useMemo(() => {
     if (activeSubagentId) {
-      // 1. If this activeSubagentId is a board subtask, inspect its todos
-      const boardSubtask = useBoardStore.getState().tasks.find((t) => t.id === activeSubagentId);
+      const boardSubtask = useBoardStore.getState().tasks.find((bt) => bt.id === activeSubagentId);
       if (boardSubtask?.todos && boardSubtask.todos.length > 0) {
         return boardSubtask.todos;
       }
 
-      // 2. Search activity feed for the subagent's latest todo_write tool execution or todos item
       const feed =
         activityFeed[activeSubagentId] ||
         (toolIdToSubagentId[activeSubagentId] ? activityFeed[toolIdToSubagentId[activeSubagentId]] : undefined) ||
@@ -101,17 +109,13 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         return subTodos;
       }
 
-      // If active subagent has not called todo_write yet, return empty list!
-      // (STRICTLY FORBIDDEN from displaying the parent task's todos!)
       return [];
     }
 
-    // Main parent task view: show parent task's todos
     if (task.todos && task.todos.length > 0) {
       return task.todos;
     }
 
-    // Fallback: extract latest todos from parent task's activity feed
     const parentFeed = activityFeed[task.id] || [];
     const feedTodos = extractTodosFromFeed(parentFeed);
     if (feedTodos && feedTodos.length > 0) {
@@ -121,12 +125,11 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
     return task.todos ?? [];
   }, [activeSubagentId, task.id, task.todos, activityFeed, toolIdToSubagentId, subagentIdToToolId]);
 
-  const completedCount = todos.filter((t) => t.status === 'completed').length;
-  const inProgressCount = todos.filter((t) => t.status === 'in_progress').length;
-  const pendingCount = todos.filter((t) => t.status === 'pending').length;
+  const completedCount = todos.filter((item) => item.status === 'completed').length;
+  const inProgressCount = todos.filter((item) => item.status === 'in_progress').length;
+  const pendingCount = todos.filter((item) => item.status === 'pending').length;
   const hasTodos = todos.length > 0;
 
-  // Handle click outside & Escape key to smoothly close popover
   useEffect(() => {
     if (!isOpen) return;
 
@@ -138,22 +141,23 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setIsOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
   }, [isOpen]);
 
   return (
     <div ref={containerRef} className={`relative inline-flex items-center ${className}`}>
-      {/* Compact Trigger */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -167,7 +171,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             : 'bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] border-[#ebebeb] dark:border-[#2c2c33] text-[#737373] dark:text-[#71717a]'
         }`}
       >
-        <ListTodo className="h-3.5 w-3.5 block shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors" />
+        <ListTodo className="h-3.5 w-3.5 block shrink-0 text-sky-600 dark:text-sky-400 transition-colors" />
         <span className="font-medium text-xs tracking-tight">{t('drawer.todos')}</span>
 
         {hasTodos ? (
@@ -184,7 +188,6 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#71717a] leading-none">0</span>
         )}
 
-        {/* Static indicator when an item is currently in progress */}
         {inProgressCount > 0 && (
           <span className="inline-flex rounded-full h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400 ml-0.5" />
         )}
@@ -196,7 +199,6 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         />
       </button>
 
-      {/* Floating Overlay Popover */}
       {isOpen && (
         <div
           role="dialog"
@@ -205,10 +207,9 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             align === 'right' ? 'right-0' : 'left-0'
           } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#111114] rounded-lg border border-[#ebebeb] dark:border-[#212126] shadow-md overflow-hidden select-text font-sans text-[#171717] dark:text-[#f4f4f5]`}
         >
-          {/* Popover Header */}
           <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] flex items-center justify-between gap-2 select-none">
             <div className="flex items-center space-x-2 min-w-0">
-              <ListTodo className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <ListTodo className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
               <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight shrink-0 truncate max-w-[240px]">
                 {activeSubagentId
                   ? activeSubagentTitle
@@ -233,7 +234,6 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             </button>
           </div>
 
-          {/* Subheader summary strip */}
           {hasTodos && (
             <div className="px-3.5 py-1.5 bg-white dark:bg-[#111114] border-b border-[#f4f4f5] dark:border-[#212126] flex items-baseline space-x-3 text-[11px] text-[#737373] dark:text-[#71717a] select-none">
               <div className="flex items-baseline space-x-1">
@@ -259,7 +259,6 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             </div>
           )}
 
-          {/* Popover Body: Scrollable Task List */}
           <div className="p-3 min-h-0 min-w-0">
             <TodoChecklist
               todos={todos}

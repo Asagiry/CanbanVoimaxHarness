@@ -10,7 +10,7 @@ import {
   FileText,
   Plus,
 } from 'lucide-react';
-import type { CortexAgentFile, CortexAgentStage } from '../../types';
+import type { CortexAgentStage } from '../../types';
 import type { ExpandAllSignal } from './types';
 import AgentIcon from '../common/AgentIcon';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
@@ -19,6 +19,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import NewCortexFileForm from './NewCortexFileForm';
 import DirtyDot from './DirtyDot';
+import { TreeFileRow } from './TreeFileRow';
 import { isAgentDirty, isFileDirty } from '../../stores/cortex/cortexGitSave';
 
 export interface AgentMindInspectorProps {
@@ -29,14 +30,6 @@ export interface AgentMindInspectorProps {
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-/**
- * Deep component representing an autonomous Agent's Mind:
- * - Agent header with role icon, built-in cvh-dev badge, inline plus action, and context menu.
- * - Persona prompt (persona.md) with missing template restoration.
- * - Rules folder (.cvh/agents/<role>/rules/*.md) with live folder expansion and inline rule creation.
- * - Settings configuration (setting) with missing template restoration.
- * - Invariant: NEVER displays hooks/ (hooks belong strictly to pipeline columns).
- */
 export function AgentMindInspector({
   stage,
   isFocused = false,
@@ -119,7 +112,7 @@ export function AgentMindInspector({
             )}
 
             {isBuiltin ? (
-              <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <Cpu className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
             ) : stage.icon ? (
               <AgentIcon
                 name={stage.icon}
@@ -133,13 +126,16 @@ export function AgentMindInspector({
               />
             )}
 
-            <span className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none ${stage.isDeleted ? 'line-through opacity-50' : ''}`} title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}>
+            <span
+              className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none ${stage.isDeleted ? 'line-through opacity-50' : ''}`}
+              title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}
+            >
               {stage.stageTitle}
             </span>
             {agentDirty && <DirtyDot />}
 
             {isBuiltin && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center leading-none">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 shrink-0 self-center leading-none">
                 {t('cortex.builtinBadge')}
               </span>
             )}
@@ -156,7 +152,6 @@ export function AgentMindInspector({
         </button>
       </div>
 
-      {/* Inline Form for creating a new agent rule */}
       {isCreatingRule && (
         <NewCortexFileForm
           stage={stage}
@@ -166,17 +161,15 @@ export function AgentMindInspector({
         />
       )}
 
-      {/* Agent Mind Body */}
       {stage.isExpanded && (
         <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#212126] ml-3 my-0.5">
-          {/* 1. Persona Prompt (persona.md) */}
           {personaFile && !personaIsMissing && (
             <TreeFileRow
               file={personaFile}
               isActive={activeFile?.id === personaFile.id}
               icon={
                 isBuiltin ? (
-                  <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                  <Cpu className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                 ) : (
                   <User className="h-3.5 w-3.5 text-[#666666] shrink-0" />
                 )
@@ -193,7 +186,6 @@ export function AgentMindInspector({
             />
           )}
 
-          {/* 2. Agent Rules Folder (rules/) */}
           {(!isSearching || ruleFiles.length > 0) && (
             <div className="space-y-0.5">
               <div className="group/folder flex items-center gap-0.5">
@@ -233,7 +225,7 @@ export function AgentMindInspector({
                         isActive={activeFile?.id === ruleFile.id}
                         icon={
                           isRuntime ? (
-                            <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                            <RuntimeRuleIcon className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                           ) : (
                             <FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                           )
@@ -242,7 +234,7 @@ export function AgentMindInspector({
                           isRuntime ? (
                             <span
                               title={t('cortex.runtimeRuleTooltip')}
-                              className="px-1 py-px rounded border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/50 text-[9px] font-mono font-medium text-indigo-600 dark:text-indigo-400 shrink-0 leading-tight"
+                              className="px-1 py-px rounded border border-sky-200 dark:border-sky-800/80 bg-sky-50 dark:bg-sky-950/50 text-[9px] font-mono font-medium text-sky-700 dark:text-sky-300 shrink-0 leading-tight"
                             >
                               {t('cortex.runtimeRuleBadge')}
                             </span>
@@ -250,7 +242,15 @@ export function AgentMindInspector({
                         }
                         title={isRuntime ? t('cortex.runtimeRuleTooltip') : ruleFile.path}
                         onSelect={() => void openFile(ruleFile.id)}
-                        onContextMenu={ruleFile.isDeleted ? (e) => { e.preventDefault(); e.stopPropagation(); restorePendingDelete(`file:${ruleFile.id}`); } : undefined}
+                        onContextMenu={
+                          ruleFile.isDeleted
+                            ? (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                restorePendingDelete(`file:${ruleFile.id}`);
+                              }
+                            : undefined
+                        }
                       />
                     );
                   })}
@@ -259,7 +259,6 @@ export function AgentMindInspector({
             </div>
           )}
 
-          {/* 3. Agent Setting File (setting) */}
           {settingsFile && !settingsIsMissing && (
             <TreeFileRow
               file={settingsFile}
@@ -279,54 +278,6 @@ export function AgentMindInspector({
         </div>
       )}
     </div>
-  );
-}
-
-interface TreeFileRowProps {
-  file: CortexAgentFile;
-  isActive: boolean;
-  icon: React.ReactNode;
-  badge?: React.ReactNode;
-  title?: string;
-  onSelect: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-}
-
-function TreeFileRow({ file, isActive, icon, badge, title, onSelect, onContextMenu }: TreeFileRowProps) {
-  const { t } = useTranslation();
-  const cvhGitStatus = useCortexStore((s) => s.cvhGitStatus);
-  const dirty = isFileDirty(file, cvhGitStatus);
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      onContextMenu={onContextMenu}
-      className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
-        isActive
-          ? 'bg-white dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-xs'
-          : 'text-[#4d4d4d] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328]'
-      }`}
-      title={title ?? file.path}
-    >
-      <div className="flex items-center space-x-1.5 min-w-0">
-        {icon}
-        <span className={`text-xs font-mono truncate leading-none ${file.isDeleted ? 'line-through text-[#a1a1aa]' : ''}`} title={file.isDeleted ? t('cortex.deletedUnsaved') : undefined}>{file.name}</span>
-        {typeof badge === 'string' ? (
-          <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
-            {badge}
-          </span>
-        ) : (
-          badge
-        )}
-      </div>
-
-      {dirty && (
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
-          title={t('cortex.unsavedChanges')}
-        />
-      )}
-    </button>
   );
 }
 

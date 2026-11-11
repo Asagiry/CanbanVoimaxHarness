@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   applyShellToExecuteCommandSchema,
   useToolPolicyStore,
@@ -56,7 +57,12 @@ function ToolParamRow({
     unit: string;
   };
 }) {
-  const { toolSettings, setToolSetting } = useToolPolicyStore();
+  const { toolSettings, setToolSetting } = useToolPolicyStore(
+    useShallow((s) => ({
+      toolSettings: s.toolSettings,
+      setToolSetting: s.setToolSetting,
+    })),
+  );
   const { t } = useTranslation();
   const rawValue = toolSettings[toolId]?.[param.key];
   const currentValue = typeof rawValue === 'number' ? rawValue : param.defaultValue;
@@ -153,7 +159,14 @@ function ToolParamRow({
 }
 
 function ShellSelectorRow() {
-  const { toolSettings, setToolSetting, toolCustomSchemas, setToolCustomSchema } = useToolPolicyStore();
+  const { toolSettings, setToolSetting, toolCustomSchemas, setToolCustomSchema } = useToolPolicyStore(
+    useShallow((s) => ({
+      toolSettings: s.toolSettings,
+      setToolSetting: s.setToolSetting,
+      toolCustomSchemas: s.toolCustomSchemas,
+      setToolCustomSchema: s.setToolCustomSchema,
+    })),
+  );
   const selectedShell = ((toolSettings['execute_command']?.shell as string) || 'bash') as ExecuteShell;
 
   const handleShellChange = (newShell: ExecuteShell) => {
@@ -165,8 +178,9 @@ function ShellSelectorRow() {
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.function) {
           setToolCustomSchema('execute_command', applyShellToExecuteCommandSchema(parsed as Record<string, unknown>, newShell));
         }
-      } catch {
+      } catch (err) {
         // Ignore draft syntax errors
+        console.debug('[ToolParamsEditor] custom schema JSON parse skipped:', err);
       }
     }
   };

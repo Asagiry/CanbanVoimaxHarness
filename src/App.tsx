@@ -18,6 +18,7 @@ import { useSettingsStore } from './stores/settingsStore';
 import { useUiZoom } from './hooks/useUiZoom';
 import { initNotifications } from './services/notificationService';
 import { setupTauriEventGateway } from './services/tauriEventGateway';
+import { useTranslation } from './stores/languageStore';
 
 const NON_TEXT_INPUT_TYPES = new Set([
   'button',
@@ -49,6 +50,7 @@ function isEditableElement(el: HTMLElement | null): boolean {
 
 export default function App() {
   const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
+  const { t } = useTranslation();
   const loadTasks = useBoardStore((s) => s.loadTasks);
   const loadBoards = useBoardStore((s) => s.loadBoards);
   const loadProjects = useProjectStore((s) => s.loadProjects);
@@ -134,20 +136,21 @@ export default function App() {
       <SettingsModal />
 
       {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
-      <ErrorBoundary isOverlay scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>
+      <ErrorBoundary isOverlay scopeLabel={t('app.consoleScope')} onClose={() => useDrawerStore.getState().closeDrawer()}>
         <AgentConsoleDrawer />
       </ErrorBoundary>
 
       {/* Zoom Indicator Toast (rendered at root level above modals and drawer with z-[120]) */}
       {showIndicator && (
         <div className="fixed bottom-4 right-4 z-[120] flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#17171b] text-[#f4f4f5] border border-[#2c2c33] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
-          <span>Масштаб: {zoomPercent}%</span>
+          <span>{t('app.zoomLabel', { percent: zoomPercent })}</span>
           {zoomPercent !== 100 && (
             <button
+              type="button"
               onClick={resetZoom}
               className="text-[#71717a] hover:text-[#f4f4f5] underline text-[11px] ml-1 cursor-pointer"
             >
-              Сброс
+              {t('app.zoomReset')}
             </button>
           )}
         </div>

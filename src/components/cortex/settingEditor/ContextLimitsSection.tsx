@@ -33,7 +33,7 @@ export function ContextLimitsSection({
             <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5]">
               {t('ruleEditor.contextWindowLabel')}
             </label>
-            <span className="font-mono text-xs font-semibold tabular-nums text-[#6366f1] dark:text-[#818cf8]">
+            <span className="font-mono text-xs font-semibold tabular-nums text-[#0284c7] dark:text-[#38bdf8]">
               {contextWindow.toLocaleString()}
             </span>
           </div>

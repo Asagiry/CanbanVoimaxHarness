@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
@@ -47,7 +48,15 @@ export default function SubagentsSidebar({
     toolExecutions,
     activityFeed,
     toolIdToSubagentId,
-  } = useDrawerStore();
+  } = useDrawerStore(
+    useShallow((s) => ({
+      subagents: s.subagents,
+      activeSubagentId: s.activeSubagentId,
+      toolExecutions: s.toolExecutions,
+      activityFeed: s.activityFeed,
+      toolIdToSubagentId: s.toolIdToSubagentId,
+    })),
+  );
 
   const boardTasks = useBoardStore((s) => s.tasks);
   const columns = useBoardStore((s) => s.columns);
