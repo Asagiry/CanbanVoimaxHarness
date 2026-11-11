@@ -1,9 +1,10 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter};
 
 use crate::agent::Task;
 use crate::commands::dialogs::append_task_dialog_activity;
+use crate::commands::tasks::lifecycle::record_task_hook_result;
 use crate::commands::tasks::storage::load_tasks_from_disk;
 use super::helpers::{sync_single_task_in_app_state, upsert_single_task};
 
@@ -108,8 +109,164 @@ impl<'a> TaskTransitionPipeline<'a> {
         Err(error_msg)
     }
 
-    /// Master execution: run `on_leave` -> `on_enter`.
+    /// Step: Execute source column `gatekeeper_sensor` command if configured.
+    /// Skipped when rejecting backwards with verdict `CHANGES_REQUESTED`.
+    pub async fn run_gatekeeper_sensor(&self, task: &mut Task) -> Result<(), String> {
+        let Some(sc) = self.source_col else {
+            return Ok(());
+        };
+        if self.verdict.as_deref() == Some("CHANGES_REQUESTED") {
+            return Ok(());
+        }
+        let Some(sensor_cmd) = sc
+            .gatekeeper_sensor
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        else {
+            return Ok(());
+        };
+
+        let working_dir = task
+            .worktree_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|wt| {
+                let p = PathBuf::from(wt);
+                if p.is_absolute() { p } else { self.root.join(p) }
+            })
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| self.root.to_path_buf());
+
+        if let Some(app) = self.app_handle {
+            let _ = app.emit("hook:start", serde_json::json!({
+                "taskId": task.id,
+                "stageId": sc.id,
+                "hookType": "gatekeeper_sensor",
+                "hookName": sensor_cmd,
+                "description": "Gatekeeper sensor check",
+            }));
+        }
+
+        let started_at = Utc::now().timestamp_millis();
+        let sensor_res = crate::hooks::execute_sensor_command(sensor_cmd, &working_dir, None).await;
+        let duration_ms = (Utc::now().timestamp_millis() - started_at).max(0) as u64;
+
+        match sensor_res {
+            Ok(res) if res.success => {
+                record_task_hook_result(
+                    task,
+                    &sc.id,
+                    "gatekeeper_sensor",
+                    sensor_cmd,
+                    started_at,
+                    duration_ms,
+                    true,
+                    res.exit_code,
+                    &res.stdout,
+                    &res.stderr,
+                    None,
+                );
+                if let Some(app) = self.app_handle {
+                    let _ = app.emit("hook:finish", serde_json::json!({
+                        "taskId": task.id,
+                        "stageId": sc.id,
+                        "hookType": "gatekeeper_sensor",
+                        "success": true,
+                        "exitCode": res.exit_code,
+                        "stdout": res.stdout,
+                        "stderr": res.stderr,
+                    }));
+                }
+                upsert_single_task(self.root, task)
+            }
+            Ok(res) => {
+                let err_details = if !res.stderr.trim().is_empty() {
+                    res.stderr.trim().to_string()
+                } else if !res.stdout.trim().is_empty() {
+                    res.stdout.trim().to_string()
+                } else {
+                    format!("Exit code {:?}", res.exit_code)
+                };
+                record_task_hook_result(
+                    task,
+                    &sc.id,
+                    "gatekeeper_sensor",
+                    sensor_cmd,
+                    started_at,
+                    duration_ms,
+                    false,
+                    res.exit_code,
+                    &res.stdout,
+                    &res.stderr,
+                    Some(&err_details),
+                );
+                if let Some(app) = self.app_handle {
+                    let _ = app.emit("hook:finish", serde_json::json!({
+                        "taskId": task.id,
+                        "stageId": sc.id,
+                        "hookType": "gatekeeper_sensor",
+                        "success": false,
+                        "exitCode": res.exit_code,
+                        "stdout": res.stdout,
+                        "stderr": res.stderr,
+                        "error": &err_details,
+                    }));
+                }
+                let steer_content = format!(
+                    "### [ОТКЛОНЕНО СЕНСОРОМ / GATEKEEPER FAILED: {}]\n\nСенсор этапа '{}' завершился с ошибкой (код {:?}).\n\n**Вывод:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                    sensor_cmd, sc.id, res.exit_code, err_details
+                );
+                let err_msg = format!(
+                    "Gatekeeper sensor '{}' этапа '{}' отклонил переход (Exit code: {:?}):\n{}",
+                    sensor_cmd, sc.id, res.exit_code, err_details
+                );
+                self.handle_rejection(task, &steer_content, err_msg, &err_details).await
+            }
+            Err(e) => {
+                let err_details = e.to_string();
+                record_task_hook_result(
+                    task,
+                    &sc.id,
+                    "gatekeeper_sensor",
+                    sensor_cmd,
+                    started_at,
+                    duration_ms,
+                    false,
+                    None,
+                    "",
+                    &err_details,
+                    Some(&err_details),
+                );
+                if let Some(app) = self.app_handle {
+                    let _ = app.emit("hook:finish", serde_json::json!({
+                        "taskId": task.id,
+                        "stageId": sc.id,
+                        "hookType": "gatekeeper_sensor",
+                        "success": false,
+                        "exitCode": None::<i32>,
+                        "stdout": "",
+                        "stderr": &err_details,
+                        "error": &err_details,
+                    }));
+                }
+                let steer_content = format!(
+                    "### [ОТКЛОНЕНО СЕНСОРОМ / GATEKEEPER ERROR: {}]\n\nОшибка запуска сенсора этапа '{}': {}\n\nИсправь указанную ошибку.",
+                    sensor_cmd, sc.id, err_details
+                );
+                let err_msg = format!(
+                    "Gatekeeper sensor '{}' этапа '{}' ошибка запуска: {}",
+                    sensor_cmd, sc.id, err_details
+                );
+                self.handle_rejection(task, &steer_content, err_msg, &err_details).await
+            }
+        }
+    }
+
+    /// Master execution: run `gatekeeper_sensor` -> `on_leave` -> `on_enter`.
     pub async fn execute(&self, task: &mut Task) -> Result<(), String> {
+        self.run_gatekeeper_sensor(task).await?;
         self.run_on_leave(task).await?;
         self.run_on_enter(task).await?;
         Ok(())

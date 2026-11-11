@@ -4,8 +4,11 @@ use crate::config::{
     save_boards_config, save_pipeline_config, BoardDef, PipelineConfig,
 };
 use crate::commands::state::AppState;
-use crate::commands::tasks::{heal_tasks, load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::{heal_tasks, save_tasks_to_disk, try_load_tasks_from_disk};
+use std::sync::LazyLock;
 use tauri::{AppHandle, Emitter, State};
+
+static BOARDS_MUTEX: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 pub use crate::commands::personas::*;
 
@@ -67,6 +70,7 @@ pub async fn save_pipeline(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let _boards_guard = BOARDS_MUTEX.lock().await;
     pipeline.stages = normalize_pipeline_stages(pipeline.stages)?;
     let root = state.get_root();
     save_pipeline_config(&root, &pipeline)
@@ -76,25 +80,26 @@ pub async fn save_pipeline(
     if let Err(e) = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipeline })) {
         eprintln!("CVH [WARN]: Failed to emit pipeline:updated: {}", e);
     }
-    if let Ok(boards_cfg) = load_boards_config(&root).await {
-        if let Err(e) = app.emit(
-            "boards:updated",
-            serde_json::json!({ "boards": &boards_cfg.boards, "activeBoardId": &boards_cfg.active_board_id }),
-        ) {
-            eprintln!("CVH [WARN]: Failed to emit boards:updated: {}", e);
+    let boards_cfg = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to reload boards after pipeline save: {}", e))?;
+    if let Err(e) = app.emit(
+        "boards:updated",
+        serde_json::json!({ "boards": &boards_cfg.boards, "activeBoardId": &boards_cfg.active_board_id }),
+    ) {
+        eprintln!("CVH [WARN]: Failed to emit boards:updated: {}", e);
+    }
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
+    let modified = heal_tasks(&mut tasks, &boards_cfg);
+    if modified {
+        {
+            let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
+            *guard = tasks.clone();
         }
-        let mut tasks = load_tasks_from_disk(&root).await;
-        let modified = heal_tasks(&mut tasks, &boards_cfg);
-        if modified {
-            {
-                let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
-                *guard = tasks.clone();
-            }
-            let _ = save_tasks_to_disk(&root, &tasks).await;
-        }
-        if let Err(e) = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks })) {
-            eprintln!("CVH [WARN]: Failed to emit tasks:updated: {}", e);
-        }
+        save_tasks_to_disk(&root, &tasks).await?;
+    }
+    if let Err(e) = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks })) {
+        eprintln!("CVH [WARN]: Failed to emit tasks:updated: {}", e);
     }
     Ok(())
 }
@@ -124,6 +129,7 @@ pub async fn create_board(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<BoardDef, String> {
+    let _boards_guard = BOARDS_MUTEX.lock().await;
     let trimmed_name = name.trim();
     if trimmed_name.is_empty() {
         return Err("Название доски не может быть пустым".to_string());
@@ -170,14 +176,14 @@ pub async fn create_board(
         }
     }
 
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
     let modified = heal_tasks(&mut tasks, &config);
     if modified {
         {
             let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
             *guard = tasks.clone();
         }
-        let _ = save_tasks_to_disk(&root, &tasks).await;
+        save_tasks_to_disk(&root, &tasks).await?;
     }
     if let Err(e) = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks })) {
         eprintln!("CVH [WARN]: Failed to emit tasks:updated: {}", e);
@@ -192,6 +198,7 @@ pub async fn save_board(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let _boards_guard = BOARDS_MUTEX.lock().await;
     let trimmed_name = board.name.trim();
     if trimmed_name.is_empty() {
         return Err("Название доски не может быть пустым".to_string());
@@ -229,14 +236,14 @@ pub async fn save_board(
     // Verify and heal all tasks:
     // Any task on a deleted/renamed board must be mapped to config.active_board_id,
     // and any task in a removed column mapped to the board's first column (backlog).
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
     let modified = heal_tasks(&mut tasks, &config);
     if modified {
         {
             let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
             *guard = tasks.clone();
         }
-        let _ = save_tasks_to_disk(&root, &tasks).await;
+        save_tasks_to_disk(&root, &tasks).await?;
     }
     // Emit both boards:updated and tasks:updated so the UI immediately updates!
     if let Err(e) = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks })) {
@@ -252,6 +259,7 @@ pub async fn delete_board(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let _boards_guard = BOARDS_MUTEX.lock().await;
     let root = state.get_root();
     let mut config = load_boards_config(&root)
         .await
@@ -300,13 +308,13 @@ pub async fn delete_board(
     // Verify and heal all tasks:
     // Any task on the deleted board must be mapped to config.active_board_id,
     // and any task in a removed column mapped to the target board's first column (backlog).
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
     let _modified = heal_tasks(&mut tasks, &config);
     {
         let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
         *guard = tasks.clone();
     }
-    let _ = save_tasks_to_disk(&root, &tasks).await;
+    save_tasks_to_disk(&root, &tasks).await?;
     if let Err(e) = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks })) {
         eprintln!("CVH [WARN]: Failed to emit tasks:updated: {}", e);
     }
@@ -320,6 +328,7 @@ pub async fn set_active_board(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let _boards_guard = BOARDS_MUTEX.lock().await;
     let root = state.get_root();
     let mut config = load_boards_config(&root)
         .await

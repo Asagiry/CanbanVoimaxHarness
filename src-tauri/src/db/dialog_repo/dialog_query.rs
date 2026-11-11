@@ -94,18 +94,18 @@ pub fn find_subagent_dialog_key(
     tool_call_id: &str,
 ) -> Result<Option<String>, String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
-    let tc_clean = tool_call_id.trim();
+    let tc_clean = crate::db::escape_like(tool_call_id.trim());
     if tc_clean.is_empty() {
         return Ok(None);
     }
 
     // 1. Try parent-scoped suffix match
     if let Some(p) = parent_task_id {
-        let p_clean = p.trim();
+        let p_clean = crate::db::escape_like(p.trim());
         if !p_clean.is_empty() {
             let pattern = format!("{}:sub:%.sub-{}", p_clean, tc_clean);
             let mut stmt = conn
-                .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+                .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ESCAPE '\\' ORDER BY created_at DESC LIMIT 1")
                 .map_err(|e| format!("Prepare failed: {}", e))?;
             let mut rows = stmt
                 .query(params![pattern])
@@ -120,7 +120,7 @@ pub fn find_subagent_dialog_key(
     // 2. Try general suffix match
     let pattern_suffix = format!("%.sub-{}", tc_clean);
     let mut stmt = conn
-        .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+        .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ESCAPE '\\' ORDER BY created_at DESC LIMIT 1")
         .map_err(|e| format!("Prepare failed: {}", e))?;
     let mut rows = stmt
         .query(params![pattern_suffix])
@@ -131,10 +131,10 @@ pub fn find_subagent_dialog_key(
     }
 
     // 3. Try exact suffix match if tool_call_id is already prefixed with .sub-
-    if tc_clean.contains(".sub-") {
+    if tool_call_id.trim().contains(".sub-") {
         let pattern_any = format!("%{}", tc_clean);
         let mut stmt = conn
-            .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+            .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ESCAPE '\\' ORDER BY created_at DESC LIMIT 1")
             .map_err(|e| format!("Prepare failed: {}", e))?;
         let mut rows = stmt
             .query(params![pattern_any])
@@ -158,9 +158,9 @@ pub fn list_subagent_dialog_keys(
     if p_clean.is_empty() {
         return Ok(Vec::new());
     }
-    let pattern = format!("{}:sub:%", p_clean);
+    let pattern = format!("{}:sub:%", crate::db::escape_like(p_clean));
     let mut stmt = conn
-        .prepare("SELECT DISTINCT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at ASC")
+        .prepare("SELECT DISTINCT task_id FROM dialog_items WHERE task_id LIKE ?1 ESCAPE '\\' ORDER BY created_at ASC")
         .map_err(|e| format!("Prepare failed: {}", e))?;
     let rows = stmt
         .query_map(params![pattern], |row| row.get::<_, String>(0))
@@ -172,11 +172,16 @@ pub fn list_subagent_dialog_keys(
 /// Retrieves the tool JSON value for a specific tool ID in a task dialogue.
 pub fn db_get_dialog_tool_json(root: &Path, task_id: &str, tool_id: &str) -> Option<serde_json::Value> {
     let conn = get_db_conn(root).ok()?;
-    let like_pattern = format!("%{}%", tool_id);
     let raw: Option<String> = conn
         .query_row(
-            "SELECT tool_json FROM dialog_items WHERE task_id = ?1 AND (id = ?2 OR tool_json LIKE ?3) LIMIT 1",
-            params![task_id, tool_id, like_pattern],
+            "SELECT tool_json FROM dialog_items
+             WHERE task_id = ?1
+               AND (id = ?2 OR (json_valid(tool_json) AND (
+                   json_extract(tool_json, '$.id') = ?2
+                   OR json_extract(tool_json, '$.params.callId') = ?2
+               )))
+             LIMIT 1",
+            params![task_id, tool_id],
             |row| row.get(0),
         )
         .ok()?;

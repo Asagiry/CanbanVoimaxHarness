@@ -42,6 +42,16 @@ pub(crate) async fn run_git(repo_root: &Path, args: &[&str]) -> Result<String> {
     Ok(stdout)
 }
 
+fn worktree_matches_slug(wt: &WorktreeInfo, branch_name: &str, task_slug: &str) -> bool {
+    if wt.branch.as_deref() == Some(branch_name) {
+        return true;
+    }
+    Path::new(&wt.path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case(task_slug))
+}
+
 /// Creates an isolated git worktree at `worktrees/<task_slug>` on branch `feat/<task_slug>`.
 /// If branch already exists, checks it out without `-b`.
 pub async fn create_worktree(
@@ -67,7 +77,7 @@ pub async fn create_worktree(
     // Check if worktree or branch is already registered in git
     if let Ok(existing_wts) = list_worktrees(repo_path).await {
         for wt in existing_wts {
-            if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+            if worktree_matches_slug(&wt, &branch_name, task_slug) {
                 let p = PathBuf::from(&wt.path);
                 if p.exists() {
                     return Ok(p);
@@ -110,7 +120,7 @@ pub async fn create_worktree(
             }
             if let Ok(existing_wts) = list_worktrees(repo_path).await {
                 for wt in existing_wts {
-                    if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+                    if worktree_matches_slug(&wt, &branch_name, task_slug) {
                         let p = PathBuf::from(&wt.path);
                         if p.exists() {
                             sync_cvh_runtime_state(repo_path, &p).await;
@@ -152,7 +162,7 @@ pub async fn create_worktree(
             }
             if let Ok(existing_wts) = list_worktrees(repo_path).await {
                 for wt in existing_wts {
-                    if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+                    if worktree_matches_slug(&wt, &branch_name, task_slug) {
                         let p = PathBuf::from(&wt.path);
                         if p.exists() {
                             sync_cvh_runtime_state(repo_path, &p).await;
@@ -174,6 +184,26 @@ pub async fn create_worktree(
     Ok(worktree_abs)
 }
 
+async fn remove_single_worktree_path(repo_path: &Path, worktree_rel: &Path, worktree_abs: &Path) -> Result<()> {
+    let worktree_str = worktree_rel.to_string_lossy().to_string();
+    let git_res = run_git(repo_path, &["worktree", "remove", "--force", &worktree_str]).await;
+
+    if worktree_abs.exists() {
+        tokio::fs::remove_dir_all(worktree_abs)
+            .await
+            .with_context(|| match git_res {
+                Err(ref ge) => format!("Failed to remove worktree {:?} (git error: {ge})", worktree_abs),
+                Ok(_) => format!("Failed to remove lingering worktree directory {:?}", worktree_abs),
+            })?;
+    } else if let Err(e) = git_res {
+        let msg = e.to_string();
+        if !msg.contains("is not a working tree") && !msg.contains("does not exist") {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
 /// Removes a worktree forcefully and prunes git worktree metadata.
 pub async fn remove_worktree(
     repo_root: impl AsRef<Path>,
@@ -181,43 +211,31 @@ pub async fn remove_worktree(
 ) -> Result<()> {
     let repo_path = repo_root.as_ref();
     let worktree_rel = PathBuf::from("worktrees").join(task_slug);
-    let worktree_str = worktree_rel.to_string_lossy().to_string();
-
-    // Run git worktree remove --force
-    let _ = run_git(
-        repo_path,
-        &["worktree", "remove", "--force", &worktree_str],
-    )
-    .await;
-
-    // Prune worktree records
-    let _ = run_git(repo_path, &["worktree", "prune"]).await;
-
-    // Ensure physical folder is cleaned up if lingering
     let worktree_abs = repo_path.join(&worktree_rel);
     if worktree_abs.exists() {
-        let _ = tokio::fs::remove_dir_all(&worktree_abs).await;
+        remove_single_worktree_path(repo_path, &worktree_rel, &worktree_abs).await?;
     }
 
-    // Also check alt path (.cvh/worktrees/<task_slug>) for backward compatibility
     let alt_worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
     let alt_worktree_abs = repo_path.join(&alt_worktree_rel);
     if alt_worktree_abs.exists() {
-        let _ = run_git(
-            repo_path,
-            &["worktree", "remove", "--force", &alt_worktree_rel.to_string_lossy()],
-        )
-        .await;
-        let _ = tokio::fs::remove_dir_all(&alt_worktree_abs).await;
+        remove_single_worktree_path(repo_path, &alt_worktree_rel, &alt_worktree_abs).await?;
     }
 
+    if repo_path.join(".git").exists() {
+        run_git(repo_path, &["worktree", "prune"])
+            .await
+            .context("Failed to prune git worktree metadata")?;
+    }
     Ok(())
 }
 
 /// Prunes git worktree administrative records.
 pub async fn prune_worktrees(repo_root: impl AsRef<Path>) -> Result<()> {
     let repo_path = repo_root.as_ref();
-    let _ = run_git(repo_path, &["worktree", "prune"]).await;
+    run_git(repo_path, &["worktree", "prune"])
+        .await
+        .context("Failed to prune git worktrees")?;
     Ok(())
 }
 

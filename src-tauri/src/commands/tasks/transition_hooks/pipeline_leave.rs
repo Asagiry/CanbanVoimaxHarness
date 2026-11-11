@@ -165,7 +165,7 @@ impl<'a> TaskTransitionPipeline<'a> {
                 let _ = upsert_single_task(self.root, task);
                 if let Some(app) = self.app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if state_ref.get_root() == self.root {
+                        if state_ref.is_same_root(self.root) {
                             let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
                             if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
                                 t.worktree_path = task.worktree_path.clone();

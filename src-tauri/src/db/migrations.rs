@@ -4,15 +4,15 @@ use crate::agent::Task;
 use rusqlite::{params, Connection, TransactionBehavior};
 use std::path::Path;
 
-pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
+pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) -> Result<(), rusqlite::Error> {
     // 1. Tasks & Todos migration
     let tasks_file = root.join(".cvh").join("tasks.json");
-    let task_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))
-        .unwrap_or(0);
+    let task_count: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
 
     if tasks_file.exists() && task_count > 0 {
-        let _ = std::fs::rename(&tasks_file, root.join(".cvh").join("tasks.json.migrated"));
+        if let Err(e) = std::fs::rename(&tasks_file, root.join(".cvh").join("tasks.json.migrated")) {
+            eprintln!("CVH [db]: Failed to rename legacy tasks.json: {}", e);
+        }
     }
 
     if task_count == 0 {
@@ -126,9 +126,7 @@ pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         }
     }
 
-    let todo_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM task_todos", [], |r| r.get(0))
-        .unwrap_or(0);
+    let todo_count: i64 = conn.query_row("SELECT COUNT(*) FROM task_todos", [], |r| r.get(0))?;
 
     if todo_count == 0 && task_count > 0 {
         let tasks_file = root.join(".cvh").join("tasks.json");
@@ -186,9 +184,7 @@ pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
     }
 
     // 2. Sequence migration
-    let seq_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sequences WHERE name = 'task'", [], |r| r.get(0))
-        .unwrap_or(0);
+    let seq_count: i64 = conn.query_row("SELECT COUNT(*) FROM sequences WHERE name = 'task'", [], |r| r.get(0))?;
 
     if seq_count == 0 {
         let seq_paths = [
@@ -242,17 +238,15 @@ pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         }
 
         if last_num > 0 {
-            let _ = conn.execute(
+            conn.execute(
                 "INSERT OR REPLACE INTO sequences (name, current_val) VALUES ('task', ?1)",
                 params![last_num as i64],
-            );
+            )?;
         }
     }
 
     // 3. Ledger migration
-    let ledger_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r.get(0))
-        .unwrap_or(0);
+    let ledger_count: i64 = conn.query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r.get(0))?;
 
     if ledger_count == 0 {
         let ledger_paths = [
@@ -277,11 +271,11 @@ pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                                 let files_json = item.get("files").map(|v| v.to_string());
                                 let created_at = item.get("timestamp").and_then(|v| v.as_i64()).unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
                                 let id = format!("ledger-{}", key);
-                                let _ = conn.execute(
+                                conn.execute(
                                     "INSERT OR IGNORE INTO task_ledger (id, task_id, commit_hash, summary, verdict, author, files_json, created_at)
                                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                                     params![id, task_id, commit_hash, summary, verdict, author, files_json, created_at],
-                                );
+                                )?;
                             }
                         }
                     }
@@ -289,4 +283,5 @@ pub fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
             }
         }
     }
+    Ok(())
 }

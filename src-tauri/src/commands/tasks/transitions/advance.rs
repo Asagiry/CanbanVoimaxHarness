@@ -9,7 +9,7 @@ use crate::commands::state::AppState;
 use crate::config::{load_boards_config, resolve_actual_repo_root};
 use crate::commands::tasks::healing::{stage_id_matches, task_id_matches};
 use crate::commands::tasks::lifecycle::internal_create_subtask_with_hook_states;
-use crate::commands::tasks::storage::load_tasks_from_disk;
+use crate::commands::tasks::storage::try_load_tasks_from_disk;
 use crate::commands::tasks::timing::freeze_stage_duration;
 use super::transition_hooks::{
     auto_complete_task_todos, format_handover_steer_prompt, format_stage_summary_activity,
@@ -36,9 +36,20 @@ pub async fn internal_advance_task_to_stage(
     summary: &str,
     app_handle: Option<&AppHandle>,
 ) -> Result<String, String> {
+    internal_advance_task_with_verdict(root, task_id, target_stage_override, None, summary, app_handle).await
+}
+
+pub async fn internal_advance_task_with_verdict(
+    root: &Path,
+    task_id: &str,
+    target_stage_override: Option<&str>,
+    verdict_override: Option<&str>,
+    summary: &str,
+    app_handle: Option<&AppHandle>,
+) -> Result<String, String> {
     let root_resolved = resolve_actual_repo_root(root);
     let root = &root_resolved;
-    let initial_tasks = load_tasks_from_disk(root).await;
+    let initial_tasks = try_load_tasks_from_disk(root).await?;
     let mut current_task = initial_tasks
         .iter()
         .find(|t| task_id_matches(&t.id, task_id))
@@ -110,17 +121,18 @@ pub async fn internal_advance_task_to_stage(
         .map(|c| c.persona.as_deref() == Some("reviewer") || stage_id_matches(&c.id, "review"))
         .unwrap_or(false);
 
-    let effective_verdict = current_task.verdict.clone().or_else(|| {
-        if is_terminal || is_review_stage {
-            Some("APPROVED".to_string())
-        } else {
-            None
-        }
-    });
-
-    if effective_verdict.is_some() && current_task.verdict.is_none() {
-        current_task.verdict = effective_verdict.clone();
-    }
+    let effective_verdict = verdict_override
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| current_task.verdict.clone())
+        .or_else(|| {
+            if is_terminal || is_review_stage {
+                Some("APPROVED".to_string())
+            } else {
+                None
+            }
+        });
 
     let pipeline = TaskTransitionPipeline::new(
         root,
@@ -132,7 +144,10 @@ pub async fn internal_advance_task_to_stage(
         app_handle,
     );
     pipeline.execute(&mut current_task).await?;
-    let _ = upsert_single_task(root, &mut current_task);
+    if effective_verdict.is_some() {
+        current_task.verdict = effective_verdict.clone();
+    }
+    upsert_single_task(root, &mut current_task)?;
     auto_complete_task_todos(root, &mut current_task, app_handle);
 
     // Legacy on_enter_script (col.on_enter_script) is a distinct field from
@@ -148,7 +163,7 @@ pub async fn internal_advance_task_to_stage(
     .await;
 
     // Reload fresh tasks from SQLite after all async hooks complete
-    let mut tasks = load_tasks_from_disk(root).await;
+    let mut tasks = try_load_tasks_from_disk(root).await?;
 
     if let Some(ref pid) = current_task.parent_id {
         return handle_child_subtask_advance(

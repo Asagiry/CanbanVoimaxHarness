@@ -17,16 +17,40 @@ pub fn get_app_config_dir() -> PathBuf {
     }
 }
 
+/// Strips Windows verbatim (`\\?\` / `//?/`) and UNC (`\\?\UNC\` / `//?/UNC/`) prefixes safely.
+pub fn strip_windows_verbatim_prefix(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.len() >= 8 {
+        if trimmed[..8].eq_ignore_ascii_case(r"\\?\UNC\") {
+            return format!(r"\\{}", &trimmed[8..]);
+        }
+        if trimmed[..8].eq_ignore_ascii_case("//?/UNC/") {
+            return format!("//{}", &trimmed[8..]);
+        }
+    }
+    if let Some(rest) = trimmed.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    if let Some(rest) = trimmed.strip_prefix("//?/") {
+        return rest.to_string();
+    }
+    trimmed.to_string()
+}
+
 /// Checks if a directory is a build, compiler, distribution, installer, or runtime dependency folder
 /// (`bin`, `release`, `debug`, `target`, `dist`, `node_modules`, `installer`).
-/// Such directories must NEVER be treated as project roots.
+/// Such directories must NEVER be treated as project roots, without blocking valid user workspaces
+/// that merely live under an ancestor folder with one of those names.
 pub fn is_binary_or_target_dir(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
     if path_str.trim().is_empty() {
         return false;
     }
-    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-        let lower = file_name.to_lowercase();
+    let leaf = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_lowercase());
+    if let Some(ref lower) = leaf {
         if matches!(
             lower.as_str(),
             "bin" | "release" | "debug" | "target" | "dist" | "node_modules" | "installer"
@@ -34,18 +58,29 @@ pub fn is_binary_or_target_dir(path: &Path) -> bool {
             return true;
         }
     }
-    // Also inspect path components to catch paths inside Release, bin, dist, installer, debug, or node_modules
+    // A directory that is itself a git/CVH workspace (e.g. D:\release\my-app) is valid.
+    if path.join(".git").exists() || path.join(".cvh").exists() {
+        return false;
+    }
+    // Block paths nested inside `node_modules/` or `target/` build outputs.
     for comp in path.components() {
         if let std::path::Component::Normal(c) = comp {
             let s = c.to_string_lossy().to_lowercase();
-            if matches!(
-                s.as_str(),
-                "release" | "bin" | "debug" | "dist" | "installer" | "node_modules"
-            ) {
+            if s == "node_modules" || (!cfg!(test) && s == "target") {
                 return true;
             }
-            if !cfg!(test) && s == "target" {
-                return true;
+        }
+    }
+    // Block known OS-target subdirs directly under `Release/` (e.g. `Release/Windows`).
+    if let Some(parent_name) = path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) {
+        if parent_name.eq_ignore_ascii_case("release") {
+            if let Some(ref lower) = leaf {
+                if matches!(
+                    lower.as_str(),
+                    "windows" | "linux" | "macos" | "darwin" | "win32" | "win64" | "x64" | "arm64"
+                ) {
+                    return true;
+                }
             }
         }
     }
@@ -229,11 +264,30 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
 
 pub fn persist_active_project_sync(path: &Path) {
     let dir = get_app_config_dir();
-    let _ = std::fs::create_dir_all(&dir);
-    let target = dir.join("active_project.txt");
-    if let Err(e) = std::fs::write(&target, path.to_string_lossy().as_bytes()) {
+    if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!(
-            "CVH [persist_active_project_sync]: Failed to write active_project.txt: {}",
+            "CVH [persist_active_project_sync]: Failed to create config dir {:?}: {}",
+            dir, e
+        );
+        return;
+    }
+    let target = dir.join("active_project.txt");
+    let tmp = target.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
+    if let Err(e) = std::fs::write(&tmp, path.to_string_lossy().as_bytes()) {
+        eprintln!(
+            "CVH [persist_active_project_sync]: Failed to write temp active_project.txt: {}",
+            e
+        );
+        return;
+    }
+    if let Err(e) = std::fs::rename(&tmp, &target) {
+        if let Err(rm_err) = std::fs::remove_file(&tmp) {
+            if rm_err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("CVH [persist_active_project_sync]: Failed to clean temp file {:?}: {}", tmp, rm_err);
+            }
+        }
+        eprintln!(
+            "CVH [persist_active_project_sync]: Failed to rename active_project.txt: {}",
             e
         );
     } else {

@@ -191,12 +191,18 @@ pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
     ".cvh/harness.db*",
     ".cvh/worktrees/",
     ".cvh/dialogs/",
+    ".cvh/context/",
     ".cvh/spill/",
     ".cvh/logs/",
+    ".cvh/llm_debug.log*",
     ".cvh/tasks/",
     ".cvh/tasks.json",
+    ".cvh/task-sequence.json",
+    ".cvh/settings/sequence.json",
     ".cvh/llm.json",
     "**/.cvh/llm.json",
+    ".cvh/settings/llm.json",
+    "**/.cvh/settings/llm.json",
 ];
 
 /// Ensures that `<repo_root>/.gitignore` exists and contains all required

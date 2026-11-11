@@ -15,21 +15,39 @@ pub use error::AppError;
 use commands::*;
 use tauri::Manager;
 
+fn cancel_all_agents_on_exit(app_handle: &tauri::AppHandle) {
+    let state = app_handle.state::<AppState>();
+    let handles: Vec<ActiveAgentHandle> = {
+        let mut map = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        map.drain().map(|(_, h)| h).collect()
+    };
+    for h in &handles {
+        h.abort_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    tauri::async_runtime::block_on(async {
+        for h in handles {
+            let maybe = {
+                let mut guard = h.join_handle.lock().await;
+                guard.take()
+            };
+            if let Some(jh) = maybe {
+                jh.abort();
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(300), jh).await;
+            }
+        }
+        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+        for session in sessions.values() {
+            session.abort_handle.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Ensure WebView2 UDF is verified available and sanitized before webviews are initialized
-    #[cfg(target_os = "windows")]
-    {
-        if std::env::var("WEBVIEW2_USER_DATA_FOLDER").is_err() {
-            let udf = udf::resolve_and_prepare_webview2_udf();
-            std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", udf.to_string_lossy().as_ref());
-        }
-    }
-
     let project_root = config::discover_project_root();
     let state = AppState::new(project_root);
 
-    tauri::Builder::default()
+    let app = match tauri::Builder::default()
         // Single-instance MUST stay the first registered plugin: a second launch
         // forwards its args to the running instance and exits before WebView2
         // grabs the shared user-data folder (fixes 0x800700AA ERROR_BUSY).
@@ -39,6 +57,19 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // Prepare WebView2 UDF AFTER single-instance so secondary launches never probe/create fallback dirs.
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("cvh-udf-init")
+                .setup(|_app, _api| {
+                    #[cfg(target_os = "windows")]
+                    if std::env::var("WEBVIEW2_USER_DATA_FOLDER").is_err() {
+                        let udf = udf::resolve_and_prepare_webview2_udf();
+                        std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", udf.to_string_lossy().as_ref());
+                    }
+                    Ok(())
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(state)
@@ -125,16 +156,25 @@ pub fn run() {
             open_project,
             init_project_harness,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building CanbanVoimaxHarness desktop application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::Exit = event {
-                crate::db::checkpoint_all_dbs(true);
-                let state = app_handle.state::<AppState>();
-                let root = state.get_root();
-                if !root.as_os_str().is_empty() {
-                    let _ = crate::db::checkpoint_db(&root, true);
+        .build(tauri::generate_context!()) {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("CVH [FATAL]: error while building CanbanVoimaxHarness desktop application: {e}");
+            return;
+        }
+    };
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            cancel_all_agents_on_exit(app_handle);
+            crate::db::checkpoint_all_dbs(true);
+            let state = app_handle.state::<AppState>();
+            let root = state.get_root();
+            if !root.as_os_str().is_empty() {
+                if let Err(e) = crate::db::checkpoint_db(&root, true) {
+                    eprintln!("CVH [exit]: WAL checkpoint failed for {:?}: {}", root, e);
                 }
             }
-        });
+        }
+    });
 }

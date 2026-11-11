@@ -16,14 +16,91 @@ pub struct CortexDiskFile {
     pub folder: Option<String>,
 }
 
+fn resolve_allowed_cortex_path(root: &Path, raw_path: &str, create_parents: bool) -> Result<PathBuf, String> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return Err("Forbidden: empty cortex path".to_string());
+    }
+    let raw = Path::new(trimmed);
+    if raw.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("Forbidden: directory traversal detected".to_string());
+    }
+
+    let project_cvh = root.join(".cvh");
+    let global_cfg = crate::config::get_app_config_dir();
+    let candidate = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        let norm = trimmed.replace('\\', "/");
+        let clean = norm.trim_start_matches('/');
+        if !clean.starts_with(".cvh/") && clean != ".cvh" {
+            return Err("Forbidden: relative cortex path must stay within .cvh/".to_string());
+        }
+        root.join(clean)
+    };
+
+    if create_parents {
+        if let Some(parent) = candidate.parent() {
+            if !parent.exists() && parent.starts_with(&project_cvh) && project_cvh.exists() {
+                let project_cvh_canon = project_cvh.canonicalize().map_err(|e| format!("Root path error: {}", e))?;
+                let mut existing = parent;
+                while !existing.exists() {
+                    existing = existing.parent().ok_or_else(|| "Invalid parent path".to_string())?;
+                }
+                let existing_canon = existing.canonicalize().map_err(|e| format!("Path error: {}", e))?;
+                if !existing_canon.starts_with(&project_cvh_canon) {
+                    return Err("Forbidden: symlink escape outside .cvh".to_string());
+                }
+            }
+        }
+    }
+
+    let mut allowed_roots = Vec::new();
+    if project_cvh.exists() {
+        if let Ok(canon) = project_cvh.canonicalize() {
+            allowed_roots.push(canon);
+        }
+    } else if !root.as_os_str().is_empty() && root.exists() {
+        if let Ok(root_canon) = root.canonicalize() {
+            allowed_roots.push(root_canon.join(".cvh"));
+        }
+    }
+    if global_cfg.exists() {
+        if let Ok(canon) = global_cfg.canonicalize() {
+            allowed_roots.push(canon);
+        }
+    }
+
+    // Walk up to nearest existing ancestor and canonicalize to defeat symlinks/junctions
+    let mut existing = candidate.as_path();
+    let mut tail_parts: Vec<std::ffi::OsString> = Vec::new();
+    while !existing.exists() {
+        let name = existing.file_name().ok_or_else(|| "Forbidden: invalid path".to_string())?;
+        tail_parts.push(name.to_os_string());
+        existing = existing.parent().ok_or_else(|| "Forbidden: invalid path".to_string())?;
+    }
+    let mut resolved = existing.canonicalize().map_err(|e| format!("Target path error: {}", e))?;
+    for part in tail_parts.into_iter().rev() {
+        resolved.push(part);
+    }
+
+    let in_allowed = allowed_roots.iter().any(|allowed| resolved.starts_with(allowed));
+    if !in_allowed {
+        return Err("Forbidden: path outside allowed .cvh/ or global config roots".to_string());
+    }
+
+    if let Some(fname) = resolved.file_name().and_then(|n| n.to_str()) {
+        if fname.starts_with("harness.db") {
+            return Err("Forbidden: direct access to SQLite database binary is denied".to_string());
+        }
+    }
+    Ok(resolved)
+}
+
 #[tauri::command]
 pub async fn read_cortex_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
     let root = state.get_root();
-    let target = if Path::new(&path).is_absolute() {
-        PathBuf::from(path.clone())
-    } else {
-        root.join(&path)
-    };
+    let target = resolve_allowed_cortex_path(&root, &path, false)?;
 
     if !target.exists() && path.contains("cvh-dev") {
         let _ = crate::config::ensure_cvh_dev_scaffold(&root).await;
@@ -50,11 +127,7 @@ pub async fn save_cortex_file(
     app: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
-    let target = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path)
-    } else {
-        root.join(&path)
-    };
+    let target = resolve_allowed_cortex_path(&root, &path, true)?;
 
     atomic_write_file(&target, &content)
         .await

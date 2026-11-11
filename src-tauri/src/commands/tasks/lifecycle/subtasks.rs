@@ -6,7 +6,7 @@ use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::config::{load_boards_config, load_pipeline_config, resolve_actual_repo_root};
 use crate::commands::healing::{stage_id_matches, task_id_matches};
-use crate::commands::tasks::storage::{get_next_subtask_index, load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::storage::{get_next_subtask_index, save_tasks_to_disk, try_load_tasks_from_disk};
 use crate::commands::tasks::timing::freeze_stage_duration;
 use crate::commands::tasks::transitions::trigger_column_on_enter_script;
 
@@ -43,7 +43,7 @@ pub async fn internal_create_subtask_with_hook_states(
 ) -> Result<Task, String> {
     let root_resolved = resolve_actual_repo_root(root);
     let root = &root_resolved;
-    let mut tasks = load_tasks_from_disk(root).await;
+    let mut tasks = try_load_tasks_from_disk(root).await?;
 
     // Merge in-memory tasks if state is available in app_handle to prevent stale data
     if let Some(app) = app_handle {
@@ -264,7 +264,7 @@ pub async fn internal_create_subtask_with_hook_states(
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if state_ref.get_root().as_path() == root {
+            if state_ref.is_same_root(root) {
                 let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
                 *guard = tasks.clone();
             }
@@ -337,7 +337,7 @@ pub async fn internal_create_subtask_with_hook_states(
             if subtask_for_hook.hook_states != new_subtask.hook_states {
                 let _ = crate::db::db_upsert_task(root, &subtask_for_hook);
                 if let Some(state_ref) = app.try_state::<AppState>() {
-                    if state_ref.get_root().as_path() == root {
+                    if state_ref.is_same_root(root) {
                         let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
                         if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_for_hook.id)) {
                             t.hook_states = subtask_for_hook.hook_states.clone();

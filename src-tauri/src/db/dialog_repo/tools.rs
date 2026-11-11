@@ -20,13 +20,13 @@ pub fn mark_running_tools_as_aborted(
     }
 
     let rows = if is_subagent {
-        let sub_core = p_clean.rsplit(":sub:").next().unwrap_or(p_clean);
+        let sub_core = crate::db::escape_like(p_clean.rsplit(":sub:").next().unwrap_or(p_clean));
         let pattern1 = format!("%:sub:{}", sub_core);
         let pattern2 = format!("%:sub:%{}", sub_core);
         let mut stmt = conn
             .prepare(
                 r#"SELECT id, task_id, content, tool_json FROM dialog_items
-                 WHERE (task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3)
+                 WHERE (task_id = ?1 OR task_id LIKE ?2 ESCAPE '\' OR task_id LIKE ?3 ESCAPE '\')
                    AND tool_json IS NOT NULL
                    AND tool_json LIKE '%"status"%"running"%'"#,
             )
@@ -46,12 +46,13 @@ pub fn mark_running_tools_as_aborted(
             .collect::<Vec<_>>();
         res
     } else {
-        let pattern_dot = format!("{}.sub-%", p_clean);
-        let pattern_colon = format!("{}:sub:%", p_clean);
+        let escaped = crate::db::escape_like(p_clean);
+        let pattern_dot = format!("{}.sub-%", escaped);
+        let pattern_colon = format!("{}:sub:%", escaped);
         let mut stmt = conn
             .prepare(
                 r#"SELECT id, task_id, content, tool_json FROM dialog_items
-                 WHERE (task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3)
+                 WHERE (task_id = ?1 OR task_id LIKE ?2 ESCAPE '\' OR task_id LIKE ?3 ESCAPE '\')
                    AND tool_json IS NOT NULL
                    AND tool_json LIKE '%"status"%"running"%'"#,
             )
@@ -144,14 +145,17 @@ pub fn db_update_dialog_tool_result(
     duration_ms: Option<f64>,
 ) -> Result<(), String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
-    let like_pattern = format!("%{}%", tool_id);
 
     let rows = conn
         .execute(
             "UPDATE dialog_items
              SET tool_json = ?1, duration_ms = COALESCE(?2, duration_ms)
-             WHERE task_id = ?3 AND (id = ?4 OR tool_json LIKE ?5)",
-            params![tool_json, duration_ms, task_id, tool_id, like_pattern],
+             WHERE task_id = ?3
+               AND (id = ?4 OR (json_valid(tool_json) AND (
+                   json_extract(tool_json, '$.id') = ?4
+                   OR json_extract(tool_json, '$.params.callId') = ?4
+               )))",
+            params![tool_json, duration_ms, task_id, tool_id],
         )
         .map_err(|e| format!("Failed to update dialog tool result: {}", e))?;
 
@@ -179,12 +183,15 @@ pub fn db_update_dialog_tool_result_pool(
     duration_ms: f64,
 ) -> anyhow::Result<()> {
     let conn = pool.get().map_err(|e| anyhow::anyhow!("Failed to acquire connection: {}", e))?;
-    let like_pattern = format!("%{}%", tool_id);
     conn.execute(
         "UPDATE dialog_items
          SET tool_json = ?1, duration_ms = ?2
-         WHERE task_id = ?3 AND (id = ?4 OR tool_json LIKE ?5)",
-        params![tool_json, duration_ms, task_id, tool_id, like_pattern],
+         WHERE task_id = ?3
+           AND (id = ?4 OR (json_valid(tool_json) AND (
+               json_extract(tool_json, '$.id') = ?4
+               OR json_extract(tool_json, '$.params.callId') = ?4
+           )))",
+        params![tool_json, duration_ms, task_id, tool_id],
     )?;
     Ok(())
 }

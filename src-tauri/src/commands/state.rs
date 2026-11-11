@@ -78,7 +78,9 @@ impl AppState {
         *guard = new_root.clone();
 
         // Dynamically update the SQLite connection pool for the new workspace root
-        if let Ok(pool) = crate::db::get_db_pool(&new_root) {
+        if !new_root.as_os_str().is_empty() {
+            let pool = crate::db::get_db_pool(&new_root)
+                .map_err(|e| format!("Failed to initialize SQLite pool for {:?}: {}", new_root, e))?;
             let mut pool_guard = self.db_pool.write().unwrap_or_else(|p| p.into_inner());
             *pool_guard = Some(pool);
         }
@@ -117,11 +119,9 @@ impl AppState {
     }
 
     pub fn normalize_root_key(root: &std::path::Path) -> String {
-        let s = root.to_string_lossy().replace('\\', "/");
-        let s = s.trim();
-        let s = s.strip_prefix("//?/").unwrap_or(s);
-        let s = s.strip_prefix("\\\\?\\").unwrap_or(s);
-        let s = s.trim_end_matches('/');
+        let stripped = crate::config::strip_windows_verbatim_prefix(&root.to_string_lossy());
+        let s = stripped.replace('\\', "/");
+        let s = s.trim().trim_end_matches('/');
         #[cfg(windows)]
         {
             s.to_lowercase()
@@ -130,6 +130,10 @@ impl AppState {
         {
             s.to_string()
         }
+    }
+
+    pub fn is_same_root(&self, other: &std::path::Path) -> bool {
+        Self::normalize_root_key(&self.get_root()) == Self::normalize_root_key(other)
     }
 
     pub fn agent_key(root: &std::path::Path, task_id: &str) -> String {

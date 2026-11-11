@@ -20,30 +20,30 @@ pub fn db_delete_task(root: &Path, task_id: &str) -> Result<(), String> {
     .map_err(|e| format!("Failed to unlock parent for task {}: {}", task_id, e))?;
 
     // 2. Cascade delete subtasks (dialogs, telemetry, todos, tasks)
-    let subtask_pattern = format!("{}.%", task_id);
+    let subtask_pattern = format!("{}.%", crate::db::escape_like(task_id));
     tx.execute(
         "DELETE FROM dialog_items WHERE task_id IN (
-            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
+            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2 ESCAPE '\\'
         )",
         params![task_id, subtask_pattern],
     )
     .map_err(|e| format!("Failed to cascade delete dialog_items for subtasks of {}: {}", task_id, e))?;
     tx.execute(
         "DELETE FROM telemetry WHERE task_id IN (
-            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
+            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2 ESCAPE '\\'
         )",
         params![task_id, subtask_pattern],
     )
     .map_err(|e| format!("Failed to cascade delete telemetry for subtasks of {}: {}", task_id, e))?;
     tx.execute(
         "DELETE FROM task_todos WHERE task_id IN (
-            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
+            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2 ESCAPE '\\'
         )",
         params![task_id, subtask_pattern],
     )
     .map_err(|e| format!("Failed to cascade delete todos for subtasks of {}: {}", task_id, e))?;
     tx.execute(
-        "DELETE FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2",
+        "DELETE FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2 ESCAPE '\\'",
         params![task_id, subtask_pattern],
     )
     .map_err(|e| format!("Failed to cascade delete subtasks of {}: {}", task_id, e))?;

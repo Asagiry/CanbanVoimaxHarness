@@ -995,3 +995,137 @@ async fn test_empty_todos_clears_old_todos_in_sqlite() {
     let _ = tokio::fs::remove_dir_all(&root).await;
 }
 
+#[test]
+fn db_upsert_tasks_batch_preserves_todos_when_none() {
+    let root = PathBuf::from("target").join(format!("cvh_batch_todos_{}", uuid::Uuid::new_v4()));
+    let mut task = Task {
+        id: "BATCH-TODO-1".into(),
+        title: "Keep todos".into(),
+        description: String::new(),
+        stage_id: "backlog".into(),
+        board_id: None,
+        worktree_path: None,
+        branch: None,
+        verdict: None,
+        custom_flow: None,
+        status: Some("idle".into()),
+        model: None,
+        provider_id: None,
+        reasoning_effort: None,
+        parent_id: None,
+        subtask_index: None,
+        waiting_for_subtask_id: None,
+        handover_summary: None,
+        cover_image: None,
+        priority: Some("medium".into()),
+        current_tokens: None,
+        skip_worktree: Some(true),
+        created_at: 1,
+        updated_at: 1,
+        stage_entered_at: None,
+        completed_at: None,
+        position: None,
+        hook_states: None,
+        stage_durations: None,
+        total_elapsed: None,
+        project_path: None,
+        attachments: None,
+        tags: None,
+        todos: Some(vec![TodoItem {
+            id: "td-1".into(),
+            content: "Stay intact".into(),
+            status: "todo".into(),
+        }]),
+    };
+    db_upsert_tasks_batch(&root, std::slice::from_ref(&task)).expect("initial batch upsert");
+
+    task.todos = None;
+    task.title = "Updated title".into();
+    db_upsert_tasks_batch(&root, std::slice::from_ref(&task)).expect("second batch upsert");
+
+    let loaded = db_get_all_tasks(&root).expect("load tasks");
+    let found = loaded.into_iter().find(|t| t.id == "BATCH-TODO-1").expect("task exists");
+    assert_eq!(found.title, "Updated title");
+    assert_eq!(found.todos.as_ref().map(|v| v.len()).unwrap_or(0), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn context_file_path_is_injective_and_missing_file_errors() {
+    let root = PathBuf::from("target").join(format!("cvh_ctx_inj_{}", uuid::Uuid::new_v4()));
+    let p_dot = context_file_path(&root, "CVH-1.2");
+    let p_under = context_file_path(&root, "CVH-1_2");
+    assert_ne!(p_dot, p_under);
+
+    // Insert a 'file' context_snapshot marker without creating the file on disk.
+    append_dialog_items(&root, "MISSING-CTX-1", &[ActivityItem {
+        id: "ctx-missing".into(),
+        item_type: "context_snapshot".into(),
+        content: Some("file".into()),
+        timestamp: "2026-01-01T00:00:00Z".into(),
+        tool: None,
+        duration_ms: None,
+        images: None,
+    }]).expect("append context marker");
+
+    let err = load_conversation_context(&root, "MISSING-CTX-1").err().expect("missing file should error");
+    assert!(err.contains("Failed to read context file"), "unexpected error: {err}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn escape_like_prevents_wildcard_prefix_collision() {
+    let root = PathBuf::from("target").join(format!("cvh_like_{}", uuid::Uuid::new_v4()));
+    let call_1 = ActivityItem {
+        id: "t1".into(),
+        item_type: "tool".into(),
+        content: None,
+        timestamp: "2026-01-01T00:00:01Z".into(),
+        tool: Some(serde_json::json!({ "id": "call_1", "name": "read_file" })),
+        duration_ms: None,
+        images: None,
+    };
+    let call_10 = ActivityItem {
+        id: "t10".into(),
+        item_type: "tool".into(),
+        content: None,
+        timestamp: "2026-01-01T00:00:02Z".into(),
+        tool: Some(serde_json::json!({ "id": "call_10", "name": "read_file" })),
+        duration_ms: None,
+        images: None,
+    };
+    append_dialog_items(&root, "LIKE-TASK", &[call_1, call_10]).unwrap();
+
+    db_update_dialog_tool_result(
+        &root,
+        "LIKE-TASK",
+        "call_1",
+        r#"{"id":"call_1","name":"read_file","status":"done","output":"ok-1"}"#,
+        Some(5.0),
+    )
+    .unwrap();
+
+    let items = load_dialog_items(&root, "LIKE-TASK").unwrap();
+    let item_1 = items.iter().find(|i| i.id == "t1").unwrap();
+    let item_10 = items.iter().find(|i| i.id == "t10").unwrap();
+    assert_eq!(item_1.tool.as_ref().unwrap()["status"], "done");
+    assert!(item_10.tool.as_ref().unwrap().get("status").is_none());
+
+    // Also verify subagent clear prefix CVH-1 doesn't wipe CVH-10::sub::1
+    append_dialog_items(&root, "CVH-10::sub::1", &[ActivityItem {
+        id: "s10".into(),
+        item_type: "output".into(),
+        content: Some("keep me".into()),
+        timestamp: "2026-01-01T00:00:01Z".into(),
+        tool: None,
+        duration_ms: None,
+        images: None,
+    }]).unwrap();
+    clear_dialog_items(&root, "CVH-1").unwrap();
+    assert_eq!(load_dialog_items(&root, "CVH-10::sub::1").unwrap().len(), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+

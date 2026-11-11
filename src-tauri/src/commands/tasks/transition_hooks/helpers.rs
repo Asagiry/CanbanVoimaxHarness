@@ -21,7 +21,7 @@ pub fn upsert_single_task(root: &Path, task: &mut Task) -> Result<(), String> {
 pub fn sync_single_task_in_app_state(root: &Path, task: &Task, app_handle: Option<&AppHandle>) {
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if state_ref.get_root().as_path() == root {
+            if state_ref.is_same_root(root) {
                 let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(existing) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
                     *existing = task.clone();
@@ -114,7 +114,7 @@ pub fn auto_complete_task_todos(
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if state_ref.get_root().as_path() == root {
+            if state_ref.is_same_root(root) {
                 let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
                     t.todos = task.todos.clone();

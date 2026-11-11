@@ -171,7 +171,7 @@ pub fn is_cvh_path(path: &str) -> bool {
     // 3. Explicitly allowed CVH configuration files & directories:
     //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
     //    .cvh/boards.json
-    if is_cvh_config_path(&norm) {
+    if is_cvh_config_path(norm) {
         return false;
     }
 

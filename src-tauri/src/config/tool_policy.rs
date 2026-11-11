@@ -1,22 +1,45 @@
 //! Two-level tool policy matrix, stage overrides, and tool permissions gating.
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::config::io::atomic_write_file;
 use crate::config::models::normalize_tool_name;
 
+fn serialize_sorted_map<S, V>(map: &HashMap<String, V>, serializer: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    V: Serialize,
+{
+    let ordered: BTreeMap<&String, &V> = map.iter().collect();
+    ordered.serialize(serializer)
+}
+
+fn serialize_sorted_nested_map<S>(
+    map: &HashMap<String, HashMap<String, bool>>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let ordered: BTreeMap<&String, BTreeMap<&String, &bool>> = map
+        .iter()
+        .map(|(k, inner)| (k, inner.iter().collect()))
+        .collect();
+    ordered.serialize(serializer)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolPolicyConfig {
-    #[serde(default, rename = "stageOverrides")]
+    #[serde(default, rename = "stageOverrides", serialize_with = "serialize_sorted_nested_map")]
     pub stage_overrides: HashMap<String, HashMap<String, bool>>,
-    #[serde(default = "default_tool_settings", rename = "toolSettings")]
+    #[serde(default = "default_tool_settings", rename = "toolSettings", serialize_with = "serialize_sorted_map")]
     pub tool_settings: HashMap<String, serde_json::Value>,
-    #[serde(default, rename = "toolDescriptions")]
+    #[serde(default, rename = "toolDescriptions", serialize_with = "serialize_sorted_map")]
     pub tool_descriptions: HashMap<String, String>,
-    #[serde(default, rename = "toolCustomSchemas")]
+    #[serde(default, rename = "toolCustomSchemas", serialize_with = "serialize_sorted_map")]
     pub tool_custom_schemas: HashMap<String, serde_json::Value>,
 }
 

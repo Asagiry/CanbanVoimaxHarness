@@ -28,18 +28,16 @@ pub fn is_path_inside_project(path: &Path, root: &Path) -> bool {
 }
 
 fn normalize_path_for_comparison(p: &Path) -> String {
-    let s = p.to_string_lossy().replace('\\', "/");
-    let s = s.trim();
-    let s = s.strip_prefix("//?/").unwrap_or(s);
-    let s = s.strip_prefix("\\\\?\\").unwrap_or(s);
-    let s = s.trim_end_matches('/');
+    let stripped = crate::config::strip_windows_verbatim_prefix(&p.to_string_lossy());
+    let norm = stripped.replace('\\', "/");
+    let trimmed = norm.trim().trim_end_matches('/');
     #[cfg(windows)]
     {
-        s.to_lowercase()
+        trimmed.to_lowercase()
     }
     #[cfg(not(windows))]
     {
-        s.to_string()
+        trimmed.to_string()
     }
 }
 
@@ -119,28 +117,17 @@ pub fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
     get_app_config_dir().join("projects").join(format!("{:016x}", hash)).join("tasks.json")
 }
 
-pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
+pub async fn try_load_tasks_from_disk(repo_root: &Path) -> Result<Vec<Task>, String> {
     let actual_root = resolve_actual_repo_root(repo_root);
     if actual_root.as_os_str().is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let boards_cfg = load_boards_config(&actual_root)
         .await
-        .unwrap_or_else(|_| crate::config::default_boards_config());
+        .map_err(|e| format!("Failed to load boards config: {}", e))?;
 
     // 1. Sole Source of Truth: High-speed SQLite Database (.cvh/harness.db)
-    let mut tasks = match crate::db::db_get_all_tasks(&actual_root) {
-        Ok(t) => t,
-        Err(e) => {
-            crate::logger::cvh_log(
-                Some(&actual_root),
-                "WARN",
-                "LOAD_TASKS",
-                &format!("db_get_all_tasks warning: {}", e),
-            );
-            Vec::new()
-        }
-    };
+    let mut tasks = crate::db::db_get_all_tasks(&actual_root)?;
 
     // 2. Purge foreign tasks that were contaminated into this SQLite database
     let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
@@ -156,9 +143,7 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                 foreign_ids.iter().cloned().collect::<Vec<_>>().join(", ")
             ),
         );
-        for fid in &foreign_ids {
-            let _ = crate::db::db_delete_task(&actual_root, fid);
-        }
+        crate::db::db_delete_tasks_cascade(&actual_root, &foreign_ids)?;
         tasks.retain(|t| !foreign_ids.contains(&t.id));
     }
 
@@ -174,7 +159,7 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
             "LOAD_TASKS",
             &format!("Healed tasks against boards config, persisting {} tasks", tasks.len()),
         );
-        let _ = save_tasks_to_disk(&actual_root, &tasks).await;
+        save_tasks_to_disk(&actual_root, &tasks).await?;
     }
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
@@ -191,10 +176,66 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     if max_on_disk > 0 {
         let current_seq = load_task_sequence(&actual_root).await;
         if max_on_disk > current_seq {
-            let _ = save_task_sequence(&actual_root, max_on_disk).await;
+            if let Err(e) = save_task_sequence(&actual_root, max_on_disk).await {
+                crate::logger::cvh_log(
+                    Some(&actual_root),
+                    "WARN",
+                    "LOAD_TASKS",
+                    &format!("Failed to advance task sequence to {}: {}", max_on_disk, e),
+                );
+            }
         }
     }
 
+    Ok(tasks)
+}
+
+pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
+    let actual_root = resolve_actual_repo_root(repo_root);
+    if actual_root.as_os_str().is_empty() {
+        return Vec::new();
+    }
+    let mut tasks = match crate::db::db_get_all_tasks(&actual_root) {
+        Ok(t) => t,
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(&actual_root),
+                "ERROR",
+                "LOAD_TASKS",
+                &format!("db_get_all_tasks failed (skipping heal/save): {}", e),
+            );
+            return Vec::new();
+        }
+    };
+    let boards_cfg = match load_boards_config(&actual_root).await {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(&actual_root),
+                "ERROR",
+                "LOAD_TASKS",
+                &format!("load_boards_config failed (skipping heal/save to protect SQLite): {}", e),
+            );
+            return tasks;
+        }
+    };
+
+    let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
+    if !foreign_ids.is_empty() {
+        if let Err(e) = crate::db::db_delete_tasks_cascade(&actual_root, &foreign_ids) {
+            crate::logger::cvh_log(Some(&actual_root), "WARN", "LOAD_TASKS", &format!("Foreign purge failed: {}", e));
+        } else {
+            tasks.retain(|t| !foreign_ids.contains(&t.id));
+        }
+    }
+    for t in tasks.iter_mut() {
+        t.project_path = Some(actual_root.to_string_lossy().to_string());
+    }
+    if heal_tasks(&mut tasks, &boards_cfg) {
+        if let Err(e) = save_tasks_to_disk(&actual_root, &tasks).await {
+            crate::logger::cvh_log(Some(&actual_root), "WARN", "LOAD_TASKS", &format!("Healed task save failed: {}", e));
+        }
+    }
     tasks
 }
 
@@ -291,8 +332,17 @@ pub async fn load_task_sequence(repo_root: &Path) -> u32 {
 }
 
 pub async fn save_task_sequence(repo_root: &Path, last_num: u32) -> Result<(), String> {
+    if !repo_root.as_os_str().is_empty() && repo_root.join(".cvh").exists() {
+        if let Err(e) = crate::db::db_update_task_sequence(repo_root, last_num) {
+            eprintln!("CVH [save_task_sequence]: DB sequence sync warning: {}", e);
+        } else {
+            return Ok(());
+        }
+    }
     let settings_dir = repo_root.join(".cvh").join("settings");
-    let _ = tokio::fs::create_dir_all(&settings_dir).await;
+    tokio::fs::create_dir_all(&settings_dir)
+        .await
+        .map_err(|e| format!("Failed to create settings directory {:?}: {}", settings_dir, e))?;
     let seq_path = settings_dir.join("sequence.json");
     let content = serde_json::to_string_pretty(&serde_json::json!({
         "last_task_num": last_num
@@ -303,9 +353,10 @@ pub async fn save_task_sequence(repo_root: &Path, last_num: u32) -> Result<(), S
         .await
         .map_err(|e| format!("Failed to save sequence file: {}", e))?;
 
-    // Also synchronize to .cvh/task-sequence.json for maximum reliability
     let alt_path = repo_root.join(".cvh").join("task-sequence.json");
-    let _ = atomic_write_file(&alt_path, &content).await;
+    atomic_write_file(&alt_path, &content)
+        .await
+        .map_err(|e| format!("Failed to save task-sequence.json: {}", e))?;
 
     Ok(())
 }

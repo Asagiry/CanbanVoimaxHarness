@@ -8,8 +8,8 @@ use crate::agent::{run_agent_loop, AgentSessionConfig};
 use crate::commands::state::{ActiveAgentHandle, AppState};
 use crate::config::{load_boards_config, load_llm_settings, load_pipeline_config};
 use crate::commands::healing::task_id_matches;
-use crate::commands::tasks::storage::{load_tasks_from_disk, save_tasks_to_disk};
-use super::execution_events::{build_agent_event_sink, handle_agent_run_completion};
+use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
+use super::execution_events::{build_agent_event_sink_with_worker, handle_agent_run_completion};
 use super::model_resolve::{cleanup_active_agent_reservation, resolve_task_active_agent_model};
 
 pub async fn run_agent(
@@ -92,10 +92,16 @@ pub(crate) async fn run_agent_inner(
         (abort_flag, join_slot, steering, advance_aborted)
     };
 
-    let mut tasks_to_use = load_tasks_from_disk(&root).await;
+    let mut tasks_to_use = match try_load_tasks_from_disk(&root).await {
+        Ok(t) => t,
+        Err(e) => {
+            cleanup_active_agent_reservation(&app_handle, &root, &task_id);
+            return Err(e);
+        }
+    };
     let initial_disk_count = tasks_to_use.len();
     let app_state = app_handle.state::<AppState>();
-    let is_current_project = app_state.get_root() == root;
+    let is_current_project = app_state.is_same_root(&root);
     if is_current_project {
         let guard = app_state.tasks.lock().unwrap_or_else(|p| p.into_inner());
         for mem_task in guard.iter() {
@@ -141,19 +147,25 @@ pub(crate) async fn run_agent_inner(
     let steer_prompt = if let Some(p) = prompt {
         let p_trimmed = p.trim();
         if !p_trimmed.is_empty() {
-            let has_existing_context = {
-                let map = app_state.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
-                map.get(&task_id).and_then(|cs| {
+            let has_existing_context = app_state
+                .get_agent_context(&root, &task_id)
+                .map(|cs| {
                     let g = cs.lock().unwrap_or_else(|p| p.into_inner());
-                    Some(g.messages.len() > 2)
-                }).unwrap_or(false)
-            };
+                    g.messages.len() > 2
+                })
+                .unwrap_or(false);
 
             if task.description.trim().is_empty() && !has_existing_context && images.is_none() {
                 task.description = p_trimmed.to_string();
                 task.updated_at = Utc::now().timestamp_millis();
 
-                let mut all_tasks = load_tasks_from_disk(&root).await;
+                let mut all_tasks = match try_load_tasks_from_disk(&root).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        cleanup_active_agent_reservation(&app_handle, &root, &task_id);
+                        return Err(e);
+                    }
+                };
                 if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                     t.description = task.description.clone();
                     t.updated_at = task.updated_at;
@@ -250,21 +262,11 @@ pub(crate) async fn run_agent_inner(
     let llm_settings = load_llm_settings(&root).await.unwrap_or_default();
     let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
     if model.trim().is_empty() {
+        cleanup_active_agent_reservation(&app_handle, &root, &task_id);
         return Err("Модель не выбрана: укажите модель в карточке задачи, настройках агента или Settings → Providers".to_string());
     }
 
-    let base_url = llm_settings
-        .providers
-        .iter()
-        .find(|p| p.models.iter().any(|m| m.id == model))
-        .map(|p| p.base_url.clone())
-        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
-
-    let api_key = llm_settings
-        .providers
-        .iter()
-        .find(|p| p.models.iter().any(|m| m.id == model))
-        .map(|p| p.api_key.clone());
+    let (base_url, api_key) = llm_settings.endpoint_for_pair(task.provider_id.as_deref(), &model);
 
     let worktree_dir = if let Some(ref rel_wt) = task.worktree_path {
         let trimmed = rel_wt.trim();
@@ -304,15 +306,24 @@ pub(crate) async fn run_agent_inner(
     }
 
     {
-        let mut all_tasks = load_tasks_from_disk(&root).await;
+        let mut all_tasks = match try_load_tasks_from_disk(&root).await {
+            Ok(t) => t,
+            Err(e) => {
+                cleanup_active_agent_reservation(&app_handle, &root, &task_id);
+                return Err(e);
+            }
+        };
         if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
             t.status = Some("running".to_string());
             t.completed_at = None;
             t.waiting_for_subtask_id = None;
             t.updated_at = Utc::now().timestamp_millis();
-            let _ = save_tasks_to_disk(&root, &all_tasks).await;
+            if let Err(e) = save_tasks_to_disk(&root, &all_tasks).await {
+                cleanup_active_agent_reservation(&app_handle, &root, &task_id);
+                return Err(e);
+            }
         }
-        if app_handle.state::<AppState>().get_root() == root {
+        if app_handle.state::<AppState>().is_same_root(&root) {
             if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
                 *guard = all_tasks;
             }
@@ -383,8 +394,9 @@ pub(crate) async fn run_agent_inner(
         let root_inner = root_task.clone();
         let model_inner = agent_cfg.model.clone();
 
-        let event_sink = build_agent_event_sink(app_inner, tid_inner, root_inner, model_inner);
+        let (event_sink, db_worker) = build_agent_event_sink_with_worker(app_inner, tid_inner, root_inner, model_inner);
         let result = run_agent_loop(agent_cfg, abort_flag, event_sink).await;
+        let _ = db_worker.await;
 
         handle_agent_run_completion(
             result,

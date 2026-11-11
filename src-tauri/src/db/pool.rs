@@ -30,15 +30,57 @@ pub fn normalize_db_root(root: &Path) -> PathBuf {
         }
     };
     if let Ok(canonical) = target.canonicalize() {
-        let s = canonical.to_string_lossy();
-        if let Some(stripped) = s.strip_prefix(r"\\?\") {
-            PathBuf::from(stripped)
-        } else {
-            canonical
-        }
+        let stripped = crate::config::strip_windows_verbatim_prefix(&canonical.to_string_lossy());
+        PathBuf::from(stripped)
     } else {
         target
     }
+}
+
+fn sqlite_err(code: i32, msg: String) -> rusqlite::Error {
+    rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(code), Some(msg))
+}
+
+fn quarantine_corrupt_db(db_path: &Path, reason: &str) {
+    let ts = chrono::Utc::now().timestamp_millis();
+    for suffix in ["", "-wal", "-shm"] {
+        let src = PathBuf::from(format!("{}{}", db_path.to_string_lossy(), suffix));
+        if src.exists() {
+            let dst = PathBuf::from(format!("{}{}.corrupt-{}", db_path.to_string_lossy(), suffix, ts));
+            if let Err(e) = std::fs::rename(&src, &dst) {
+                eprintln!(
+                    "CVH [db]: Failed to quarantine corrupt DB artifact {:?} -> {:?}: {}",
+                    src, dst, e
+                );
+            } else {
+                eprintln!(
+                    "CVH [db]: Quarantined corrupt DB artifact {:?} -> {:?} ({})",
+                    src, dst, reason
+                );
+            }
+        }
+    }
+}
+
+fn ensure_column_exists(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> Result<(), rusqlite::Error> {
+    let pragma = format!("PRAGMA table_info({});", table);
+    let mut stmt = conn.prepare(&pragma)?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let col_name: String = row.get(1)?;
+        if col_name.eq_ignore_ascii_case(column) {
+            return Ok(());
+        }
+    }
+    drop(rows);
+    drop(stmt);
+    conn.execute(alter_sql, [])?;
+    Ok(())
 }
 
 /// Initializes SQLite database at <root>/.cvh/harness.db and creates tables and indexes.
@@ -52,7 +94,12 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
     }
     let db_dir = normalized.join(".cvh");
     if !db_dir.exists() {
-        let _ = std::fs::create_dir_all(&db_dir);
+        std::fs::create_dir_all(&db_dir).map_err(|e| {
+            sqlite_err(
+                rusqlite::ffi::SQLITE_CANTOPEN,
+                format!("Failed to create .cvh directory {:?}: {}", db_dir, e),
+            )
+        })?;
     }
     let normalized = normalize_db_root(&normalized);
     let db_path = normalized.join(".cvh").join("harness.db");
@@ -61,15 +108,38 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
     // Set busy timeout to 5000ms to eliminate instant SQLITE_BUSY under WAL concurrent access
     conn.busy_timeout(std::time::Duration::from_millis(5000))?;
 
+    let quick_check_rows: Result<Vec<String>, rusqlite::Error> = (|| {
+        let mut stmt = conn.prepare("PRAGMA quick_check;")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    })();
+    match quick_check_rows {
+        Ok(rows) if rows.len() == 1 && rows[0].eq_ignore_ascii_case("ok") => {}
+        Ok(rows) => {
+            let reason = format!("PRAGMA quick_check failed: {}", rows.join("; "));
+            drop(conn);
+            quarantine_corrupt_db(&db_path, &reason);
+            return Err(sqlite_err(rusqlite::ffi::SQLITE_CORRUPT, reason));
+        }
+        Err(e) => {
+            let reason = format!("PRAGMA quick_check error: {}", e);
+            drop(conn);
+            quarantine_corrupt_db(&db_path, &reason);
+            return Err(sqlite_err(rusqlite::ffi::SQLITE_CORRUPT, reason));
+        }
+    }
+
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA synchronous = NORMAL;
          PRAGMA foreign_keys = ON;",
     )?;
 
-    let encoding: String = conn
-        .query_row("PRAGMA encoding", [], |row| row.get(0))
-        .unwrap_or_else(|_| "UTF-8".to_string());
+    let encoding: String = conn.query_row("PRAGMA encoding", [], |row| row.get(0))?;
     if !encoding.eq_ignore_ascii_case("UTF-8") {
         eprintln!(
             "CVH [db]: WARN database encoding is '{}', expected 'UTF-8'. SQLite TEXT is stored as-is; changing encoding requires VACUUM INTO and is not done automatically.",
@@ -83,9 +153,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks', 'task_todos', 'dialog_items')",
             [],
             |row| row.get::<_, i64>(0),
-        )
-        .map(|count| count == 3)
-        .unwrap_or(false);
+        )? == 3;
 
     let already_initialized = {
         let set = INITIALIZED_DBS.lock().unwrap_or_else(|p| p.into_inner());
@@ -187,22 +255,22 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         )?;
 
         // Ensure optional columns exist if table was initialized by an earlier schema
-        let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN tool_json TEXT", []);
-        let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN duration_ms REAL", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN attachments TEXT", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN tags TEXT", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0.0", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN hook_states TEXT", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN completed_at INTEGER", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_entered_at INTEGER", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_durations TEXT", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN provider_id TEXT", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN reasoning_effort TEXT", []);
-        let _ = conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", []);
-        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
+        ensure_column_exists(&conn, "dialog_items", "tool_json", "ALTER TABLE dialog_items ADD COLUMN tool_json TEXT")?;
+        ensure_column_exists(&conn, "dialog_items", "duration_ms", "ALTER TABLE dialog_items ADD COLUMN duration_ms REAL")?;
+        ensure_column_exists(&conn, "tasks", "attachments", "ALTER TABLE tasks ADD COLUMN attachments TEXT")?;
+        ensure_column_exists(&conn, "tasks", "tags", "ALTER TABLE tasks ADD COLUMN tags TEXT")?;
+        ensure_column_exists(&conn, "tasks", "position", "ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0.0")?;
+        ensure_column_exists(&conn, "tasks", "hook_states", "ALTER TABLE tasks ADD COLUMN hook_states TEXT")?;
+        ensure_column_exists(&conn, "tasks", "completed_at", "ALTER TABLE tasks ADD COLUMN completed_at INTEGER")?;
+        ensure_column_exists(&conn, "tasks", "stage_entered_at", "ALTER TABLE tasks ADD COLUMN stage_entered_at INTEGER")?;
+        ensure_column_exists(&conn, "tasks", "stage_durations", "ALTER TABLE tasks ADD COLUMN stage_durations TEXT")?;
+        ensure_column_exists(&conn, "tasks", "total_elapsed", "ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0")?;
+        ensure_column_exists(&conn, "tasks", "provider_id", "ALTER TABLE tasks ADD COLUMN provider_id TEXT")?;
+        ensure_column_exists(&conn, "tasks", "reasoning_effort", "ALTER TABLE tasks ADD COLUMN reasoning_effort TEXT")?;
+        conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", [])?;
 
-        auto_migrate_if_needed(&mut conn, root);
+        auto_migrate_if_needed(&mut conn, root)?;
 
         let mut set = INITIALIZED_DBS.lock().unwrap_or_else(|p| p.into_inner());
         set.insert(db_path.clone());
@@ -222,7 +290,12 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
     }
     let db_dir = normalized.join(".cvh");
     if !db_dir.exists() {
-        let _ = std::fs::create_dir_all(&db_dir);
+        std::fs::create_dir_all(&db_dir).map_err(|e| {
+            sqlite_err(
+                rusqlite::ffi::SQLITE_CANTOPEN,
+                format!("Failed to create .cvh directory {:?}: {}", db_dir, e),
+            )
+        })?;
     }
     let normalized = normalize_db_root(&normalized);
     let db_path = normalized.join(".cvh").join("harness.db");
@@ -232,14 +305,13 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
         return Ok(pool.clone());
     }
 
-    // Ensure database tables and schema are initialized first
+    // Ensure database tables, WAL mode, and schema are initialized first
     let _ = init_db(&normalized)?;
 
     let manager = SqliteConnectionManager::file(&db_path).with_init(|conn| {
         conn.busy_timeout(std::time::Duration::from_millis(5000))?;
         conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = NORMAL;
+            "PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;",
         )?;
         Ok(())
@@ -248,7 +320,7 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
     let pool = Pool::builder()
         .max_size(4)
         .build(manager)
-        .map_err(|e| rusqlite::Error::InvalidPath(PathBuf::from(e.to_string())))?;
+        .map_err(|e| sqlite_err(rusqlite::ffi::SQLITE_ERROR, format!("Failed to build DB pool: {}", e)))?;
 
     pools.insert(db_path, pool.clone());
     Ok(pool)
@@ -258,7 +330,7 @@ pub fn get_db_pool(root: &Path) -> Result<DbPool, rusqlite::Error> {
 pub fn get_db_conn(root: &Path) -> Result<DbConnection, rusqlite::Error> {
     let pool = get_db_pool(root)?;
     pool.get()
-        .map_err(|e| rusqlite::Error::InvalidPath(PathBuf::from(e.to_string())))
+        .map_err(|e| sqlite_err(rusqlite::ffi::SQLITE_BUSY, format!("Failed to acquire DB connection from pool: {}", e)))
 }
 
 /// Checkpoints the SQLite WAL file into the main database file.
@@ -268,10 +340,7 @@ pub fn checkpoint_db(root: &Path, truncate: bool) -> Result<(), rusqlite::Error>
     if root.as_os_str().is_empty() {
         return Ok(());
     }
-    let conn = match get_db_conn(root) {
-        Ok(c) => c,
-        Err(_) => return Ok(()),
-    };
+    let conn = get_db_conn(root)?;
     let sql = if truncate {
         "PRAGMA wal_checkpoint(TRUNCATE);"
     } else {
@@ -289,9 +358,16 @@ pub fn checkpoint_all_dbs(truncate: bool) {
     } else {
         "PRAGMA wal_checkpoint(PASSIVE);"
     };
-    for pool in pools.values() {
-        if let Ok(conn) = pool.get() {
-            let _ = conn.execute_batch(sql);
+    for (db_path, pool) in pools.iter() {
+        match pool.get() {
+            Ok(conn) => {
+                if let Err(e) = conn.execute_batch(sql) {
+                    eprintln!("CVH [db]: WAL checkpoint failed for {:?}: {}", db_path, e);
+                }
+            }
+            Err(e) => {
+                eprintln!("CVH [db]: Failed to acquire connection for WAL checkpoint {:?}: {}", db_path, e);
+            }
         }
     }
 }

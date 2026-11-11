@@ -27,14 +27,15 @@ pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEnt
         && !crate::config::is_binary_or_target_dir(&root)
         && !crate::config::is_app_own_directory(&root);
 
-    let root_str = root.to_string_lossy().to_string();
+    let root_key = AppState::normalize_root_key(&root);
     let registry = load_project_registry(None).await.unwrap_or_default();
     let mut entry = if is_valid {
-        if let Some(mut entry) = registry
-            .projects
-            .into_iter()
-            .find(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str))
-        {
+        if let Some(mut entry) = registry.projects.into_iter().find(|p| {
+            AppState::normalize_root_key(std::path::Path::new(&p.path)) == root_key
+                || p.root_path
+                    .as_deref()
+                    .is_some_and(|rp| AppState::normalize_root_key(std::path::Path::new(rp)) == root_key)
+        }) {
             entry.has_project = Some(true);
             entry
         } else {
@@ -232,10 +233,13 @@ pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectEntr
     let mut projects = registry.projects;
 
     // Ensure active project is represented in the list
-    let root_str = root.to_string_lossy().to_string();
-    let contains_current = projects
-        .iter()
-        .any(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str));
+    let root_key = AppState::normalize_root_key(&root);
+    let contains_current = projects.iter().any(|p| {
+        AppState::normalize_root_key(std::path::Path::new(&p.path)) == root_key
+            || p.root_path
+                .as_deref()
+                .is_some_and(|rp| AppState::normalize_root_key(std::path::Path::new(rp)) == root_key)
+    });
 
     if !contains_current && root.exists() {
         let entry = ProjectEntry::from_path(&root);
@@ -307,7 +311,7 @@ pub async fn remove_project(path: String, state: State<'_, AppState>) -> Result<
     }
     let current = state.get_root();
     let is_current = !current.as_os_str().is_empty()
-        && current.to_string_lossy().to_lowercase() == target.to_string_lossy().to_lowercase();
+        && AppState::normalize_root_key(&current) == AppState::normalize_root_key(&target);
     remove_project_from_registry(None, &target)
         .await
         .map_err(|e| format!("Failed to remove project from registry: {}", e))?;

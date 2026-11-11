@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::commands::healing::task_id_matches;
-use crate::commands::tasks::storage::{load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn update_task(
@@ -29,7 +29,7 @@ pub async fn update_task(
     )
     .await;
 
-    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = try_load_tasks_from_disk(&root).await?;
     let Some(task_idx) = tasks.iter().position(|t| task_id_matches(&t.id, &task_id)) else {
         if updated_subagent || task_id.contains(".sub-") || task_id.contains(":sub:") {
             return Ok(Task {
@@ -78,10 +78,10 @@ pub async fn update_task(
     task.updated_at = now;
 
     let updated = task.clone();
-    let _ = crate::db::db_upsert_task(&root, &updated);
+    crate::db::db_upsert_task(&root, &updated)?;
     save_tasks_to_disk(&root, &tasks).await?;
 
-    if state.get_root() == root {
+    if state.is_same_root(&root) {
         let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());
         *guard = tasks.clone();
     }

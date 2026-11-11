@@ -10,7 +10,7 @@ use crate::commands::state::AppState;
 use crate::config::{load_boards_config, resolve_actual_repo_root};
 use crate::hooks::{execute_hook, HookContext};
 use crate::commands::healing::stage_id_matches;
-use crate::commands::tasks::storage::{load_tasks_from_disk, resolve_or_allocate_task_id, save_tasks_to_disk};
+use crate::commands::tasks::storage::{resolve_or_allocate_task_id, save_tasks_to_disk, try_load_tasks_from_disk};
 use super::hook_records::record_task_hook_result;
 
 #[allow(clippy::too_many_arguments)]
@@ -81,7 +81,7 @@ pub async fn internal_create_task(
         ),
         Some(&format!("actual_root='{}'", root.display())),
     );
-    let mut tasks = load_tasks_from_disk(root).await;
+    let mut tasks = try_load_tasks_from_disk(root).await?;
 
     let effective_board_id = match board_id.as_deref() {
         Some(b) if !b.trim().is_empty() => b.trim().to_string(),
@@ -145,13 +145,13 @@ pub async fn internal_create_task(
     };
 
     // Persist immediately to SQLite so hooks or subsequent transitions find the task
-    let _ = crate::db::db_upsert_task(root, &new_task);
+    crate::db::db_upsert_task(root, &new_task)?;
 
     tasks.push(new_task.clone());
-    let _ = save_tasks_to_disk(root, &tasks).await;
+    save_tasks_to_disk(root, &tasks).await?;
 
     if let Some(state_ref) = state {
-        if state_ref.get_root().as_path() == root {
+        if state_ref.is_same_root(root) {
             let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
             guard.retain(|t| t.id != new_task.id);
             guard.push(new_task.clone());
@@ -328,8 +328,8 @@ pub async fn internal_create_task(
     }
 
     // After hooks, update worktree_path and branch fields.
-    // If the task was moved or modified concurrently, preserve its latest stage_id and status.
-    let mut updated_tasks = load_tasks_from_disk(root).await;
+    // If the task was deleted while async hooks ran, do NOT resurrect it.
+    let mut updated_tasks = try_load_tasks_from_disk(root).await?;
     if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {
         t.worktree_path = new_task.worktree_path.clone();
         t.branch = new_task.branch.clone();
@@ -337,11 +337,17 @@ pub async fn internal_create_task(
         t.updated_at = Utc::now().timestamp_millis();
         new_task = t.clone();
     } else {
-        updated_tasks.push(new_task.clone());
+        if let Some(state_ref) = state {
+            if state_ref.is_same_root(root) {
+                let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
+                guard.retain(|t| t.id != new_task.id);
+            }
+        }
+        return Err(format!("Task {} was deleted during creation hooks", new_task.id));
     }
 
     if let Some(state_ref) = state {
-        if state_ref.get_root().as_path() == root {
+        if state_ref.is_same_root(root) {
             let mut guard = state_ref.tasks.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
                 t.worktree_path = new_task.worktree_path.clone();
@@ -353,11 +359,6 @@ pub async fn internal_create_task(
                 new_task.board_id = t.board_id.clone();
             } else {
                 guard.push(new_task.clone());
-            }
-            for mem_t in guard.iter() {
-                if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
-                    updated_tasks.push(mem_t.clone());
-                }
             }
         }
     }
