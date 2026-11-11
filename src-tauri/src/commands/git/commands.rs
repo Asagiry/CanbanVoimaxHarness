@@ -40,7 +40,8 @@ pub async fn get_task_git_diff(
     }
 
     let status_stdout = crate::agent::decode_output_bytes(&status_output.stdout);
-    let mut file_entries: Vec<(String, String)> = Vec::new();
+    let mut file_entries_map: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
 
     for line in status_stdout.lines() {
         let line = line.trim_end();
@@ -67,10 +68,22 @@ pub async fn get_task_git_diff(
             "M".to_string()
         };
 
-        file_entries.push((unquoted, status));
+        // Guard against phantom deletion: if file physically exists on disk, it cannot be "D"
+        if status == "D" && workdir.join(&unquoted).exists() {
+            continue;
+        }
+
+        file_entries_map
+            .entry(unquoted)
+            .and_modify(|existing| {
+                if *existing == "D" {
+                    *existing = status.clone();
+                }
+            })
+            .or_insert(status);
     }
 
-    if file_entries.is_empty() {
+    if file_entries_map.is_empty() {
         return Ok(TaskGitDiff {
             files: Vec::new(),
             total_additions: 0,
@@ -119,7 +132,7 @@ pub async fn get_task_git_diff(
     let mut total_additions: usize = 0;
     let mut total_deletions: usize = 0;
 
-    for (file_path, status) in file_entries {
+    for (file_path, status) in file_entries_map {
         // High-performance unified patch resolution:
         // 1. If diff_blocks has the patch (from 'git diff HEAD'), use it immediately.
         // 2. If status is "A" (untracked file) and not in diff_blocks, read file directly in Rust
@@ -145,6 +158,9 @@ pub async fn get_task_git_diff(
                 format!("diff --git a/{0} b/{0}\nnew file mode 100644\nBinary file\n", file_path)
             }
         } else if status == "D" {
+            if workdir.join(&file_path).exists() {
+                continue;
+            }
             format!("diff --git a/{0} b/{0}\ndeleted file\n--- a/{0}\n+++ /dev/null\n", file_path)
         } else {
             String::new()
