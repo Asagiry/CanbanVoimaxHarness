@@ -188,7 +188,7 @@ export function ColumnStageCard({
               />
             )}
 
-            <span className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-none ${stage.isDeleted ? 'line-through opacity-50' : ''}`} title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}>
+            <span className={`font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate leading-tight ${stage.isDeleted ? 'line-through opacity-50' : ''}`} title={stage.isDeleted ? t('cortex.deletedUnsaved') : undefined}>
               {stage.stageTitle}
             </span>
             {columnDirty && <DirtyDot />}
