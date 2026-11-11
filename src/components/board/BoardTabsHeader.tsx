@@ -257,9 +257,9 @@ export default function BoardTabsHeader({
 
         {/* Right: Board Stats & Action Buttons */}
         <div className="flex items-center space-x-3 shrink-0">
-          <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#71717a] text-xs">
+          <div className="hidden sm:flex items-baseline space-x-1.5 text-[#666666] dark:text-[#71717a] text-xs">
             <span>{t('board.tasksOnBoard')}</span>
-            <span className="text-[#171717] dark:text-[#f4f4f5] font-semibold tabular-nums font-mono leading-none">
+            <span className="text-[#171717] dark:text-[#f4f4f5] font-semibold tabular-nums font-mono">
               {tasksCount}
             </span>
           </div>

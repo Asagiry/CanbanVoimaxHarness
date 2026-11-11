@@ -9,6 +9,7 @@ Typed Tauri events enter through `tauriEventGateway.ts` and the modular `src/ser
 | --- | --- |
 | `src/main.tsx` | React entrypoint mounting the application. |
 | `src/index.css` | Global styles and Tailwind entry. |
+| `src/fonts.css` | Offline `@font-face` declarations for bundled `Inter` and `JetBrains Mono` in `public/fonts/`. |
 | `src/App.tsx` | Application composition, providers, bootstrap and overlays. |
 | `src/components/splash/SplashScreen.tsx` | Boot screen displayed while backend state synchronizes. |
 | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
