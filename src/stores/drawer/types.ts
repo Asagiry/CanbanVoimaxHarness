@@ -45,6 +45,7 @@ export interface DrawerMetaActions {
   closeDrawer: () => void;
   goBackDrawer: () => void;
   setActiveTab: (tab: DrawerTab) => void;
+  resetProjectContext: () => void;
 }
 
 export type DrawerMetaSlice = DrawerMetaState & DrawerMetaActions;

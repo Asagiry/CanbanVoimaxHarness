@@ -168,7 +168,14 @@ export async function saveRulesAction(set: CortexSet, get: CortexGet): Promise<v
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('save_cortex_file', { path: targetPath, content: activeFile.content });
     } catch (err) {
-      console.info('save_cortex_file not available or in web mode:', err);
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error('save_cortex_file failed:', err);
+      set({
+        isSaving: false,
+        saveFeedback: null,
+        cvhGitError: `Не удалось сохранить ${activeFile.name}: ${detail}`,
+      });
+      return;
     }
   }
 
@@ -197,6 +204,7 @@ export async function saveRulesAction(set: CortexSet, get: CortexGet): Promise<v
     activeFile: savedFile,
     isSaving: false,
     saveFeedback: feedbackMsg,
+    cvhGitError: null,
   });
 
   setTimeout(() => {

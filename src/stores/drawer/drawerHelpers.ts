@@ -19,6 +19,13 @@ export function cancelActivitySave(taskId: string) {
 }
 export const cancelDialogSave = cancelActivitySave; // backward-compatible alias
 
+export function cancelAllActivitySaves(): void {
+  for (const taskId of Object.keys(activitySaveTimers)) {
+    clearTimeout(activitySaveTimers[taskId]);
+    delete activitySaveTimers[taskId];
+  }
+}
+
 export function scheduleActivitySave(taskId: string, delayMs = 1000) {
   if (activitySaveTimers[taskId]) {
     clearTimeout(activitySaveTimers[taskId]);

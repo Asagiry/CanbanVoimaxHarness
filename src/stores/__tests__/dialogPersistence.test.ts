@@ -202,4 +202,39 @@ describe('Dialog Persistence & Stream Unification (CVH-051)', () => {
     store.appendActivityItem(taskId, { id: 'h2', type: 'steer', timestamp: '21:28:52', content });
     expect(useDrawerStore.getState().activityFeed[taskId]).toHaveLength(1);
   });
+
+  it('compactTaskContext reports backend saved_tokens and surfaces IPC failure without fake 2450', async () => {
+    mockInvoke.mockImplementation(async (cmd) => {
+      if (cmd === 'compact_context') {
+        return { tokens_before: 5000, tokens_after: 3800, evaporated_count: 2, saved_tokens: 1200 };
+      }
+      return [];
+    });
+    const okRes = await useDrawerStore.getState().compactTaskContext('COMPACT-1');
+    expect(okRes.savedTokens).toBe(1200);
+    expect(okRes.evaporatedCount).toBe(2);
+
+    mockInvoke.mockImplementationOnce(async (cmd) => {
+      if (cmd === 'compact_context') throw new Error('compact ipc error');
+      return [];
+    });
+    await expect(useDrawerStore.getState().compactTaskContext('COMPACT-2')).rejects.toThrow('compact ipc error');
+    const failedTool = useDrawerStore.getState().toolExecutions['COMPACT-2']?.[0];
+    expect(failedTool?.status).toBe('failed');
+    expect(failedTool?.stderr).toContain('compact ipc error');
+  });
+
+  it('loadTaskActivity stops after bounded retries when streamRollbackVersions keeps changing', async () => {
+    let calls = 0;
+    mockInvoke.mockImplementation(async (cmd) => {
+      if (cmd === 'load_task_activity') {
+        calls += 1;
+        useDrawerStore.setState({ streamRollbackVersions: { 'RETRY-1': calls } });
+        return [];
+      }
+      return [];
+    });
+    await useDrawerStore.getState().loadTaskActivity('RETRY-1');
+    expect(calls).toBe(3);
+  });
 });

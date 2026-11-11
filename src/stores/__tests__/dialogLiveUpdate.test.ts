@@ -52,14 +52,20 @@ describe('Dialog live update without open drawer (CVH-066)', () => {
     expect(useDrawerStore.getState().activityFeed['CVH-063'].length).toBeGreaterThanOrEqual(1);
   });
 
-  it('loadTaskActivity with empty response does not clear live feed', async () => {
+  it('loadTaskActivity with empty response does not clear live feed while agent is active, but clears stale feed when idle', async () => {
     const taskId = 'CVH-064';
+    useDrawerStore.getState().setActiveAgentTask(taskId, true);
     useDrawerStore.getState().appendOutput(taskId, 'live chunk');
     const before = useDrawerStore.getState().activityFeed[taskId].length;
     expect(before).toBeGreaterThan(0);
     mockInvoke.mockResolvedValue([]);
     await useDrawerStore.getState().loadTaskActivity(taskId);
     expect(useDrawerStore.getState().activityFeed[taskId].length).toBe(before);
+
+    // Once agent is no longer active, empty backend response clears stale feed
+    useDrawerStore.getState().setActiveAgentTask(taskId, false);
+    await useDrawerStore.getState().loadTaskActivity(taskId);
+    expect(useDrawerStore.getState().activityFeed[taskId]).toEqual([]);
   });
 
   it('loadTaskActivity merges live-only chunks after hydration', async () => {

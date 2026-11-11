@@ -34,7 +34,9 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   toolSettings: DEFAULT_TOOL_SETTINGS,
   toolDescriptions: {},
   toolCustomSchemas: {},
+  policyError: null,
 
+  clearPolicyError: () => set({ policyError: null }),
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
 
@@ -143,8 +145,8 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         if (colById?.persona && stageOverrides[colById.persona] && typeof stageOverrides[colById.persona][toolId] === 'boolean') {
           return stageOverrides[colById.persona][toolId];
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Failed to resolve board columns in isToolAllowed:', err);
       }
       if (DEFAULT_OVERRIDES[stageOrAgentId] && typeof DEFAULT_OVERRIDES[stageOrAgentId][toolId] === 'boolean') {
         return DEFAULT_OVERRIDES[stageOrAgentId][toolId];
@@ -163,7 +165,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         saved += tool.tokenWeight;
       }
     }
-    return saved > 0 ? saved : 2400;
+    return saved;
   },
 
   resetDefaults: () => {
@@ -201,10 +203,13 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           toolSettings: mergedSettings,
           toolDescriptions: policies.toolDescriptions || {},
           toolCustomSchemas: pruneDefaultCustomSchemas(policies.toolCustomSchemas, mergedSettings),
+          policyError: null,
         });
       }
-    } catch {
-      // In web browser or mock environment, keep memory defaults
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('get_tool_policies IPC failed:', err);
+      set({ policyError: errMsg });
     }
   },
 
@@ -220,8 +225,11 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           toolCustomSchemas,
         },
       });
-    } catch {
-      // Browser or test fallback
+      set({ policyError: null });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('save_tool_policies IPC failed:', err);
+      set({ policyError: errMsg });
     }
   },
 }));

@@ -147,8 +147,8 @@ export async function triggerRunAgent(
       void syncTasksBackend(reverted);
     }
 
-    // Display user notification / alert so the user understands why the agent did not start
-    alert(`Не удалось запустить агента для задачи "${taskId}":\n${errMsg}`);
+    // Surface non-blocking error state in store instead of blocking window.alert()
+    useBoardStore.getState().setBoardError(`Не удалось запустить агента для задачи "${taskId}": ${errMsg}`);
   } finally {
     inFlightAgentRuns.delete(normalizedId);
   }

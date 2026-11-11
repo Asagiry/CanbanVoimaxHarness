@@ -26,7 +26,10 @@ export interface BoardMetaSlice {
   isLoadingBoards: boolean;
   isBoardsLoaded: boolean;
   isTauriConnected: boolean;
+  boardError: string | null;
 
+  setBoardError: (error: string | null) => void;
+  clearBoardError: () => void;
   setBoards: (boards: BoardDef[]) => void;
   setActiveBoard: (boardId: string) => Promise<void>;
   loadBoards: () => Promise<void>;

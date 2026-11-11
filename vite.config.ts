@@ -21,17 +21,17 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
             }
             if (id.includes('@hello-pangea/dnd')) {
               return 'vendor-dnd';
             }
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons';
-            }
             if (id.includes('@tauri-apps')) {
               return 'vendor-tauri';
+            }
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) {
+              return 'vendor-react';
             }
             return 'vendor';
           }

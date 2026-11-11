@@ -5,6 +5,19 @@ import {
   DrawerActivityItem,
 } from '../types';
 import { SubagentInfo } from '../../../types';
+import { MAX_LOAD_ROLLBACK_RETRIES } from '../activityLoadHelpers';
+
+interface SubagentToolParams {
+  subagent_id?: string;
+  title?: string;
+  prompt?: string;
+  role?: string;
+}
+
+function asToolParams(raw: unknown): SubagentToolParams {
+  if (!raw || typeof raw !== 'object') return {};
+  return raw as SubagentToolParams;
+}
 
 export const createSubagentsSlice: StateCreator<
   DrawerState,
@@ -24,35 +37,31 @@ export const createSubagentsSlice: StateCreator<
   registerSubagentMapping: (toolId, subagentId) => {
     if (!toolId || !subagentId) return;
     set((state) => ({
-      toolIdToSubagentId: {
-        ...state.toolIdToSubagentId,
-        [toolId]: subagentId,
-      },
-      subagentIdToToolId: {
-        ...state.subagentIdToToolId,
-        [subagentId]: toolId,
-      },
+      toolIdToSubagentId: { ...state.toolIdToSubagentId, [toolId]: subagentId },
+      subagentIdToToolId: { ...state.subagentIdToToolId, [subagentId]: toolId },
     }));
   },
 
   openSubagent: (subagentId, title, role, prompt) => {
     const state = get();
-    // Resolve subagentId using toolIdToSubagentId map if a tool ID was passed
     let resolvedSubagentId = state.toolIdToSubagentId[subagentId] || subagentId;
 
-    // Fallback: search tool executions if still unresolved
     if (resolvedSubagentId === subagentId && state.activeTaskId) {
       const tools = state.toolExecutions[state.activeTaskId] || [];
       const matched = tools.find((t) => t.id === subagentId);
       if (matched) {
-        const pId = (matched.params as Record<string, unknown> | undefined)?.subagent_id;
+        const pId = asToolParams(matched.params).subagent_id;
         if (typeof pId === 'string' && pId) {
           resolvedSubagentId = pId;
         } else if (matched.stdout) {
           try {
-            const parsed = JSON.parse(matched.stdout);
-            if (parsed.subagent_id) resolvedSubagentId = parsed.subagent_id;
-          } catch {}
+            const parsed = JSON.parse(matched.stdout) as { subagent_id?: unknown };
+            if (typeof parsed.subagent_id === 'string' && parsed.subagent_id) {
+              resolvedSubagentId = parsed.subagent_id;
+            }
+          } catch (parseErr) {
+            console.debug('openSubagent: stdout is not JSON, checking regex:', parseErr);
+          }
           if (resolvedSubagentId === subagentId) {
             const m = matched.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
             if (m && m[1]) resolvedSubagentId = m[1];
@@ -65,23 +74,29 @@ export const createSubagentsSlice: StateCreator<
     if (!resolvedPrompt && state.activeTaskId) {
       const known = state.subagents[state.activeTaskId] || [];
       const storeSub = known.find(
-        (s) => s.id === resolvedSubagentId || s.id === subagentId || s.toolCallId === resolvedSubagentId || s.toolCallId === subagentId
+        (s) =>
+          s.id === resolvedSubagentId ||
+          s.id === subagentId ||
+          s.toolCallId === resolvedSubagentId ||
+          s.toolCallId === subagentId,
       );
       if (storeSub?.prompt) {
         resolvedPrompt = storeSub.prompt;
       } else {
         const tools = state.toolExecutions[state.activeTaskId] || [];
-        const spawnTool = tools.find(
-          (t) =>
-            (t.toolName === 'subagent' || t.toolName === 'subagent_bg') &&
-            (t.id === resolvedSubagentId ||
-              t.id === subagentId ||
-              (t.params as Record<string, unknown> | undefined)?.subagent_id === resolvedSubagentId ||
-              (t.params as Record<string, unknown> | undefined)?.subagent_id === subagentId ||
-              state.toolIdToSubagentId[t.id] === resolvedSubagentId ||
-              state.toolIdToSubagentId[t.id] === subagentId)
-        );
-        const toolPrompt = (spawnTool?.params as Record<string, unknown> | undefined)?.prompt;
+        const spawnTool = tools.find((t) => {
+          if (t.toolName !== 'subagent' && t.toolName !== 'subagent_bg') return false;
+          const pSubId = asToolParams(t.params).subagent_id;
+          return (
+            t.id === resolvedSubagentId ||
+            t.id === subagentId ||
+            pSubId === resolvedSubagentId ||
+            pSubId === subagentId ||
+            state.toolIdToSubagentId[t.id] === resolvedSubagentId ||
+            state.toolIdToSubagentId[t.id] === subagentId
+          );
+        });
+        const toolPrompt = asToolParams(spawnTool?.params).prompt;
         if (typeof toolPrompt === 'string' && toolPrompt) {
           resolvedPrompt = toolPrompt;
         } else {
@@ -128,13 +143,17 @@ export const createSubagentsSlice: StateCreator<
     if (!parentTaskId || !subagentId) return;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const rollbackVersion = get().streamRollbackVersions[subagentId];
-      const items = await invoke<DrawerActivityItem[]>('load_subagent_dialog', {
-        parentTaskId,
-        subagentId,
-      });
-      if (rollbackVersion !== get().streamRollbackVersions[subagentId]) {
-        return get().loadSubagentDialog(parentTaskId, subagentId);
+      let items: DrawerActivityItem[] | null = null;
+      for (let attempt = 0; attempt < MAX_LOAD_ROLLBACK_RETRIES; attempt++) {
+        const rollbackVersion = get().streamRollbackVersions[subagentId];
+        const loaded = await invoke<DrawerActivityItem[]>('load_subagent_dialog', {
+          parentTaskId,
+          subagentId,
+        });
+        if (rollbackVersion === get().streamRollbackVersions[subagentId]) {
+          items = loaded;
+          break;
+        }
       }
       if (items && Array.isArray(items) && items.length > 0) {
         set((state) => {
@@ -143,13 +162,9 @@ export const createSubagentsSlice: StateCreator<
             [subagentId]: items,
           };
           const mappedToolId = state.subagentIdToToolId[subagentId];
-          if (mappedToolId) {
-            nextFeed[mappedToolId] = items;
-          }
+          if (mappedToolId) nextFeed[mappedToolId] = items;
           const mappedSubId = state.toolIdToSubagentId[subagentId];
-          if (mappedSubId) {
-            nextFeed[mappedSubId] = items;
-          }
+          if (mappedSubId) nextFeed[mappedSubId] = items;
           return { activityFeed: nextFeed };
         });
       }
@@ -167,12 +182,10 @@ export const createSubagentsSlice: StateCreator<
         set((state) => {
           const existing = state.subagents[parentTaskId] || [];
           const mergedMap = new Map<string, SubagentInfo>();
-          for (const item of loaded) {
-            mergedMap.set(item.id, item);
-          }
+          for (const item of loaded) mergedMap.set(item.id, item);
           for (const ex of existing) {
-            if (mergedMap.has(ex.id)) {
-              const current = mergedMap.get(ex.id)!;
+            const current = mergedMap.get(ex.id);
+            if (current) {
               mergedMap.set(ex.id, {
                 ...current,
                 createdAt:
@@ -189,44 +202,37 @@ export const createSubagentsSlice: StateCreator<
             }
           }
           return {
-            subagents: {
-              ...state.subagents,
-              [parentTaskId]: Array.from(mergedMap.values()),
-            },
+            subagents: { ...state.subagents, [parentTaskId]: Array.from(mergedMap.values()) },
           };
         });
       }
-    } catch {
-      // In web or mock mode, extract from toolExecutions & activityFeed
+    } catch (err) {
+      console.info('list_subagents fallback to local tools:', err);
       const state = get();
       const tools = state.toolExecutions[parentTaskId] || [];
       const derived: SubagentInfo[] = [];
       for (const t of tools) {
-        if (t.toolName === 'subagent' || t.toolName === 'subagent_bg') {
-          const params = (t.params as any) || {};
-          const subId = params.subagent_id || state.toolIdToSubagentId[t.id] || t.id;
-          const feed = state.activityFeed[subId] || [];
-          const createdTime = t.timestamp ? Date.parse(t.timestamp) : undefined;
-          derived.push({
-            id: subId,
-            parentTaskId,
-            toolCallId: t.id,
-            title: params.title || params.prompt?.slice(0, 50) || 'Субагент',
-            role: params.role || 'general',
-            prompt: params.prompt || '',
-            status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
-            createdAt: createdTime && !Number.isNaN(createdTime) ? createdTime : undefined,
-            durationMs: t.durationMs,
-            stepsCount: feed.length,
-          });
-        }
+        if (t.toolName !== 'subagent' && t.toolName !== 'subagent_bg') continue;
+        const params = asToolParams(t.params);
+        const subId = params.subagent_id || state.toolIdToSubagentId[t.id] || t.id;
+        const feed = state.activityFeed[subId] || [];
+        const createdTime = t.timestamp ? Date.parse(t.timestamp) : undefined;
+        derived.push({
+          id: subId,
+          parentTaskId,
+          toolCallId: t.id,
+          title: params.title || params.prompt?.slice(0, 50) || 'Субагент',
+          role: params.role || 'general',
+          prompt: params.prompt || '',
+          status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
+          createdAt: createdTime && !Number.isNaN(createdTime) ? createdTime : undefined,
+          durationMs: t.durationMs,
+          stepsCount: feed.length,
+        });
       }
       if (derived.length > 0) {
         set((s) => ({
-          subagents: {
-            ...s.subagents,
-            [parentTaskId]: derived,
-          },
+          subagents: { ...s.subagents, [parentTaskId]: derived },
         }));
       }
     }
@@ -237,20 +243,13 @@ export const createSubagentsSlice: StateCreator<
     set((state) => {
       const list = state.subagents[parentTaskId] || [];
       const idx = list.findIndex(
-        (s) => s.id === subagent.id || (subagent.toolCallId && s.toolCallId === subagent.toolCallId)
+        (s) => s.id === subagent.id || (subagent.toolCallId && s.toolCallId === subagent.toolCallId),
       );
-      let nextList: SubagentInfo[];
-      if (idx >= 0) {
-        nextList = [...list];
-        nextList[idx] = { ...nextList[idx], ...subagent };
-      } else {
-        nextList = [...list, subagent];
-      }
+      const nextList = idx >= 0
+        ? list.map((item, i) => (i === idx ? { ...item, ...subagent } : item))
+        : [...list, subagent];
       return {
-        subagents: {
-          ...state.subagents,
-          [parentTaskId]: nextList,
-        },
+        subagents: { ...state.subagents, [parentTaskId]: nextList },
       };
     });
   },
@@ -303,10 +302,7 @@ export const createSubagentsSlice: StateCreator<
           if (s.id === subagentId || (s.toolCallId && s.toolCallId === subagentId)) {
             listChanged = true;
             changed = true;
-            return {
-              ...s,
-              stepsCount: (s.stepsCount || 0) + 1,
-            };
+            return { ...s, stepsCount: (s.stepsCount || 0) + 1 };
           }
           return s;
         });
@@ -341,13 +337,10 @@ export const createSubagentsSlice: StateCreator<
         nextSubagents[taskId] = list.map((s) =>
           s.id === subagentId || s.id === resolvedId || s.toolCallId === subagentId
             ? { ...s, ...config }
-            : s
+            : s,
         );
       }
-      return {
-        subagentConfigs: nextConfigs,
-        subagents: nextSubagents,
-      };
+      return { subagentConfigs: nextConfigs, subagents: nextSubagents };
     });
   },
 });

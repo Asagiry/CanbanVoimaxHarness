@@ -130,4 +130,36 @@ describe('Provider selection and cache accounting', () => {
     expect(summary.cacheHitRate).toBe(90);
     expect(useDrawerStore.getState().taskTelemetry['CACHE-1'].inputTokens).toBe(500);
   });
+
+  it('saveSettings propagates backend error instead of masking as saved', async () => {
+    invoke.mockRejectedValueOnce(new Error('disk write failed'));
+    const ok = await useSettingsStore.getState().saveSettings({ model: 'gpt-4o' });
+    expect(ok).toBe(false);
+    expect(useSettingsStore.getState().saveStatus).toBe('error');
+    expect(useSettingsStore.getState().errorMessage).toContain('disk write failed');
+  });
+
+  it('loadSettings uses backendSettings even when providers have 0 models', async () => {
+    invoke.mockResolvedValueOnce({
+      provider: 'Custom Proxy',
+      baseUrl: 'http://127.0.0.1:9000/v1',
+      apiKey: 'sk-empty-catalog',
+      model: '',
+      compactorModel: 'inherit',
+      providers: [{
+        id: 'custom proxy',
+        name: 'Custom Proxy',
+        isCustom: true,
+        apiKey: 'sk-empty-catalog',
+        baseUrl: 'http://127.0.0.1:9000/v1',
+        protocol: 'openai',
+        models: [],
+      }],
+    });
+    await useSettingsStore.getState().loadSettings();
+    const state = useSettingsStore.getState();
+    expect(state.providers[0].id).toBe('custom proxy');
+    expect(state.providers[0].apiKey).toBe('sk-empty-catalog');
+    expect(state.settings.baseUrl).toBe('http://127.0.0.1:9000/v1');
+  });
 });

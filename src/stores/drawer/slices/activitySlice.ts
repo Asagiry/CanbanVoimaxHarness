@@ -11,11 +11,10 @@ import {
   mergeToolExecutionIntoState,
   applyToolExecutionUpdate,
   mergeActivityItemIntoFeed,
-  deduplicateLoadedActivityItems,
-  hydrateLoadedActivityState,
   evaporateToolExecutionLogs,
   buildClearedTaskActivityState,
 } from '../activityDedup';
+import { buildLoadedTaskActivityPatch, MAX_LOAD_ROLLBACK_RETRIES } from '../activityLoadHelpers';
 import { setPendingQuestion, answerQuestion } from '../activityQuestionHelpers';
 import { flushStreamChunks } from './streamSlice';
 
@@ -58,13 +57,19 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
   addToolExecution: (taskId, tool) => {
     const toolWithCreatedAt: ToolExecution = { ...tool, createdAt: tool.createdAt || Date.now() };
     if (toolWithCreatedAt.toolName === 'subagent' || toolWithCreatedAt.toolName === 'subagent_bg') {
-      extractSubagentIdsFromTool(toolWithCreatedAt.id, toolWithCreatedAt.params, toolWithCreatedAt.stdout, get().registerSubagentMapping, true);
+      extractSubagentIdsFromTool(
+        toolWithCreatedAt.id,
+        toolWithCreatedAt.params,
+        toolWithCreatedAt.stdout,
+        get().registerSubagentMapping,
+        true,
+      );
     }
     set((state) => {
       const { updatedFeed, updatedTools } = mergeToolExecutionIntoState(
         state.activityFeed[taskId] || [],
         state.toolExecutions[taskId] || [],
-        toolWithCreatedAt
+        toolWithCreatedAt,
       );
       return {
         toolExecutions: { ...state.toolExecutions, [taskId]: updatedTools },
@@ -83,7 +88,7 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
         state.activityFeed[taskId] || [],
         state.toolExecutions[taskId] || [],
         toolId,
-        partial
+        partial,
       );
       return {
         toolExecutions: { ...state.toolExecutions, [taskId]: updatedTools },
@@ -127,44 +132,49 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
   compactTaskContext: async (taskId) => {
     const toolId = get().injectOptimisticCompactTool(taskId);
     const startTime = performance.now();
-    let savedTokens = 2450;
-    let evaporatedCount = 0;
-
-    set((state) => {
-      const updatedTools = (state.toolExecutions[taskId] || []).map((t, idx) => {
-        if (idx > 2 && (t.stdout?.length || 0) > 500) {
-          evaporatedCount += 1;
-          return { ...t, stdout: `[Evaporated by State-Preserving Compactor: ${t.stdout?.length} chars truncated. Preserved status: ${t.status}]` };
-        }
-        return t;
-      });
-      return { toolExecutions: { ...state.toolExecutions, [taskId]: updatedTools } };
-    });
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const res = await invoke<CompactionReport>('compact_context', { taskId, toolId });
-      if (res?.saved_tokens) savedTokens = res.saved_tokens;
-      if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
-      if (res?.tokens_after) {
+      const savedTokens = typeof res?.saved_tokens === 'number' && Number.isFinite(res.saved_tokens)
+        ? res.saved_tokens
+        : 0;
+      const evaporatedCount = typeof res?.evaporated_count === 'number' && Number.isFinite(res.evaporated_count)
+        ? res.evaporated_count
+        : 0;
+
+      if (typeof res?.tokens_after === 'number' && res.tokens_after > 0) {
         get().setTaskTokens(taskId, res.tokens_after);
-        get().updateTelemetry(taskId, { inputTokens: res.tokens_after, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
+        get().updateTelemetry(taskId, {
+          inputTokens: res.tokens_after,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        });
       }
-    } catch { /* Keep local values */ }
 
-    get().updateToolExecution(taskId, toolId, {
-      status: 'success',
-      durationMs: Math.round(performance.now() - startTime),
-      stdout: `Контекст успешно сжат. Сохранено ${savedTokens} токенов.`,
-      params: { taskId, title: `Сжато (-${savedTokens} токенов)`, savedTokens },
-    });
+      get().updateToolExecution(taskId, toolId, {
+        status: 'success',
+        durationMs: Math.round(performance.now() - startTime),
+        stdout: `Контекст успешно сжат. Сохранено ${savedTokens} токенов.`,
+        params: { taskId, title: `Сжато (-${savedTokens} токенов)`, savedTokens },
+      });
 
-    try {
-      await get().loadTaskActivity(taskId);
-    } catch (e) {
-      console.warn('Failed to reload activity after compaction:', e);
+      try {
+        await get().loadTaskActivity(taskId);
+      } catch (reloadErr) {
+        console.warn('Failed to reload activity after compaction:', reloadErr);
+      }
+      return { savedTokens, evaporatedCount };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      get().updateToolExecution(taskId, toolId, {
+        status: 'failed',
+        durationMs: Math.round(performance.now() - startTime),
+        stderr: errMsg,
+      });
+      throw err instanceof Error ? err : new Error(errMsg);
     }
-    return { savedTokens, evaporatedCount };
   },
 
   deleteDialogItem: async (taskId, itemId) => {
@@ -239,77 +249,18 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
     if (!taskId) return;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const rollbackVersion = get().streamRollbackVersions[taskId];
-      let items = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
-      if (rollbackVersion !== get().streamRollbackVersions[taskId]) return get().loadTaskActivity(taskId);
-      if (items && Array.isArray(items)) {
-        items = items.filter((it): it is DrawerActivityItem => Boolean(it) && typeof it === 'object');
-        let compactedTokens: number | undefined;
-        for (let i = items.length - 1; i >= 0; i--) {
-          const tData = items[i].type === 'compacted' ? (items[i].tool as { tokensAfter?: number }) : undefined;
-          if (typeof tData?.tokensAfter === 'number') {
-            compactedTokens = tData.tokensAfter;
-            break;
-          }
+      let items: DrawerActivityItem[] | null = null;
+      for (let attempt = 0; attempt < MAX_LOAD_ROLLBACK_RETRIES; attempt++) {
+        const rollbackVersion = get().streamRollbackVersions[taskId];
+        const loaded = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
+        if (rollbackVersion === get().streamRollbackVersions[taskId]) {
+          items = loaded;
+          break;
         }
-        try {
-          const boardTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (compactedTokens === undefined && typeof boardTask?.currentTokens === 'number') {
-            compactedTokens = boardTask.currentTokens;
-          }
-        } catch { /* Board store optional */ }
-
-        if (items.length > 0) {
-          set((state) => {
-            const currentFeed = state.activityFeed[taskId] || [];
-            const hasCompacted = items.some((it) => it.type === 'compacted');
-            const newOverrides = compactedTokens !== undefined ? { ...state.tokenOverrides, [taskId]: compactedTokens } : state.tokenOverrides;
-            if (
-              currentFeed.length === 0 ||
-              items.length >= currentFeed.length ||
-              hasCompacted ||
-              items[items.length - 1]?.id !== currentFeed[currentFeed.length - 1]?.id
-            ) {
-              const dedupedItems = deduplicateLoadedActivityItems(items);
-              const { feed, tools, thoughts, outputs } = hydrateLoadedActivityState(dedupedItems, get().registerSubagentMapping);
-              const loadedIds = new Set(feed.map((it) => it.id));
-              const liveOnly = currentFeed.filter((it) => !loadedIds.has(it.id));
-              const mergedFeed = liveOnly.length > 0 ? [...feed, ...liveOnly] : feed;
-              const mergedThoughts = [...thoughts];
-              const mergedOutputs = [...outputs];
-              for (const it of liveOnly) {
-                if (it.type === 'thought') mergedThoughts.push(it as never);
-                else if (it.type === 'output') mergedOutputs.push(it as never);
-              }
-              const liveToolIds = new Set(tools.map((t) => t.id));
-              const liveTools = (state.toolExecutions[taskId] || []).filter((t) => !liveToolIds.has(t.id));
-              return {
-                activityFeed: { ...state.activityFeed, [taskId]: mergedFeed },
-                toolExecutions: { ...state.toolExecutions, [taskId]: [...tools, ...liveTools] },
-                streamEntries: { ...state.streamEntries, [taskId]: { thoughts: mergedThoughts, outputs: mergedOutputs } },
-                tokenOverrides: newOverrides,
-              };
-            }
-            return { tokenOverrides: newOverrides };
-          });
-          return;
-        }
-        set((state) => {
-          const currentFeed = state.activityFeed[taskId] || [];
-          const currentTools = state.toolExecutions[taskId] || [];
-          const currentEntries = state.streamEntries[taskId];
-          const hasLive = currentFeed.length > 0 || currentTools.length > 0 || (currentEntries && (currentEntries.thoughts.length > 0 || currentEntries.outputs.length > 0));
-          if (hasLive) return {};
-          return {
-            activityFeed: { ...state.activityFeed, [taskId]: [] },
-            streamEntries: { ...state.streamEntries, [taskId]: { thoughts: [], outputs: [] } },
-            toolExecutions: { ...state.toolExecutions, [taskId]: [] },
-            tokenOverrides: { ...state.tokenOverrides, [taskId]: undefined },
-            cumulativeOutputTokens: { ...state.cumulativeOutputTokens, [taskId]: 0 },
-            cumulativeGenerationSec: { ...state.cumulativeGenerationSec, [taskId]: 0 },
-          };
-        });
       }
+      if (!items || !Array.isArray(items)) return;
+      const validItems = items.filter((it): it is DrawerActivityItem => Boolean(it) && typeof it === 'object');
+      set((state) => buildLoadedTaskActivityPatch(state, taskId, validItems, get().registerSubagentMapping));
     } catch (e) {
       console.info('load_task_activity invoke error or web mode:', e);
     }
@@ -337,7 +288,13 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('save_task_activity', { taskId: targetDbTaskId, items: feed });
-      if (targetDbTaskId !== taskId) await invoke('save_task_activity', { taskId, items: feed }).catch(() => {});
+      if (targetDbTaskId !== taskId) {
+        try {
+          await invoke('save_task_activity', { taskId, items: feed });
+        } catch (aliasErr) {
+          console.warn('save_task_activity alias sync failed:', aliasErr);
+        }
+      }
     } catch (err) {
       console.info('save_task_activity invoke error or web mode:', err);
     }
@@ -353,7 +310,11 @@ export const createActivitySlice: StateCreator<DrawerState, [], [], ActivitySlic
     set((state) => {
       const streamed = item.id.match(/^(.+):(thought|output)$/);
       if (streamed && taskId in state.activeStreamIds && state.activeStreamIds[taskId] !== streamed[1]) {
-        console.warn('[appendActivityItem] dropping item streamId mismatch', { taskId, itemId: item.id, activeStreamId: state.activeStreamIds[taskId] });
+        console.warn('[appendActivityItem] dropping item streamId mismatch', {
+          taskId,
+          itemId: item.id,
+          activeStreamId: state.activeStreamIds[taskId],
+        });
         return state;
       }
       return {
