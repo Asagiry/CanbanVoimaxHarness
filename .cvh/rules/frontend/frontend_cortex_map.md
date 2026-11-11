@@ -22,9 +22,12 @@ Cortex inspects and edits agent personas (`.cvh/agents/<role>/persona.md`), role
 | `src/components/cortex/settingEditor/index.ts` | Barrel re-exports for agent setting editor sections. |
 | `src/components/cortex/AgentMindInspector.tsx` | Real-time agent state, compiled system prompt, and active tools viewer. |
 | `src/components/cortex/ColumnStageCard.tsx` | Pipeline stage configuration card in Cortex view. |
+| `src/components/cortex/TreeFileRow.tsx` | Tree node row component for stage personas, rules, and hook scripts in `ColumnStageCard`. |
 | `src/components/cortex/CreateAgentModal.tsx` | Modal dialog for creating new agent personas. |
 | `src/components/cortex/EditAgentPersonaModal.tsx` | Modal dialog for updating agent persona metadata, icon, and color. |
 | `src/components/cortex/GlobalRulesSection.tsx` | Global shared rules list (`.cvh/rules/*.md`), editor triggers, and controls. |
+| `src/components/cortex/GlobalRuleCreateForm.tsx` | Inline creation form for adding new `.cvh/rules/*.md` files. |
+| `src/components/cortex/GlobalRuleRow.tsx` | Single global rule row with edit, delete, and dirty indicator controls. |
 | `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new role rules or stage hooks with live filename preview. |
 | `src/components/cortex/RuleEditorModal.tsx` | Markdown and script editor for global rules, role rules, and hook scripts. |
 | `src/components/cortex/types.ts` | Cortex explorer component props, form state, and tree node interfaces. |

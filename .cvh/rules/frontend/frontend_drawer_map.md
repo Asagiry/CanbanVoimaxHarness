@@ -11,10 +11,13 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/useDrawerTaskState.ts` | Extracted drawer hook for active task, stage, and title state. |
 | `src/components/drawer/useUnifiedActivities.ts` | Extracted drawer hook for activity feed merging, optimistic tools, and streaming thoughts. |
 | `src/components/drawer/useAgentExecution.ts` | Extracted drawer hook for agent run, abort, and model trigger execution. |
-| `src/components/drawer/DrawerHeader.tsx` | Task title, stage stepper and abort/run controls. |
+| `src/components/drawer/DrawerHeader.tsx` | Facade re-exporting `DrawerHeader.core.tsx` (task title, stage stepper, abort/run controls). |
+| `src/components/drawer/DrawerHeader.core.tsx` | Core `DrawerHeader` implementation, stage stepper buttons, and `getStageButtonClass`/`getStageAriaLabel`. |
+| `src/components/drawer/DrawerHeaderControls.tsx` | Header action buttons (run, abort, effort selector, close) extracted from `DrawerHeader`. |
 | `src/components/drawer/stageStepperHelpers.ts` | Stage duration, running status, and task resolution logic. |
 | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
+| `src/components/drawer/QuestionOptionRow.tsx` | Individual selectable option row extracted from `QuestionPromptCard`. |
 | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar coordinator, optimistic submission. |
 | `src/components/drawer/steer/SteerImageBar.tsx` | Attached image preview thumbnails with remove triggers. |
 | `src/components/drawer/steer/SteerModelMenu.tsx` | Inline model selector dropdown for steer directives. |
@@ -58,14 +61,17 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/diff/image/ImageDiffSingle.tsx` | Single image fallback view for newly added/deleted assets. |
 | `src/components/drawer/diff/image/types.ts` | Shared types and prop interfaces for image diff modes. |
 | `src/components/drawer/diff/image/index.ts` | Barrel re-exports for image diff components. |
-| `src/components/drawer/diff/DiffFileList.tsx` | Changed files sidebar, line additions/deletions. |
+| `src/components/drawer/diff/DiffFileList.tsx` | Facade re-exporting `DiffFileList.core.tsx` (changed files sidebar and status filters). |
+| `src/components/drawer/diff/DiffFileList.core.tsx` | Core changed files list with status filters (`StatusFilterType`) and expansion state. |
+| `src/components/drawer/diff/DiffAccordionItem.tsx` | Expandable per-file diff accordion row (`AccordionFileItem`). |
 | `src/components/drawer/diff/index.ts` | Barrel re-exports for diff viewers and utils. |
 | `src/components/drawer/diff/utils.ts` | Diff parsing/formatting helpers (`parseCleanDiff`, `isImageFile`, `formatBytes`). |
 | `src/components/drawer/subagentHelpers.ts` | Subagent display title/role label formatting helpers. |
 | `src/components/drawer/stream/ThoughtStreamCard.tsx` | Collapsible reasoning stream card with duration badge. |
 | `src/components/drawer/stream/SteerDirectiveCard.tsx` | In-stream steer instruction indicator. |
 | `src/components/drawer/stream/SubagentActivityCard.tsx` | Child agent delegation summary and report view. |
-| `src/components/drawer/stream/MarkdownContent.tsx` | Streaming markdown tokens, copyable codeblocks, lightbox. |
+| `src/components/drawer/stream/MarkdownContent.tsx` | Streaming markdown tokens and safe link/image rendering. |
+| `src/components/drawer/stream/MarkdownCodeBlock.tsx` | Copyable codeblock component, `LightboxContext`, and token hash cache (`getCachedMarkdownTokens`). |
 | `src/components/drawer/stream/AgentExplanationCard.tsx` | Intermediate step commentary, action plan, and todo list. |
 | `src/components/drawer/stream/ActivityItemActions.tsx` | Stopped-dialog deletion with visible persistence errors. |
 | `src/components/drawer/stream/ActivityItem.tsx` | Memoized per-item renderer extracted from DrawerActivityStream. |
@@ -75,6 +81,7 @@ The drawer is a root-level fixed overlay; scrollable flex children retain `min-h
 | `src/components/drawer/stream/StageSummaryCard.tsx` | Dedicated stage handover summary card and reviewer verdict card. |
 | `src/components/drawer/stream/index.ts` | Barrel re-exports for stream cards and helpers. |
 | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
+| `src/components/drawer/stream/activityFilter.ts` | Activity tool name resolution (`resolveActivityToolName`) and display filtering (`filterDisplayActivities`). |
 | `src/components/drawer/tools/TodoToolCard.tsx` | `todo_write` checklist progress bar, status icons, and task rendering. |
 | `src/components/drawer/tools/TodoChecklist.tsx` | Reusable task checklist and progress rendering. |
 | `src/components/drawer/tools/FileOpsToolCard.tsx` | File operations card coordinator (`read_file`, `write_file`, `edit_file`). |
