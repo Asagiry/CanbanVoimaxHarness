@@ -102,6 +102,8 @@ pub struct ProjectConfig {
     pub version: String,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(rename = "taskPrefix", default, skip_serializing_if = "Option::is_none")]
+    pub task_prefix: Option<String>,
     #[serde(rename = "activePipeline", default)]
     pub active_pipeline: Option<String>,
     #[serde(rename = "defaultModel", default)]

@@ -30,6 +30,7 @@ export interface TaskInput {
   boardId?: string;
   model?: string;
   attachments?: string[];
+  baseBranch?: string;
   priority?: TaskPriority;
   tags?: string[];
   isSubtask?: boolean;
@@ -52,6 +53,7 @@ export interface KanbanTask {
   boardId?: string;
   persona: string;
   branch?: string;
+  baseBranch?: string | null;
   worktreePath?: string;
   status: TaskStatus;
   activeStageDuration: number; // in seconds
@@ -100,6 +102,8 @@ export interface BackendTaskDTO {
   projectPath?: string;
   project_path?: string;
   branch?: string;
+  baseBranch?: string | null;
+  base_branch?: string | null;
   verdict?: string;
   customFlow?: string[];
   custom_flow?: string[];

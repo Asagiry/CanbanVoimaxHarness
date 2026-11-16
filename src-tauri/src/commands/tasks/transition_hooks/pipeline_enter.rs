@@ -1,13 +1,12 @@
-use std::collections::HashMap;
 use tauri::{Emitter, Manager};
 
 use crate::agent::Task;
 use crate::commands::git::apply_worktree_from_hook_stdout;
 use crate::commands::healing::task_id_matches;
 use crate::commands::state::AppState;
-use crate::hooks::{execute_hook, HookContext};
+use crate::hooks::execute_hook_streaming;
 use crate::commands::tasks::lifecycle::record_task_hook_result;
-use super::helpers::upsert_single_task;
+use super::helpers::{build_task_hook_context, upsert_single_task};
 use super::pipeline::TaskTransitionPipeline;
 
 impl<'a> TaskTransitionPipeline<'a> {
@@ -53,18 +52,21 @@ impl<'a> TaskTransitionPipeline<'a> {
         }
 
         let hook_started_at = chrono::Utc::now().timestamp_millis();
-        let ctx = HookContext {
-            task_id: task.id.clone(),
-            task_title: task.title.clone(),
-            worktree_path: task.worktree_path.clone().unwrap_or_default(),
-            branch: task.branch.clone().unwrap_or_default(),
-            verdict: self.verdict.clone().or_else(|| task.verdict.clone()),
-            stage_id: Some(self.target_col.id.clone()),
-            board_id: task.board_id.clone(),
-            extra_env: HashMap::new(),
-        };
+        let ctx = build_task_hook_context(
+            task,
+            Some(self.target_col.id.clone()),
+            self.verdict.clone().or_else(|| task.verdict.clone()),
+        );
 
-        let hook_res = execute_hook(&hook_path, self.root, &ctx, None).await;
+        let hook_res = execute_hook_streaming(
+            &hook_path,
+            self.root,
+            &ctx,
+            None,
+            self.app_handle,
+            "on_enter",
+            &hook_rel,
+        ).await;
         let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
 
         match hook_res {

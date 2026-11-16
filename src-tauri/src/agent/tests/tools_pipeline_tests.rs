@@ -103,6 +103,7 @@ use std::sync::Arc;
             board_id: Some("dev-board".to_string()),
             worktree_path: None,
             branch: None,
+            base_branch: None,
             verdict: None,
             custom_flow: None,
             status: Some("running".to_string()),

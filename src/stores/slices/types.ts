@@ -81,6 +81,14 @@ export interface TaskHooksSlice {
     error?: string;
     hookName?: string;
   }) => void;
+  setHookOutput: (payload: {
+    taskId: string;
+    stageId?: string | null;
+    hookType: 'on_enter' | 'on_leave';
+    hookName?: string;
+    stdout?: string;
+    stderr?: string;
+  }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
 }
 

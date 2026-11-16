@@ -14,6 +14,7 @@ fn sample_task(id: &str, stage_id: &str, status: &str) -> Task {
         board_id: Some("default".to_string()),
         worktree_path: None,
         branch: None,
+        base_branch: None,
         verdict: None,
         custom_flow: None,
         status: Some(status.to_string()),

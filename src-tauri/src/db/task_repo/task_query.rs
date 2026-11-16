@@ -14,7 +14,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
                     custom_flow, status, model, provider_id, reasoning_effort, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
-                    stage_entered_at, stage_durations, total_elapsed
+                    stage_entered_at, stage_durations, total_elapsed, base_branch
              FROM tasks
              ORDER BY position ASC, created_at ASC",
         )
@@ -53,13 +53,14 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let stage_entered_at: Option<i64> = row.get(28).ok();
             let stage_durations_raw: Option<String> = row.get(29).ok();
             let total_elapsed: Option<i64> = row.get(30).ok();
+            let base_branch: Option<String> = row.get(31).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow_raw, status, model, provider_id, reasoning_effort, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
                 created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
-                stage_entered_at, stage_durations_raw, total_elapsed,
+                stage_entered_at, stage_durations_raw, total_elapsed, base_branch,
             ))
         })
         .map_err(|e| format!("Query tasks failed: {}", e))?;
@@ -90,7 +91,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             custom_flow_raw, status, model, provider_id, reasoning_effort, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
             created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
-            stage_entered_at, stage_durations_raw, total_elapsed,
+            stage_entered_at, stage_durations_raw, total_elapsed, base_branch,
         ) = row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
 
         let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
@@ -108,6 +109,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             board_id,
             worktree_path,
             branch,
+            base_branch,
             verdict,
             custom_flow,
             status,
@@ -150,7 +152,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
                     custom_flow, status, model, provider_id, reasoning_effort, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
-                    stage_entered_at, stage_durations, total_elapsed
+                    stage_entered_at, stage_durations, total_elapsed, base_branch
              FROM tasks
              WHERE id = ?1 OR LOWER(id) = LOWER(?1)
              LIMIT 1",
@@ -197,6 +199,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let stage_entered_at: Option<i64> = row.get(28).ok();
     let stage_durations_raw: Option<String> = row.get(29).ok();
     let total_elapsed: Option<i64> = row.get(30).ok();
+    let base_branch: Option<String> = row.get(31).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -229,6 +232,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         board_id,
         worktree_path,
         branch,
+        base_branch,
         verdict,
         custom_flow,
         status,

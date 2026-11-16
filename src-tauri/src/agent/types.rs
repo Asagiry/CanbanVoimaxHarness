@@ -26,6 +26,8 @@ pub struct Task {
     pub worktree_path: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
+    #[serde(rename = "baseBranch", alias = "base_branch", default)]
+    pub base_branch: Option<String>,
     #[serde(default)]
     pub verdict: Option<String>,
     #[serde(rename = "customFlow", alias = "custom_flow", default)]

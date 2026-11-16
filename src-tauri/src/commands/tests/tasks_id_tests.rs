@@ -100,7 +100,13 @@ use std::path::PathBuf;
             .join("target")
             .join("tmp")
             .join(format!("cvh_test_explicit_id_{}", uuid::Uuid::new_v4()));
-        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+        tokio::fs::write(
+            tmp.join(".cvh").join("config.json"),
+            r#"{"name":"TestProject","version":"0.1.0","taskPrefix":"CVH"}"#,
+        )
+        .await
+        .expect("write config.json");
 
         // Scaffold minimal .cvh settings with sequence = 1
         save_task_sequence(&tmp, 1).await.expect("save initial sequence");
@@ -164,7 +170,13 @@ use std::path::PathBuf;
             .join("target")
             .join("tmp")
             .join(format!("cvh_test_model_order_{}", uuid::Uuid::new_v4()));
-        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+        tokio::fs::write(
+            tmp.join(".cvh").join("config.json"),
+            r#"{"name":"TestProject","version":"0.1.0","taskPrefix":"CVH"}"#,
+        )
+        .await
+        .expect("write config.json");
 
         save_task_sequence(&tmp, 1).await.expect("save initial sequence");
 
@@ -200,4 +212,45 @@ use std::path::PathBuf;
         );
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_task_prefix_resolution_and_allocation() {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("prefix_test_{}", uuid::Uuid::new_v4()));
+
+        // 1. External project without taskPrefix derives from config name ("mcs" -> "MCS")
+        let mcs_dir = base.join("mcs");
+        tokio::fs::create_dir_all(mcs_dir.join(".cvh")).await.unwrap();
+        tokio::fs::write(
+            mcs_dir.join(".cvh").join("config.json"),
+            r#"{"name":"mcs","version":"0.1.0"}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(crate::config::resolve_task_prefix_sync(&mcs_dir), "MCS");
+        let id1 = resolve_or_allocate_task_id(&mcs_dir, &[], None).await;
+        assert_eq!(id1, "MCS-001");
+
+        // 2. Explicit taskPrefix overrides project name
+        let mkc_dir = base.join("some-other-name");
+        tokio::fs::create_dir_all(mkc_dir.join(".cvh")).await.unwrap();
+        tokio::fs::write(
+            mkc_dir.join(".cvh").join("config.json"),
+            r#"{"name":"Other","version":"0.1.0","taskPrefix":"mkc"}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(crate::config::resolve_task_prefix_sync(&mkc_dir), "MKC");
+        let id2 = resolve_or_allocate_task_id(&mkc_dir, &[], None).await;
+        assert_eq!(id2, "MKC-001");
+
+        // 3. No config.json derives from folder name
+        let no_cfg = base.join("my-app");
+        tokio::fs::create_dir_all(&no_cfg).await.unwrap();
+        assert_eq!(crate::config::resolve_task_prefix_sync(&no_cfg), "MYAPP");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }

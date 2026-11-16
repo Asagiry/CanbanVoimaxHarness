@@ -1,5 +1,5 @@
 use super::process::{
-    build_windows_cmd_raw_arg, kill_process_tree, quote_windows_path, read_pipe_capped,
+    build_windows_cmd_raw_arg, kill_process_tree, quote_windows_path,
     resolve_powershell_executable, ProcessTreeGuard, MAX_PIPE_CAPTURE_BYTES,
 };
 #[cfg(windows)]
@@ -8,8 +8,12 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tauri::Emitter;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HookContext {
@@ -41,6 +45,19 @@ pub async fn execute_hook(
     working_dir: impl AsRef<Path>,
     context: &HookContext,
     timeout: Option<Duration>,
+) -> Result<HookExecutionResult> {
+    execute_hook_streaming(script_path, working_dir, context, timeout, None, "", "").await
+}
+
+/// Executes a hook script and optionally streams `hook:output` events while it runs.
+pub async fn execute_hook_streaming(
+    script_path: impl AsRef<Path>,
+    working_dir: impl AsRef<Path>,
+    context: &HookContext,
+    timeout: Option<Duration>,
+    app_handle: Option<&tauri::AppHandle>,
+    hook_type: &str,
+    hook_name: &str,
 ) -> Result<HookExecutionResult> {
     let script = script_path.as_ref();
     let cwd = working_dir.as_ref();
@@ -178,28 +195,123 @@ pub async fn execute_hook(
 
     let timeout_duration = timeout.unwrap_or(Duration::from_secs(180));
 
+    let shared_logs: Arc<Mutex<(String, String)>> = Arc::new(Mutex::new((String::new(), String::new())));
+    let last_emit: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
+
+    async fn drain_pipe_streaming<R: tokio::io::AsyncRead + Unpin>(
+        mut pipe: R,
+        is_stderr: bool,
+        shared_logs: Arc<Mutex<(String, String)>>,
+        last_emit: Arc<Mutex<Option<Instant>>>,
+        app_handle: Option<&tauri::AppHandle>,
+        task_id: &str,
+        stage_id: Option<&str>,
+        hook_type: &str,
+        hook_name: &str,
+    ) {
+        let mut buf = [0u8; 4096];
+        let mut raw_total = Vec::new();
+        let mut truncated = false;
+        loop {
+            match pipe.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    let remaining = MAX_PIPE_CAPTURE_BYTES.saturating_sub(raw_total.len());
+                    if remaining > 0 {
+                        let take = n.min(remaining);
+                        raw_total.extend_from_slice(&buf[..take]);
+                        if take < n {
+                            truncated = true;
+                        }
+                    } else {
+                        truncated = true;
+                    }
+                    let mut text = crate::agent::decode_output_bytes(&raw_total);
+                    if truncated {
+                        text.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
+                    }
+                    let (out_snap, err_snap) = {
+                        let mut guard = shared_logs.lock().await;
+                        if is_stderr {
+                            guard.1 = text;
+                        } else {
+                            guard.0 = text;
+                        }
+                        (guard.0.clone(), guard.1.clone())
+                    };
+                    if let Some(app) = app_handle {
+                        let should_emit = {
+                            let mut ts = last_emit.lock().await;
+                            let now = Instant::now();
+                            if ts.map(|t| now.duration_since(t) >= Duration::from_millis(150)).unwrap_or(true) {
+                                *ts = Some(now);
+                                true
+                            } else {
+                                false
+                            }
+                        };
+                        if should_emit {
+                            let _ = app.emit("hook:output", serde_json::json!({
+                                "taskId": task_id,
+                                "stageId": stage_id,
+                                "hookType": hook_type,
+                                "hookName": hook_name,
+                                "stdout": out_snap,
+                                "stderr": err_snap,
+                            }));
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        if let Some(app) = app_handle {
+            let guard = shared_logs.lock().await;
+            if !guard.0.is_empty() || !guard.1.is_empty() {
+                let _ = app.emit("hook:output", serde_json::json!({
+                    "taskId": task_id,
+                    "stageId": stage_id,
+                    "hookType": hook_type,
+                    "hookName": hook_name,
+                    "stdout": &guard.0,
+                    "stderr": &guard.1,
+                }));
+            }
+        }
+    }
+
+    let stage_ref = context.stage_id.as_deref();
     let run_task = async {
-        let stdout_drain = async {
-            let (buf, truncated) = read_pipe_capped(stdout_pipe, MAX_PIPE_CAPTURE_BYTES).await;
-            let mut s = crate::agent::decode_output_bytes(&buf);
-            if truncated {
-                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
-            }
-            s
-        };
+        let stdout_drain = drain_pipe_streaming(
+            stdout_pipe,
+            false,
+            Arc::clone(&shared_logs),
+            Arc::clone(&last_emit),
+            app_handle,
+            &context.task_id,
+            stage_ref,
+            hook_type,
+            hook_name,
+        );
+        let stderr_drain = drain_pipe_streaming(
+            stderr_pipe,
+            true,
+            Arc::clone(&shared_logs),
+            Arc::clone(&last_emit),
+            app_handle,
+            &context.task_id,
+            stage_ref,
+            hook_type,
+            hook_name,
+        );
 
-        let stderr_drain = async {
-            let (buf, truncated) = read_pipe_capped(stderr_pipe, MAX_PIPE_CAPTURE_BYTES).await;
-            let mut s = crate::agent::decode_output_bytes(&buf);
-            if truncated {
-                s.push_str("\n... [Output truncated: exceeded 4 MiB capture limit]");
-            }
-            s
-        };
-
-        let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
+        tokio::join!(stdout_drain, stderr_drain);
         let status = child.wait().await?;
         tree_guard.disarm();
+        let (stdout_str, stderr_str) = {
+            let guard = shared_logs.lock().await;
+            (guard.0.clone(), guard.1.clone())
+        };
         Ok::<HookExecutionResult, anyhow::Error>(HookExecutionResult {
             success: status.success(),
             exit_code: status.code(),

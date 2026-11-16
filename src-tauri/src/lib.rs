@@ -130,6 +130,7 @@ pub fn run() {
             get_active_sessions,
             get_task_git_diff,
             get_task_image_diff,
+            list_git_branches,
             get_tool_policies,
             save_tool_policies,
             list_custom_tools,

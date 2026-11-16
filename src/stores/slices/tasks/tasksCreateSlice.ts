@@ -38,6 +38,7 @@ export const createTasksCreateSlice: StateCreator<BoardState, [], [], TasksCreat
         boardId,
         model: input.model || undefined,
         attachments: input.attachments && input.attachments.length > 0 ? input.attachments : undefined,
+        baseBranch: input.baseBranch?.trim() || undefined,
       });
 
       if (backendTask && typeof backendTask.id === 'string') {

@@ -92,12 +92,16 @@ pub async fn execute_create_task(
     let mut next_num = crate::commands::tasks::allocate_next_task_num(repo_root, &tasks).await;
 
     let pipe_cols = crate::config::load_pipeline_config(repo_root).await.ok().map(|p| p.stages);
+    let task_prefix = crate::config::resolve_task_prefix_sync(repo_root);
 
     for input in inputs {
-        while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
+        while tasks
+            .iter()
+            .any(|t| t.id.eq_ignore_ascii_case(&format!("{}-{:03}", task_prefix, next_num)))
+        {
             next_num = next_num.saturating_add(1);
         }
-        let new_id = format!("CVH-{:03}", next_num);
+        let new_id = format!("{}-{:03}", task_prefix, next_num);
         let _ = crate::commands::tasks::save_task_sequence(repo_root, next_num).await;
         next_num = next_num.saturating_add(1);
 
@@ -161,6 +165,7 @@ pub async fn execute_create_task(
             board_id: Some(effective_board_id.clone()),
             worktree_path: None,
             branch: None,
+            base_branch: None,
             verdict: None,
             custom_flow: None,
             status: Some("idle".to_string()),

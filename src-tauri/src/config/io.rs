@@ -220,6 +220,43 @@ pub async fn load_project_config(root_path: impl AsRef<Path>) -> Result<ProjectC
     Ok(config)
 }
 
+/// Normalizes a candidate task ID prefix to uppercase ASCII alphanumeric (max 8 chars).
+pub fn normalize_task_prefix(raw: &str) -> Option<String> {
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_uppercase())
+        .take(8)
+        .collect();
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
+}
+
+/// Resolves the project's task ID prefix synchronously from `.cvh/config.json` (`taskPrefix`,
+/// falling back to `name`), then the repo folder name, or `"TASK"` as a last resort.
+pub fn resolve_task_prefix_sync(root_path: impl AsRef<Path>) -> String {
+    let root = root_path.as_ref();
+    let config_path = root.join(".cvh").join("config.json");
+    if let Ok(content) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<ProjectConfig>(&content) {
+            if let Some(prefix) = config.task_prefix.as_deref().and_then(normalize_task_prefix) {
+                return prefix;
+            }
+            if let Some(prefix) = normalize_task_prefix(&config.name) {
+                return prefix;
+            }
+        }
+    }
+
+    root.file_name()
+        .and_then(|n| n.to_str())
+        .and_then(normalize_task_prefix)
+        .unwrap_or_else(|| "TASK".to_string())
+}
+
 pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<PipelineConfig> {
     let root = root_path.as_ref();
     let boards_cfg = load_boards_config(root).await?;

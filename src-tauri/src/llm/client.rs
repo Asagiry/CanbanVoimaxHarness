@@ -105,10 +105,16 @@ impl LlmClient {
         } else {
             format!("{}/chat/completions", base_url)
         };
-        let body_json = if use_responses {
+        let mut body_json = if use_responses {
             super::cache::build_responses_payload(&request)
         } else {
-            serde_json::to_value(&request)?
+            let mut v = serde_json::to_value(&request)?;
+            if let Some(obj) = v.as_object_mut() {
+                if !obj.contains_key("reasoning_effort") {
+                    obj.insert("reasoning_effort".to_string(), serde_json::json!("none"));
+                }
+            }
+            v
         };
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -158,6 +164,17 @@ impl LlmClient {
                     } else {
                         redacted_text.clone()
                     };
+                    if status.as_u16() == 400
+                        && body_json.get("reasoning_effort").and_then(|v| v.as_str()) == Some("none")
+                    {
+                        let lower_err = redacted_text.to_lowercase();
+                        if lower_err.contains("reasoning") || lower_err.contains("none") || lower_err.contains("unsupported") {
+                            if let Some(obj) = body_json.as_object_mut() {
+                                obj.remove("reasoning_effort");
+                            }
+                            continue;
+                        }
+                    }
                     if status.is_server_error() {
                         format!("HTTP {}: {}", status, err_summary)
                     } else {

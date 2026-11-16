@@ -9,6 +9,7 @@ import { PipelineStage, PipelineColumn } from '../../../types';
 import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import ImageLightboxModal from './ImageLightboxModal';
 import TaskAttachmentPicker, { type TaskAttachmentItem } from './TaskAttachmentPicker';
+import BranchPicker from './BranchPicker';
 
 export interface CreateTaskModalProps {
   isOpen: boolean;
@@ -41,6 +42,8 @@ export default function CreateTaskModal({
   const [newDescription, setNewDescription] = useState('');
   const [newAttachments, setNewAttachments] = useState<TaskAttachmentItem[]>([]);
   const [selectedColumnId, setSelectedColumnId] = useState<string>('');
+  const [baseBranch, setBaseBranch] = useState<string>('');
+  const [gitBranches, setGitBranches] = useState<string[]>([]);
   const [previewLightbox, setPreviewLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -57,8 +60,25 @@ export default function CreateTaskModal({
         intakeCol?.id ||
         (effectiveStages?.some((c) => c.id === 'backlog') ? 'backlog' : (effectiveStages?.[0]?.id ?? 'backlog'));
       setSelectedColumnId(initialStage || fallbackId);
+      setBaseBranch('');
       setPreviewLightbox(null);
       setIsSubmitting(false);
+
+      let cancelled = false;
+      void import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke<string[]>('list_git_branches'))
+        .then((branches) => {
+          if (!cancelled && Array.isArray(branches)) {
+            setGitBranches(branches);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setGitBranches([]);
+        });
+      wasOpenRef.current = isOpen;
+      return () => {
+        cancelled = true;
+      };
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, initialStage, effectiveStages]);
@@ -188,6 +208,7 @@ export default function CreateTaskModal({
         stageId: targetColumnId,
         boardId: activeBoardId || 'development',
         attachments: newAttachments.map((a) => a.dataUrl),
+        baseBranch: baseBranch.trim() || undefined,
       });
       if (created) {
         onClose();
@@ -259,22 +280,39 @@ export default function CreateTaskModal({
               />
             </div>
 
-            {effectiveStages && effectiveStages.length > 0 && (
-              <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
-                  {t('board.columnTitleLabel')}
-                </label>
-                <select
-                  value={selectedColumnId}
-                  onChange={(e) => setSelectedColumnId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans text-xs cursor-pointer transition"
-                >
-                  {effectiveStages.map((col) => (
-                    <option key={col.id} value={col.id} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
-                      {col.title}
-                    </option>
-                  ))}
-                </select>
+            {((effectiveStages && effectiveStages.length > 0) || gitBranches.length > 0) && (
+              <div className={effectiveStages && effectiveStages.length > 0 && gitBranches.length > 0 ? 'grid grid-cols-2 gap-3' : ''}>
+                {effectiveStages && effectiveStages.length > 0 && (
+                  <div>
+                    <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
+                      {t('board.columnTitleLabel')}
+                    </label>
+                    <select
+                      value={selectedColumnId}
+                      onChange={(e) => setSelectedColumnId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans text-xs cursor-pointer transition"
+                    >
+                      {effectiveStages.map((col) => (
+                        <option key={col.id} value={col.id} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
+                          {col.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {gitBranches.length > 0 && (
+                  <div>
+                    <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
+                      {t('newTask.baseBranchLabel')}
+                    </label>
+                    <BranchPicker
+                      branches={gitBranches}
+                      value={baseBranch}
+                      onChange={setBaseBranch}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

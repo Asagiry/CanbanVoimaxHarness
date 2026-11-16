@@ -23,6 +23,14 @@ export interface TaskHooksSlice {
     error?: string;
     hookName?: string;
   }) => void;
+  setHookOutput: (payload: {
+    taskId: string;
+    stageId?: string | null;
+    hookType: 'on_enter' | 'on_leave';
+    hookName?: string;
+    stdout?: string;
+    stderr?: string;
+  }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
 }
 
@@ -62,6 +70,42 @@ export const createTaskHooksSlice: StateCreator<
         }
         return t;
       });
+      return {
+        hookStates: nextHookStates,
+        tasks: nextTasks,
+      };
+    });
+  },
+
+  setHookOutput: ({ taskId, stageId, hookType, hookName, stdout, stderr }) => {
+    set((state) => {
+      const normalizedHookType = (hookType as string) === 'on_finish' || (hookType as string) === 'on_exit' ? 'on_leave' : hookType;
+      const prev = state.hookStates[taskId] || {};
+      const existing = prev[normalizedHookType];
+      const nextEntry = {
+        hookName: hookName || existing?.hookName || (normalizedHookType as string),
+        stageId: stageId || existing?.stageId || '',
+        hookType: normalizedHookType,
+        status: existing?.status === 'success' || existing?.status === 'failed' ? existing.status : ('running' as const),
+        startedAt: existing?.startedAt ?? Date.now(),
+        stdout: stdout ?? existing?.stdout ?? '',
+        stderr: stderr ?? existing?.stderr ?? '',
+        description: existing?.description,
+        durationMs: existing?.durationMs,
+        exitCode: existing?.exitCode,
+        error: existing?.error,
+      };
+      const nextTaskHookState: TaskHookStates = {
+        ...prev,
+        [normalizedHookType]: nextEntry,
+      };
+      const nextHookStates = {
+        ...state.hookStates,
+        [taskId]: nextTaskHookState,
+      };
+      const nextTasks = state.tasks.map((t) =>
+        t.id === taskId ? { ...t, hookStates: nextTaskHookState } : t
+      );
       return {
         hookStates: nextHookStates,
         tasks: nextTasks,
