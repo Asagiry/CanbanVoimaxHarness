@@ -197,6 +197,10 @@ export function normalizeKanbanTask(
   const branch = (typeof raw.branch === 'string' && raw.branch.trim() !== '')
     ? raw.branch.trim()
     : parentTask?.branch;
+  const rawBaseBranch = raw.baseBranch ?? raw.base_branch;
+  const baseBranch = (typeof rawBaseBranch === 'string' && rawBaseBranch.trim() !== '')
+    ? rawBaseBranch.trim()
+    : parentTask?.baseBranch;
   const worktreePath = (typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== '')
     ? raw.worktreePath.trim()
     : ((typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '')
@@ -247,6 +251,7 @@ export function normalizeKanbanTask(
     boardId: effectiveBoardId,
     persona: effectivePersona,
     branch,
+    baseBranch,
     worktreePath,
     status,
     activeStageDuration,

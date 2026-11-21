@@ -51,6 +51,12 @@ use std::sync::Arc;
     async fn test_orchestrator_create_task_and_create_tasks() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_orch_test_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("config.json"),
+            r#"{"name":"TestProject","version":"0.1.0","taskPrefix":"CVH"}"#,
+        )
+        .await
+        .expect("write config.json");
 
         // Seed parent orchestrator task CVH-001
         let parent_task = Task {
@@ -61,6 +67,7 @@ use std::sync::Arc;
             board_id: Some("development".to_string()),
             worktree_path: None,
             branch: None,
+            base_branch: None,
             verdict: None,
             custom_flow: None,
             status: Some("running".to_string()),
@@ -178,6 +185,12 @@ use std::sync::Arc;
     async fn test_orchestrator_monotonic_id_with_gaps() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_gaps_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("config.json"),
+            r#"{"name":"TestProject","version":"0.1.0","taskPrefix":"CVH"}"#,
+        )
+        .await
+        .expect("write config.json");
 
         // Seed CVH-002 and CVH-007 (gap between 2 and 7)
         let t1 = make_test_task("CVH-002", "dev", "development");
@@ -232,6 +245,7 @@ use std::sync::Arc;
             board_id: Some("development".to_string()),
             worktree_path: None,
             branch: None,
+            base_branch: None,
             verdict: None,
             custom_flow: None,
             status: Some("running".to_string()),
@@ -386,6 +400,12 @@ use std::sync::Arc;
     async fn test_create_task_stage_id_priority() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_stage_prio_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("config.json"),
+            r#"{"name":"TestProject","version":"0.1.0","taskPrefix":"CVH"}"#,
+        )
+        .await
+        .expect("write config.json");
 
         let t1 = make_test_task("CVH-001", "backlog", "development");
         crate::commands::tasks::save_tasks_to_disk(&base, &[t1]).await.expect("save initial task");

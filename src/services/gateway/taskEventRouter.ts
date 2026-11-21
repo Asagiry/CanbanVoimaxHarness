@@ -146,6 +146,21 @@ export async function registerTaskEventListeners(
     });
   });
 
+  // 14b. hook:output (live streaming stdout/stderr)
+  await addListener('hook:output', (payload) => {
+    const { taskId, stageId, hookType, hookName, stdout, stderr } = payload || {};
+    if (!taskId || !hookType) return;
+    const normalizedHookType = hookType === 'on_finish' || hookType === 'on_exit' ? 'on_leave' : hookType;
+    useBoardStore.getState().setHookOutput({
+      taskId,
+      stageId,
+      hookType: normalizedHookType,
+      hookName,
+      stdout,
+      stderr,
+    });
+  });
+
   // 15. hook:finish
   await addListener('hook:finish', (payload) => {
     const { taskId, stageId, hookType, success, exitCode, stdout, stderr, error, hookName } = payload || {};

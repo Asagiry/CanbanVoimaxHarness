@@ -217,7 +217,54 @@ pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
 /// If any of these entries are missing (and no wildcard `.cvh/` or `.cvh` covers them),
 /// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Workspace`.
 /// Never duplicates existing lines or existing section headers.
+fn line_covers_cvh_dir(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+        return false;
+    }
+    let norm = trimmed.trim_start_matches('/');
+    matches!(
+        norm,
+        ".cvh" | ".cvh/" | ".cvh/*" | "**/.cvh" | "**/.cvh/" | "**/.cvh/*"
+    )
+}
+
+fn is_excluded_in_git_info(repo_root: &Path) -> bool {
+    let dot_git = repo_root.join(".git");
+    let exclude_path = if dot_git.is_dir() {
+        dot_git.join("info").join("exclude")
+    } else if dot_git.is_file() {
+        let Ok(content) = std::fs::read_to_string(&dot_git) else {
+            return false;
+        };
+        let Some(gitdir_raw) = content.lines().find_map(|l| l.strip_prefix("gitdir:")) else {
+            return false;
+        };
+        let gd = Path::new(gitdir_raw.trim());
+        let gitdir = if gd.is_absolute() {
+            gd.to_path_buf()
+        } else {
+            repo_root.join(gd)
+        };
+        let commondir_file = gitdir.join("commondir");
+        if let Ok(cd) = std::fs::read_to_string(&commondir_file) {
+            gitdir.join(cd.trim()).join("info").join("exclude")
+        } else {
+            gitdir.join("info").join("exclude")
+        }
+    } else {
+        return false;
+    };
+
+    std::fs::read_to_string(exclude_path)
+        .map(|c| c.lines().any(line_covers_cvh_dir))
+        .unwrap_or(false)
+}
+
 pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
+    if is_excluded_in_git_info(repo_root) {
+        return Ok(());
+    }
     let gitignore_path = repo_root.join(".gitignore");
     if !gitignore_path.exists() {
         if !repo_root.exists() {
@@ -238,19 +285,7 @@ pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     let lines: Vec<&str> = existing_content.lines().collect();
 
     // 1. Check if any wildcard `.cvh` or `.cvh/` covers the entire directory
-    let is_wildcard_covered = lines.iter().any(|line| {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
-            return false;
-        }
-        let norm = trimmed.trim_start_matches('/');
-        norm == ".cvh"
-            || norm == ".cvh/"
-            || norm == ".cvh/*"
-            || norm == "**/.cvh"
-            || norm == "**/.cvh/"
-            || norm == "**/.cvh/*"
-    });
+    let is_wildcard_covered = lines.iter().any(|line| line_covers_cvh_dir(line));
 
     if is_wildcard_covered {
         return Ok(());

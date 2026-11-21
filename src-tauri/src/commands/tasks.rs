@@ -55,6 +55,7 @@ pub async fn create_task(
     model: Option<String>,
     task_id: Option<String>,
     attachments: Option<Vec<String>>,
+    base_branch: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
@@ -68,6 +69,7 @@ pub async fn create_task(
         model,
         task_id,
         attachments,
+        base_branch,
         app_handle,
         state,
     )

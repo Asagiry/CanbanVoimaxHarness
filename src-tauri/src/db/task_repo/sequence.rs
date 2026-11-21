@@ -60,9 +60,10 @@ pub fn db_allocate_next_task_num(root: &Path) -> Result<u32, String> {
     }
 
     let mut next_num = current_val.max(max_in_db).saturating_add(1).max(1);
+    let prefix = crate::config::resolve_task_prefix_sync(root);
 
     loop {
-        let candidate_id = format!("CVH-{:03}", next_num);
+        let candidate_id = format!("{}-{:03}", prefix, next_num);
         let exists: bool = tx
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 OR LOWER(id) = LOWER(?1))",

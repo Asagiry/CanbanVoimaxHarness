@@ -108,7 +108,7 @@ pub fn build_responses_payload(request: &OpenAIChatRequest) -> serde_json::Value
         .reasoning_effort
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or("medium");
+        .unwrap_or("none");
 
     let mut payload = serde_json::json!({
         "model": request.model,
@@ -233,7 +233,7 @@ mod tests {
         };
         let payload = build_responses_payload(&req);
         assert_eq!(payload["instructions"], "sys prompt");
-        assert_eq!(payload["reasoning"]["effort"], "medium");
+        assert_eq!(payload["reasoning"]["effort"], "none");
         let input = payload["input"].as_array().unwrap();
         assert_eq!(input.len(), 4);
         assert_eq!(input[2]["type"], "function_call");

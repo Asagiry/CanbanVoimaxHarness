@@ -200,6 +200,7 @@ pub fn propagate_parent_subtask_advance(
                 board_id: tasks[parent_idx].board_id.clone(),
                 worktree_path: parent_wt,
                 branch: parent_branch,
+                base_branch: tasks[parent_idx].base_branch.clone(),
                 verdict: None,
                 custom_flow: None,
                 status: Some(subtask_status.to_string()),

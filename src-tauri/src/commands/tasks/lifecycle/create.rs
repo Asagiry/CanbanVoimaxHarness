@@ -8,7 +8,7 @@ use crate::commands::dialogs::append_task_dialog_activity;
 use crate::commands::git::apply_worktree_from_hook_stdout;
 use crate::commands::state::AppState;
 use crate::config::{load_boards_config, resolve_actual_repo_root};
-use crate::hooks::{execute_hook, HookContext};
+use crate::hooks::{execute_hook_streaming, HookContext};
 use crate::commands::healing::stage_id_matches;
 use crate::commands::tasks::storage::{resolve_or_allocate_task_id, save_tasks_to_disk, try_load_tasks_from_disk};
 use super::hook_records::record_task_hook_result;
@@ -24,6 +24,7 @@ pub async fn create_task(
     model: Option<String>,
     task_id: Option<String>,
     attachments: Option<Vec<String>>,
+    base_branch: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
@@ -34,12 +35,12 @@ pub async fn create_task(
         "INFO",
         "CREATE_TASK",
         &format!(
-            "create_task IPC called: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}, skip_backlog_hook={:?}, model={:?}",
-            title, stage_id, board_id, task_id, effective_skip, model
+            "create_task IPC called: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}, skip_backlog_hook={:?}, model={:?}, base_branch={:?}",
+            title, stage_id, board_id, task_id, effective_skip, model, base_branch
         ),
         Some(&format!("root='{}'", root.display())),
     );
-    internal_create_task(
+    internal_create_task_with_base(
         &root,
         title,
         description,
@@ -49,6 +50,7 @@ pub async fn create_task(
         model,
         task_id,
         attachments,
+        base_branch,
         Some(&app_handle),
         Some(state.inner()),
     )
@@ -66,6 +68,38 @@ pub async fn internal_create_task(
     model: Option<String>,
     task_id: Option<String>,
     attachments: Option<Vec<String>>,
+    app_handle: Option<&AppHandle>,
+    state: Option<&AppState>,
+) -> Result<Task, String> {
+    internal_create_task_with_base(
+        root,
+        title,
+        description,
+        stage_id,
+        board_id,
+        skip_worktree,
+        model,
+        task_id,
+        attachments,
+        None,
+        app_handle,
+        state,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn internal_create_task_with_base(
+    root: &Path,
+    title: String,
+    description: String,
+    stage_id: String,
+    board_id: Option<String>,
+    skip_worktree: Option<bool>,
+    model: Option<String>,
+    task_id: Option<String>,
+    attachments: Option<Vec<String>>,
+    base_branch: Option<String>,
     app_handle: Option<&AppHandle>,
     state: Option<&AppState>,
 ) -> Result<Task, String> {
@@ -108,6 +142,12 @@ pub async fn internal_create_task(
         .filter_map(|t| t.position)
         .fold(0.0f64, f64::max);
 
+    let clean_base_branch = base_branch
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
     let mut new_task = Task {
         id: task_id.clone(),
         title: title.clone(),
@@ -116,6 +156,7 @@ pub async fn internal_create_task(
         board_id: Some(effective_board_id.clone()),
         worktree_path: None,
         branch: None,
+        base_branch: clean_base_branch,
         verdict: None,
         custom_flow: None,
         status: Some("idle".to_string()),
@@ -195,6 +236,10 @@ pub async fn internal_create_task(
                         }));
                     }
                     let hook_started_at = chrono::Utc::now().timestamp_millis();
+                    let mut extra_env = HashMap::new();
+                    if let Some(ref base) = new_task.base_branch {
+                        extra_env.insert("CVH_BASE_BRANCH".to_string(), base.clone());
+                    }
                     let ctx = HookContext {
                         task_id: task_id.clone(),
                         task_title: title.clone(),
@@ -203,9 +248,9 @@ pub async fn internal_create_task(
                         verdict: None,
                         stage_id: Some(stage_id.clone()),
                         board_id: Some(effective_board_id.clone()),
-                        extra_env: HashMap::new(),
+                        extra_env,
                     };
-                    match execute_hook(&hook_path, root, &ctx, None).await {
+                    match execute_hook_streaming(&hook_path, root, &ctx, None, app_handle, "on_enter", &hook_rel).await {
                         Ok(res) => {
                             let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                             if !res.success {

@@ -3,5 +3,6 @@
   "defaultModel": null,
   "description": "CanbanVoimaxHarness Workspace for CanbanVoimaxHarness",
   "name": "CanbanVoimaxHarness",
+  "taskPrefix": "CVH",
   "version": "0.1.0"
 }

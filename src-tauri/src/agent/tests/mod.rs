@@ -117,6 +117,7 @@ pub(crate) fn make_test_task(id: &str, stage_id: &str, board_id: &str) -> Task {
         board_id: Some(board_id.to_string()),
         worktree_path: None,
         branch: None,
+        base_branch: None,
         verdict: None,
         custom_flow: None,
         status: Some("running".to_string()),

@@ -183,6 +183,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                  board_id TEXT NOT NULL DEFAULT 'development',
                  worktree_path TEXT,
                  branch TEXT,
+                 base_branch TEXT,
                  verdict TEXT,
                  custom_flow TEXT,
                  status TEXT NOT NULL DEFAULT 'idle',
@@ -267,6 +268,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         ensure_column_exists(&conn, "tasks", "total_elapsed", "ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0")?;
         ensure_column_exists(&conn, "tasks", "provider_id", "ALTER TABLE tasks ADD COLUMN provider_id TEXT")?;
         ensure_column_exists(&conn, "tasks", "reasoning_effort", "ALTER TABLE tasks ADD COLUMN reasoning_effort TEXT")?;
+        ensure_column_exists(&conn, "tasks", "base_branch", "ALTER TABLE tasks ADD COLUMN base_branch TEXT")?;
         conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", [])?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", [])?;
 

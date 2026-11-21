@@ -2,6 +2,26 @@ import React from 'react';
 import { Ban, Check, X, Loader2, Terminal } from 'lucide-react';
 import type { HookExecutionState } from '../../types';
 
+function renderLogWithLinks(text: string): React.ReactNode {
+  const parts = text.split(/(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g);
+  return parts.map((part, idx) =>
+    part.startsWith('http://') || part.startsWith('https://') ? (
+      <a
+        key={idx}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-sky-400 hover:text-sky-300 underline break-all"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
+
 interface CardHookPopoverProps {
   popoverRef: React.RefObject<HTMLDivElement | null>;
   coords: { top: number; left: number };
@@ -132,7 +152,7 @@ export function CardHookPopover({
             </span>
           </div>
           <div className="p-2.5 rounded bg-[#111114] border border-[#2c2c33] font-mono text-xs text-[#a1a1aa] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text overscroll-contain">
-            {stdout || stderr}
+            {renderLogWithLinks(stdout || stderr)}
           </div>
         </div>
       ) : (

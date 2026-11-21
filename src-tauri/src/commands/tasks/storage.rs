@@ -411,7 +411,10 @@ pub fn max_task_num_on_disk(tasks: &[Task]) -> u32 {
 pub fn next_task_num(tasks: &[Task]) -> u32 {
     let max_num = max_task_num_on_disk(tasks);
     let mut candidate = max_num.saturating_add(1).max(1);
-    while tasks.iter().any(|t| t.id == format!("CVH-{:03}", candidate)) {
+    while tasks.iter().any(|t| {
+        let base = t.id.split('.').next().unwrap_or(t.id.as_str());
+        base.ends_with(&format!("-{:03}", candidate))
+    }) {
         candidate = candidate.saturating_add(1);
     }
     candidate
@@ -439,8 +442,12 @@ pub async fn allocate_next_task_num(repo_root: &Path, tasks: &[Task]) -> u32 {
             );
             let stored_seq = load_task_sequence(repo_root).await;
             let mut next_num = stored_seq.max(max_on_disk).saturating_add(1).max(1);
+            let prefix = crate::config::resolve_task_prefix_sync(repo_root);
 
-            while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
+            while tasks
+                .iter()
+                .any(|t| t.id.eq_ignore_ascii_case(&format!("{}-{:03}", prefix, next_num)))
+            {
                 next_num = next_num.saturating_add(1);
             }
 
@@ -510,7 +517,8 @@ pub async fn resolve_or_allocate_task_id(
         }
         None => {
             let task_num = allocate_next_task_num(repo_root, tasks).await;
-            format!("CVH-{:03}", task_num)
+            let prefix = crate::config::resolve_task_prefix_sync(repo_root);
+            format!("{}-{:03}", prefix, task_num)
         }
     }
 }

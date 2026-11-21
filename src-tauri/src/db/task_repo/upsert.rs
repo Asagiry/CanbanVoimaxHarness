@@ -25,8 +25,8 @@ fn upsert_task_in_tx(tx: &Transaction<'_>, task: &Task) -> Result<(), String> {
             custom_flow, status, model, provider_id, reasoning_effort, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
             created_at, updated_at, completed_at, attachments, tags, position, hook_states,
-            stage_entered_at, stage_durations, total_elapsed
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?30, ?31, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
+            stage_entered_at, stage_durations, total_elapsed, base_branch
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?30, ?31, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0), ?32)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -34,6 +34,7 @@ fn upsert_task_in_tx(tx: &Transaction<'_>, task: &Task) -> Result<(), String> {
             board_id = excluded.board_id,
             worktree_path = excluded.worktree_path,
             branch = excluded.branch,
+            base_branch = excluded.base_branch,
             verdict = excluded.verdict,
             custom_flow = excluded.custom_flow,
             status = excluded.status,
@@ -89,6 +90,7 @@ fn upsert_task_in_tx(tx: &Transaction<'_>, task: &Task) -> Result<(), String> {
             task.total_elapsed,
             task.provider_id,
             task.reasoning_effort,
+            task.base_branch,
         ],
     )
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;

@@ -44,9 +44,10 @@ else
             exit 1
         fi
     else
-        echo "[CVH Worktree Hook] Creating new branch '${BRANCH}' and worktree '${WT_DIR}'..."
-        if ! git worktree add -b "$BRANCH" "$WT_DIR" HEAD; then
-            echo "[CVH Worktree Hook] ERROR: Failed to create worktree '$WT_DIR' with branch '$BRANCH'" >&2
+        BASE_REF="${CVH_BASE_BRANCH:-HEAD}"
+        echo "[CVH Worktree Hook] Creating new branch '${BRANCH}' from '${BASE_REF}' and worktree '${WT_DIR}'..."
+        if ! git worktree add -b "$BRANCH" "$WT_DIR" "$BASE_REF"; then
+            echo "[CVH Worktree Hook] ERROR: Failed to create worktree '$WT_DIR' with branch '$BRANCH' from '$BASE_REF'" >&2
             exit 1
         fi
     fi

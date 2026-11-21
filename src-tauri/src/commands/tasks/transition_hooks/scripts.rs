@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 
 use crate::agent::Task;
-use crate::hooks::{execute_hook, HookContext};
+use crate::hooks::execute_hook_streaming;
 use crate::commands::tasks::lifecycle::record_task_hook_result;
-use super::helpers::upsert_single_task;
+use super::helpers::{build_task_hook_context, upsert_single_task};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn trigger_column_on_enter_script(
@@ -57,16 +56,11 @@ pub async fn trigger_column_on_enter_script(
             .filter(|p| p.exists())
             .unwrap_or_else(|| root.to_path_buf());
 
-        let ctx = HookContext {
-            task_id: task.id.clone(),
-            task_title: task.title.clone(),
-            worktree_path: task.worktree_path.clone().unwrap_or_default(),
-            branch: task.branch.clone().unwrap_or_default(),
-            verdict: verdict.map(|v| v.to_string()).or_else(|| task.verdict.clone()),
-            stage_id: Some(target_stage_id.to_string()),
-            board_id: task.board_id.clone(),
-            extra_env: HashMap::new(),
-        };
+        let ctx = build_task_hook_context(
+            task,
+            Some(target_stage_id.to_string()),
+            verdict.map(|v| v.to_string()).or_else(|| task.verdict.clone()),
+        );
 
         println!(
             "CVH [on_enter_script]: Executing hook {:?} for task {} entering stage {}",
@@ -84,7 +78,7 @@ pub async fn trigger_column_on_enter_script(
         }
         let hook_started_at = chrono::Utc::now().timestamp_millis();
 
-        match execute_hook(&script_path, &wt_path, &ctx, None).await {
+        match execute_hook_streaming(&script_path, &wt_path, &ctx, None, app_handle, "on_enter", trimmed).await {
             Ok(res) => {
                 let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                 record_task_hook_result(

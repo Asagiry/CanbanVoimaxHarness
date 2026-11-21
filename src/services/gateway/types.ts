@@ -276,6 +276,14 @@ export interface AgentEventMap {
   'task:updated': TaskUpdatedPayload;
   'tasks:updated': TasksUpdatedPayload;
   'hook:start': HookStartPayload;
+  'hook:output': {
+    taskId?: string;
+    stageId?: string | null;
+    hookType?: 'on_enter' | 'on_leave' | 'on_finish' | 'on_exit';
+    hookName?: string;
+    stdout?: string;
+    stderr?: string;
+  };
   'hook:finish': HookFinishPayload;
   'project:changed': ProjectSwitchedPayload;
   'project:switched': ProjectSwitchedPayload;

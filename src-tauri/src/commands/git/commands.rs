@@ -8,6 +8,50 @@ use tokio::process::Command;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+async fn run_git_stdout(workdir: &std::path::Path, args: &[&str]) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(workdir).args(args);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let out = cmd.output().await.ok()?;
+    if out.status.success() {
+        Some(crate::agent::decode_output_bytes(&out.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Resolves the merge-base commit hash between the task's base branch (or repo default branch)
+/// and `HEAD`, so committed branch changes are included in `get_task_git_diff`.
+async fn resolve_diff_merge_base(
+    workdir: &std::path::Path,
+    task: Option<&crate::agent::Task>,
+    current_branch: Option<&str>,
+) -> Option<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(base) = task.and_then(|t| t.base_branch.as_deref()).map(str::trim).filter(|s| !s.is_empty()) {
+        candidates.push(base.to_string());
+    }
+    for def in ["main", "master", "production", "develop"] {
+        if !candidates.iter().any(|c| c == def) {
+            candidates.push(def.to_string());
+        }
+    }
+
+    let head_sha = run_git_stdout(workdir, &["rev-parse", "--verify", "HEAD"]).await?;
+    for cand in candidates {
+        if current_branch.is_some_and(|b| b == cand || format!("origin/{}", b) == cand) {
+            continue;
+        }
+        if let Some(mb) = run_git_stdout(workdir, &["merge-base", &cand, "HEAD"]).await {
+            if !mb.is_empty() && mb != head_sha {
+                return Some(mb);
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn get_task_git_diff(
     task_id: String,
@@ -21,7 +65,8 @@ pub async fn get_task_git_diff(
         &format!("get_task_git_diff called for task_id='{}', root='{}'", task_id, root.display()),
     );
 
-    let (_task, workdir, branch) = resolve_task_worktree(&root, &task_id, Some(&state)).await?;
+    let (task_item, workdir, branch) = resolve_task_worktree(&root, &task_id, Some(&state)).await?;
+    let merge_base = resolve_diff_merge_base(&workdir, Some(&task_item), Some(&branch)).await;
 
     let mut status_cmd = Command::new("git");
     status_cmd
@@ -43,6 +88,32 @@ pub async fn get_task_git_diff(
     let mut file_entries_map: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
 
+    if let Some(ref mb) = merge_base {
+        if let Some(ns_stdout) = run_git_stdout(&workdir, &["diff", "--name-status", mb]).await {
+            for line in ns_stdout.lines() {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() < 2 {
+                    continue;
+                }
+                let st_code = parts[0].trim();
+                let raw_path = parts.last().copied().unwrap_or("").trim().trim_matches('"');
+                if raw_path.is_empty() || is_cvh_path(raw_path) {
+                    continue;
+                }
+                let status = if st_code.starts_with('A') {
+                    "A"
+                } else if st_code.starts_with('D') {
+                    "D"
+                } else {
+                    "M"
+                };
+                file_entries_map
+                    .entry(raw_path.to_string())
+                    .or_insert_with(|| status.to_string());
+            }
+        }
+    }
+
     for line in status_stdout.lines() {
         let line = line.trim_end();
         if line.len() < 4 {
@@ -57,6 +128,9 @@ pub async fn get_task_git_diff(
         };
         let unquoted = target_path.trim_matches('"').to_string();
         if unquoted.is_empty() || is_cvh_path(&unquoted) {
+            continue;
+        }
+        if merge_base.is_some() && xy != "??" {
             continue;
         }
 
@@ -92,19 +166,11 @@ pub async fn get_task_git_diff(
         });
     }
 
-    let mut head_cmd = Command::new("git");
-    head_cmd
-        .current_dir(&workdir)
-        .args(["rev-parse", "--verify", "HEAD"]);
-    #[cfg(windows)]
-    head_cmd.creation_flags(CREATE_NO_WINDOW);
-    let head_exists = head_cmd
-        .output()
-        .await
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let head_exists = run_git_stdout(&workdir, &["rev-parse", "--verify", "HEAD"]).await.is_some();
 
-    let diff_args = if head_exists {
+    let diff_args: Vec<&str> = if let Some(ref mb) = merge_base {
+        vec!["diff", mb.as_str()]
+    } else if head_exists {
         vec!["diff", "HEAD"]
     } else {
         vec!["diff"]
@@ -299,4 +365,41 @@ pub async fn get_task_image_diff(
         current_bytes,
         previous_bytes,
     })
+}
+
+/// Lists local and origin remote git branches for a repository root.
+/// Returns an empty list if the directory is not a git repo or git fails.
+pub async fn list_git_branches_in(root: &std::path::Path) -> Vec<String> {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root)
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes/origin"]);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let Ok(output) = cmd.output().await else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+
+    let stdout = crate::agent::decode_output_bytes(&output.stdout);
+    let mut seen = std::collections::HashSet::new();
+    let mut branches = Vec::new();
+    for line in stdout.lines() {
+        let b = line.trim();
+        if b.is_empty() || b == "origin" || b == "origin/HEAD" {
+            continue;
+        }
+        if seen.insert(b.to_string()) {
+            branches.push(b.to_string());
+        }
+    }
+    branches
+}
+
+#[tauri::command]
+pub async fn list_git_branches(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let root = state.get_root();
+    Ok(list_git_branches_in(&root).await)
 }

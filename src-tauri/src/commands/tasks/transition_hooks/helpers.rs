@@ -1,10 +1,37 @@
 use chrono::Utc;
+use std::collections::HashMap;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::commands::healing::task_id_matches;
+use crate::hooks::HookContext;
+
+/// Builds a `HookContext` for a task transition, forwarding `CVH_BASE_BRANCH` when set.
+pub fn build_task_hook_context(
+    task: &Task,
+    stage_id: Option<String>,
+    verdict: Option<String>,
+) -> HookContext {
+    let mut extra_env = HashMap::new();
+    if let Some(ref base) = task.base_branch {
+        let trimmed = base.trim();
+        if !trimmed.is_empty() {
+            extra_env.insert("CVH_BASE_BRANCH".to_string(), trimmed.to_string());
+        }
+    }
+    HookContext {
+        task_id: task.id.clone(),
+        task_title: task.title.clone(),
+        worktree_path: task.worktree_path.clone().unwrap_or_default(),
+        branch: task.branch.clone().unwrap_or_default(),
+        verdict,
+        stage_id,
+        board_id: task.board_id.clone(),
+        extra_env,
+    }
+}
 
 /// Upserts a single mutated task into SQLite (ensuring `project_path` is set) without
 /// overwriting any other concurrent tasks on the board.
