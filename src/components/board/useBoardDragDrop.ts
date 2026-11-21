@@ -4,6 +4,15 @@ import { useBoardStore, isDoneColumnDef, sortDoneTasksByCompletionDateDesc } fro
 import { PipelineColumn, KanbanTask } from '../../types';
 import { useTranslation } from '../../stores/languageStore';
 
+/** Maps a drop index inside a search-filtered column to the index in the full column (`full` is null when no filter is active). */
+export function toUnfilteredIndex(visible: KanbanTask[], full: KanbanTask[] | null, destIndex: number): number {
+  if (!full) return destIndex;
+  const anchor = visible[Math.min(destIndex, visible.length - 1)];
+  const anchorPos = anchor ? full.findIndex((t) => t.id === anchor.id) : -1;
+  if (anchorPos === -1) return full.length;
+  return destIndex < visible.length ? anchorPos : anchorPos + 1;
+}
+
 export interface UseBoardDragDropOptions {
   columns: PipelineColumn[];
   tasks: KanbanTask[];
@@ -138,10 +147,9 @@ export function useBoardDragDrop({
     };
 
     const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
-    const getColumnDisplayTasks = (targetColId: string) => {
+    const getColumnDisplayTasks = (targetColId: string, baseTasks = searchQuery ? filteredTasks : currentBoardTasks) => {
       const isDone = isDoneCol(targetColId);
       const isFirst = targetColId === firstColId;
-      const baseTasks = searchQuery ? filteredTasks : currentBoardTasks;
       const colTasks = baseTasks.filter((t) => {
         if (t.stageId === targetColId) return true;
         if (isFirst) {
@@ -157,6 +165,9 @@ export function useBoardDragDrop({
             .sort(sortDoneTasksByCompletionDateDesc)
         : colTasks;
     };
+
+    const fullColumnOthers = (colId: string) =>
+      searchQuery ? getColumnDisplayTasks(colId, currentBoardTasks).filter((t) => t.id !== draggableId) : null;
 
     if (sourceColId === destColId) {
       if (sourceIndex === destIndex) return;
@@ -202,7 +213,7 @@ export function useBoardDragDrop({
       setTasks(nextTasks);
 
       try {
-        await reorderTask(draggableId, destColId, destIndex);
+        await reorderTask(draggableId, destColId, toUnfilteredIndex(otherTasks, fullColumnOthers(destColId), destIndex));
       } catch (err: unknown) {
         console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
         setTasks(rollbackTasks);
@@ -272,7 +283,7 @@ export function useBoardDragDrop({
     setTasks(nextTasks);
 
     try {
-      await reorderTask(draggableId, destColId, destIndex);
+      await reorderTask(draggableId, destColId, toUnfilteredIndex(destDisplayTasks, fullColumnOthers(destColId), destIndex));
     } catch (err: unknown) {
       console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
       setTasks(rollbackTasks);

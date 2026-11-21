@@ -191,8 +191,7 @@ pub async fn execute_reject_task(
                 let _ = crate::db::db_upsert_task(repo_root, p);
             }
 
-            // Save to disk and AppState
-            let _ = crate::commands::save_tasks_to_disk(repo_root, &mut_tasks).await;
+            // Sync AppState (the three mutated tasks are already upserted individually above)
             if let Some(app) = ctx.app_handle.as_ref() {
                 if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
                     if let Ok(mut guard) = state_ref.tasks.lock() {

@@ -190,6 +190,9 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
     if role == "cvh-dev" {
         return Err("Запрещено удалять встроенную персону 'cvh-dev'".to_string());
     }
+    if !is_valid_persona_role(role) {
+        return Err(format!("Недопустимое имя роли '{}'", role));
+    }
     let role_dir = crate::config::agent_dir(root, role);
     let flat = root.join(".cvh").join("agents").join(format!("{}.md", role));
     let mut deleted = false;
@@ -241,6 +244,9 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
             "Недопустимое имя роли '{}': разрешены только строчные латинские буквы, цифры и дефис (шаблон ^[a-z0-9][a-z0-9-]*$)",
             new_role
         ));
+    }
+    if !is_valid_persona_role(old_role) {
+        return Err(format!("Недопустимое имя роли '{}'", old_role));
     }
     if old_role == new_role {
         return Ok(());

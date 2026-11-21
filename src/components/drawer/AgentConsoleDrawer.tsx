@@ -39,6 +39,7 @@ export default function AgentConsoleDrawer() {
     selectableModels,
     effectiveModel,
   } = useDrawerTaskState(activeTaskId);
+  const storeSubagentsCount = useDrawerStore((s) => (task ? s.subagents[task.id]?.length ?? 0 : 0));
 
   const {
     activeTaskTools,
@@ -101,12 +102,11 @@ export default function AgentConsoleDrawer() {
     >
       <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
         {(() => {
-          const storeSubagents = useDrawerStore.getState().subagents[task.id] || [];
           const subagentToolsCount = (activeTaskTools || []).filter(
             (t) => t.toolName === 'subagent' || t.toolName === 'subagent_bg'
           ).length;
           const boardSubtasksCount = subtasks.length;
-          const subagentsCount = Math.max(storeSubagents.length, subagentToolsCount, boardSubtasksCount);
+          const subagentsCount = Math.max(storeSubagentsCount, subagentToolsCount, boardSubtasksCount);
 
           return (
             <DrawerHeader

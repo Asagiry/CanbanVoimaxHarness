@@ -144,6 +144,28 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
     Ok(())
 }
 
+/// Reads every task and lets `mutate` adjust them inside one immediate transaction; the
+/// tasks `mutate` returns are upserted before commit, so no other writer can slip in
+/// between the read and the write.
+pub fn db_read_modify_tasks(root: &Path, mutate: impl FnOnce(&mut Vec<Task>) -> Vec<Task>) -> Result<Vec<Task>, String> {
+    let mut conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+    let mut tasks = super::task_query::read_all_tasks(&tx, root)?;
+    let changed = mutate(&mut tasks);
+    if !changed.is_empty() {
+        tx.execute_batch("PRAGMA defer_foreign_keys = ON;")
+            .map_err(|e| format!("Failed to defer foreign keys: {}", e))?;
+        for task in &changed {
+            upsert_task_in_tx(&tx, task)?;
+        }
+        tx.commit()
+            .map_err(|e| format!("Failed to commit read-modify transaction: {}", e))?;
+    }
+    Ok(tasks)
+}
+
 /// Atomically upserts multiple tasks and their todos into SQLite within a single immediate transaction.
 pub fn db_upsert_tasks_batch(root: &Path, tasks: &[Task]) -> Result<(), String> {
     if tasks.is_empty() {

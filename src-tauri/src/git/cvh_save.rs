@@ -102,7 +102,9 @@ pub async fn cvh_git_save_at(root: &Path, message: &str) -> Result<CvhGitStatus,
     if config_staged.is_empty() {
         return cvh_git_status_at(root).await;
     }
-    run_git(root, &["commit", "-m", message])
+    let mut commit_args: Vec<&str> = vec!["commit", "-m", message, "--"];
+    commit_args.extend(config_staged.iter().map(String::as_str));
+    run_git(root, &commit_args)
         .await
         .map_err(|e| e.to_string())?;
     run_git(root, &["push", "origin", "HEAD:main"])
@@ -214,6 +216,29 @@ mod tests {
         let show_s = String::from_utf8_lossy(&show.stdout);
         assert!(show_s.contains(".cvh/rules/x.md"), "commit must contain rule: {}", show_s);
         assert!(!show_s.contains("harness.db"), "commit must NOT contain harness.db: {}", show_s);
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&bare);
+    }
+
+    #[tokio::test]
+    async fn save_leaves_staged_files_outside_cvh_out_of_the_commit() {
+        let dir = init_repo("outside");
+        let bare = tmp_dir("bare_outside");
+        git(&bare, &["init", "--bare", "-b", "main"]);
+        git(&dir, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        git(&dir, &["push", "origin", "main"]);
+        write(&dir, ".cvh/rules/x.md", "v2");
+        write(&dir, "src/wip.rs", "half-finished");
+        git(&dir, &["add", "--", "src/wip.rs"]);
+        cvh_git_save_at(&dir, "chore(cvh): save").await.expect("save");
+        let out = |args: &[&str]| {
+            let o = std::process::Command::new("git").current_dir(&dir).args(args).output().expect("git");
+            String::from_utf8_lossy(&o.stdout).to_string()
+        };
+        let committed = out(&["show", "--name-only", "--format=", "HEAD"]);
+        assert!(committed.contains(".cvh/rules/x.md"), "commit must contain rule: {}", committed);
+        assert!(!committed.contains("src/wip.rs"), "commit must NOT contain files outside .cvh: {}", committed);
+        assert!(out(&["diff", "--cached", "--name-only"]).contains("src/wip.rs"), "user's staged file must stay staged");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&bare);
     }

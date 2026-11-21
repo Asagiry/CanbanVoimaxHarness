@@ -234,6 +234,7 @@ pub fn compact_conversation_to_target(
         while estimate_tokens(messages) > target_tokens && messages.len() > 4 && idx < messages.len() - 1 {
             messages.remove(idx);
         }
+        crate::agent::sanitizer::repair_tool_pairs(messages);
     }
 
     build_compaction_result(original_chars, tokens_before, total_evaporated, summary_opt, current_snapshot, messages)

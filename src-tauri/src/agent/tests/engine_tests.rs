@@ -574,6 +574,80 @@ data: [DONE]
     }
 
     #[tokio::test]
+    async fn test_steer_after_advance_restarts_same_agent_and_readvance_reaches_running_subtask() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_steer_after_adv_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+        let task = make_test_task("CVH-090", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let make_config = |base_url: String| AgentSessionConfig {
+            repo_root: base.clone(), worktree_path: base.clone(), role: "developer".to_string(),
+            stage_id: "dev".to_string(), task_id: "CVH-090".to_string(), task_title: "Implement feature".to_string(),
+            task_description: "Do work".to_string(), handover_summary: None, task_attachments: None,
+            steer_prompt: None, steer_images: None, steering: Arc::new(Mutex::new(AgentSteering::default())), advance_aborted: None,
+            base_url, api_key: None, model: "test-model".to_string(), temperature: None, reasoning_effort: None,
+            max_turns: 10, app_handle: None, context_window: None,
+        };
+
+        // Run 1: the agent hands the task over and terminates.
+        let first_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_adv_1\",\"function\":{\"name\":\"advance_task\",\"arguments\":\"{\\\"summary\\\":\\\"FIRST_HANDOVER\\\"}\"}}]}}]}
+
+data: [DONE]
+
+";
+        let first_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (first_url, first_server) = start_mock_sse_server(first_stream, Arc::clone(&first_counter)).await;
+        run_agent_loop(make_config(first_url), Arc::new(AtomicBool::new(false)), |_| {}).await.expect("first run");
+        first_server.abort();
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let sub = tasks.iter().find(|t| t.id == "CVH-090.1").expect("subtask created");
+        assert_eq!(sub.status.as_deref(), Some("running"));
+
+        // The user writes to the agent after the handover (steer_agent unlinks the parent before restarting it).
+        let mut tasks = tasks;
+        let parent = tasks.iter_mut().find(|t| t.id == "CVH-090").expect("parent");
+        parent.waiting_for_subtask_id = None;
+        parent.completed_at = None;
+        crate::commands::tasks::save_tasks_to_disk(&base, &tasks).await.expect("unlink parent");
+        let steer_text = "CORRECTION_AFTER_HANDOVER";
+        crate::agent::persist_steer_message(&base, "CVH-090", steer_text, None, Some("steer-post-advance")).expect("persist steer");
+
+        // Run 2: the same agent must see the message, answer, and hand over again.
+        let second_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_adv_2\",\"function\":{\"name\":\"advance_task\",\"arguments\":\"{\\\"summary\\\":\\\"SECOND_HANDOVER\\\"}\"}}]}}]}
+
+data: [DONE]
+
+";
+        let second_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (second_url, second_server) = start_mock_sse_server(second_stream, Arc::clone(&second_counter)).await;
+        run_agent_loop(make_config(second_url), Arc::new(AtomicBool::new(false)), |_| {}).await.expect("second run");
+        second_server.abort();
+
+        assert_eq!(second_counter.load(Ordering::SeqCst), 1, "restarted agent must call the LLM once");
+        let saved = crate::db::load_conversation_context(&base, "CVH-090").unwrap().unwrap();
+        assert!(
+            saved.messages.iter().any(|m| m.content.as_deref().unwrap_or("").contains(steer_text)),
+            "restarted agent must receive the post-advance user message"
+        );
+
+        // The still-running subtask must receive the second handover as a message.
+        let sub_dialog = crate::db::load_dialog_items(&base, "CVH-090.1").expect("subtask dialog");
+        assert!(
+            sub_dialog.iter().any(|it| it.item_type == "steer" && it.content.as_deref().unwrap_or("").contains("SECOND_HANDOVER")),
+            "running subtask must receive the repeated handover, got: {:?}",
+            sub_dialog.iter().map(|it| (it.item_type.clone(), it.content.clone())).collect::<Vec<_>>()
+        );
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let parent = tasks.iter().find(|t| t.id == "CVH-090").expect("parent");
+        assert_eq!(parent.waiting_for_subtask_id.as_deref(), Some("CVH-090.1"), "parent must stay linked to its subtask");
+        assert_eq!(tasks.iter().filter(|t| t.parent_id.as_deref() == Some("CVH-090")).count(), 1, "no duplicate subtask");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
     async fn test_agent_loop_natural_exit_on_move_task() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_natural_exit_mov_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");

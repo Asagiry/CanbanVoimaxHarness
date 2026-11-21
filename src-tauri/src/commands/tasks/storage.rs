@@ -117,6 +117,78 @@ pub fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
     get_app_config_dir().join("projects").join(format!("{:016x}", hash)).join("tasks.json")
 }
 
+/// Self-heals `tasks` in place and returns only the tasks healing actually changed,
+/// so persisting the result cannot roll back concurrent updates to untouched tasks.
+fn heal_and_collect_changed(tasks: &mut [Task], boards_cfg: &crate::config::BoardsConfig) -> Vec<Task> {
+    let before = tasks.to_vec();
+    if !heal_tasks(tasks, boards_cfg) {
+        return Vec::new();
+    }
+    let as_json = |t: &Task| serde_json::to_value(t).unwrap_or_default();
+    tasks.iter().zip(&before).filter(|(after, before)| as_json(after) != as_json(before)).map(|(after, _)| after.clone()).collect()
+}
+
+/// Reads all tasks, purges foreign rows, self-heals, and persists the healed tasks.
+/// With `strict`, purge and persistence failures are returned; otherwise they are logged.
+fn load_and_heal(root: &Path, boards_cfg: &crate::config::BoardsConfig, strict: bool) -> Result<Vec<Task>, String> {
+    let mut tasks = crate::db::db_get_all_tasks(root)?;
+
+    let foreign_ids = find_foreign_task_ids(&tasks, root);
+    if !foreign_ids.is_empty() {
+        crate::logger::cvh_log(
+            Some(root),
+            "WARN",
+            "LOAD_TASKS",
+            &format!(
+                "Purging {} foreign project tasks from SQLite database at {:?}: [{}]",
+                foreign_ids.len(),
+                root,
+                foreign_ids.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        );
+        match crate::db::db_delete_tasks_cascade(root, &foreign_ids) {
+            Ok(()) => tasks.retain(|t| !foreign_ids.contains(&t.id)),
+            Err(e) if strict => return Err(e),
+            Err(e) => crate::logger::cvh_log(Some(root), "WARN", "LOAD_TASKS", &format!("Foreign purge failed: {}", e)),
+        }
+    }
+
+    for t in tasks.iter_mut() {
+        t.project_path = Some(root.to_string_lossy().to_string());
+    }
+
+    let healed = heal_and_collect_changed(&mut tasks, boards_cfg);
+    if healed.is_empty() {
+        return Ok(tasks);
+    }
+    crate::logger::cvh_log(
+        Some(root),
+        "INFO",
+        "LOAD_TASKS",
+        &format!("Healed tasks against boards config, persisting {} tasks", healed.len()),
+    );
+    // Healing must be persisted: redo it on a fresh read inside one transaction so a
+    // concurrent writer is never overwritten by this (now possibly stale) snapshot.
+    let persisted = crate::db::db_read_modify_tasks(root, |fresh| {
+        let foreign = find_foreign_task_ids(fresh, root);
+        fresh.retain(|t| !foreign.contains(&t.id));
+        heal_and_collect_changed(fresh, boards_cfg)
+    });
+    match persisted {
+        Ok(fresh) => return Ok(fresh),
+        Err(e) if strict => return Err(format!("save_tasks_to_disk: SQLite persistence error: {}", e)),
+        Err(e) => crate::logger::cvh_log(Some(root), "WARN", "LOAD_TASKS", &format!("Healed task save failed: {}", e)),
+    }
+    Ok(tasks)
+}
+
+/// Runs a blocking SQLite call off the async runtime threads.
+async fn blocking_db<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("DB task join error: {}", e))?
+}
+
 pub async fn try_load_tasks_from_disk(repo_root: &Path) -> Result<Vec<Task>, String> {
     let actual_root = resolve_actual_repo_root(repo_root);
     if actual_root.as_os_str().is_empty() {
@@ -126,41 +198,9 @@ pub async fn try_load_tasks_from_disk(repo_root: &Path) -> Result<Vec<Task>, Str
         .await
         .map_err(|e| format!("Failed to load boards config: {}", e))?;
 
-    // 1. Sole Source of Truth: High-speed SQLite Database (.cvh/harness.db)
-    let mut tasks = crate::db::db_get_all_tasks(&actual_root)?;
-
-    // 2. Purge foreign tasks that were contaminated into this SQLite database
-    let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
-    if !foreign_ids.is_empty() {
-        crate::logger::cvh_log(
-            Some(&actual_root),
-            "WARN",
-            "LOAD_TASKS",
-            &format!(
-                "Purging {} foreign project tasks from SQLite database at {:?}: [{}]",
-                foreign_ids.len(),
-                actual_root,
-                foreign_ids.iter().cloned().collect::<Vec<_>>().join(", ")
-            ),
-        );
-        crate::db::db_delete_tasks_cascade(&actual_root, &foreign_ids)?;
-        tasks.retain(|t| !foreign_ids.contains(&t.id));
-    }
-
-    for t in tasks.iter_mut() {
-        t.project_path = Some(actual_root.to_string_lossy().to_string());
-    }
-
-    let modified = heal_tasks(&mut tasks, &boards_cfg);
-    if modified {
-        crate::logger::cvh_log(
-            Some(&actual_root),
-            "INFO",
-            "LOAD_TASKS",
-            &format!("Healed tasks against boards config, persisting {} tasks", tasks.len()),
-        );
-        save_tasks_to_disk(&actual_root, &tasks).await?;
-    }
+    // Sole Source of Truth: High-speed SQLite Database (.cvh/harness.db)
+    let root_b = actual_root.clone();
+    let tasks = blocking_db(move || load_and_heal(&root_b, &boards_cfg, true)).await?;
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     crate::logger::cvh_log_with_details(
@@ -195,7 +235,25 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     if actual_root.as_os_str().is_empty() {
         return Vec::new();
     }
-    let mut tasks = match crate::db::db_get_all_tasks(&actual_root) {
+    let boards_cfg = match load_boards_config(&actual_root).await {
+        Ok(cfg) => Some(cfg),
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(&actual_root),
+                "ERROR",
+                "LOAD_TASKS",
+                &format!("load_boards_config failed (skipping heal/save to protect SQLite): {}", e),
+            );
+            None
+        }
+    };
+    let root_b = actual_root.clone();
+    let loaded = blocking_db(move || match boards_cfg {
+        Some(cfg) => load_and_heal(&root_b, &cfg, false),
+        None => crate::db::db_get_all_tasks(&root_b),
+    })
+    .await;
+    let tasks = match loaded {
         Ok(t) => t,
         Err(e) => {
             crate::logger::cvh_log(
@@ -207,35 +265,6 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
             return Vec::new();
         }
     };
-    let boards_cfg = match load_boards_config(&actual_root).await {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            crate::logger::cvh_log(
-                Some(&actual_root),
-                "ERROR",
-                "LOAD_TASKS",
-                &format!("load_boards_config failed (skipping heal/save to protect SQLite): {}", e),
-            );
-            return tasks;
-        }
-    };
-
-    let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
-    if !foreign_ids.is_empty() {
-        if let Err(e) = crate::db::db_delete_tasks_cascade(&actual_root, &foreign_ids) {
-            crate::logger::cvh_log(Some(&actual_root), "WARN", "LOAD_TASKS", &format!("Foreign purge failed: {}", e));
-        } else {
-            tasks.retain(|t| !foreign_ids.contains(&t.id));
-        }
-    }
-    for t in tasks.iter_mut() {
-        t.project_path = Some(actual_root.to_string_lossy().to_string());
-    }
-    if heal_tasks(&mut tasks, &boards_cfg) {
-        if let Err(e) = save_tasks_to_disk(&actual_root, &tasks).await {
-            crate::logger::cvh_log(Some(&actual_root), "WARN", "LOAD_TASKS", &format!("Healed task save failed: {}", e));
-        }
-    }
     tasks
 }
 
@@ -267,10 +296,14 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
             t.project_path = Some(actual_root.to_string_lossy().to_string());
         }
     }
-    let tasks = &filtered_tasks;
-
     // 1. 100% Single Source of Truth: High-speed SQLite database (.cvh/harness.db)
-    let db_res = crate::db::db_upsert_all_tasks(&actual_root, tasks);
+    let root_b = actual_root.clone();
+    let (db_res, filtered_tasks) = tokio::task::spawn_blocking(move || {
+        (crate::db::db_upsert_all_tasks(&root_b, &filtered_tasks), filtered_tasks)
+    })
+    .await
+    .map_err(|e| format!("save_tasks_to_disk: DB task join error: {}", e))?;
+    let tasks = &filtered_tasks;
     if let Err(ref e) = db_res {
         crate::logger::cvh_log(
             Some(&actual_root),

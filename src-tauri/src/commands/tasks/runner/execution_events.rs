@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::AgentEvent;
 use crate::commands::state::AppState;
-use crate::commands::tasks::storage::{save_tasks_to_disk, try_load_tasks_from_disk};
+use crate::commands::tasks::storage::try_load_tasks_from_disk;
 
 enum EventDbJob {
     AppendDialog { root: PathBuf, task_id: String, item: crate::db::ActivityItem },
@@ -379,9 +379,6 @@ async fn finalize_task_on_stop(
     }
     if !changed {
         return;
-    }
-    if let Err(e) = save_tasks_to_disk(root_task, &tasks).await {
-        eprintln!("CVH [run_agent]: Failed to persist tasks on completion: {}", e);
     }
     if let Some(state_ref) = app.try_state::<AppState>() {
         if state_ref.is_same_root(root_task) {

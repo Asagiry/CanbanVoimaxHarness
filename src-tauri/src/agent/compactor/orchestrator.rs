@@ -416,6 +416,7 @@ pub async fn compact_context_for_task(
                 new_messages.push(msg.clone());
             }
         }
+        crate::agent::sanitizer::repair_tool_pairs(&mut new_messages);
         // Enforce safe ceiling guarantee on in-memory context as well
         let _ = compact_conversation_to_target(&mut new_messages, 96_000, None);
         guard.messages = new_messages;

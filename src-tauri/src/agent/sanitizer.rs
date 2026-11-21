@@ -47,6 +47,25 @@ pub fn sanitize_unclosed_tool_calls(messages: &mut Vec<ChatMessage>) {
     }
 }
 
+/// Restores tool_call/tool_result pairing after messages were removed by index
+/// (compaction): drops tool responses whose call is gone, then closes calls whose
+/// response is gone. Providers reject transcripts with either kind of dangling half.
+pub fn repair_tool_pairs(messages: &mut Vec<ChatMessage>) {
+    let mut open_ids: HashSet<String> = HashSet::new();
+    messages.retain(|msg| match msg.role {
+        Role::Tool => msg.tool_call_id.as_ref().is_some_and(|id| open_ids.contains(id)),
+        Role::Assistant => {
+            open_ids = msg.tool_calls.iter().flatten().map(|tc| tc.id.clone()).collect();
+            true
+        }
+        _ => {
+            open_ids.clear();
+            true
+        }
+    });
+    sanitize_unclosed_tool_calls(messages);
+}
+
 /// Reconstructs a list of ChatMessages from persisted SQLite dialog items
 /// when in-memory context has been lost (e.g. after process restart).
 pub fn reconstruct_messages_from_dialog(
@@ -276,6 +295,59 @@ mod tests {
         assert_eq!(messages[1].role, Role::Tool);
         assert_eq!(messages[1].tool_call_id.as_deref(), Some("call_abc123"));
         assert!(messages[1].content.as_deref().unwrap().contains("прерван"));
+    }
+
+    fn call(id: &str) -> ChatMessage {
+        ChatMessage::assistant(None, Some(vec![ToolCall {
+            id: id.to_string(),
+            call_type: "function".to_string(),
+            function: FunctionCall { name: "read_file".to_string(), arguments: "{}".to_string() },
+        }]))
+    }
+
+    fn assert_tool_pairs_intact(messages: &[ChatMessage]) {
+        let mut open: HashSet<String> = HashSet::new();
+        for (i, msg) in messages.iter().enumerate() {
+            match msg.role {
+                Role::Tool => {
+                    let id = msg.tool_call_id.clone().unwrap_or_default();
+                    assert!(open.remove(&id), "message {} is a tool result without its call: {:?}", i, id);
+                }
+                _ => {
+                    assert!(open.is_empty(), "message {} follows unanswered tool calls: {:?}", i, open);
+                    open = msg.tool_calls.iter().flatten().map(|tc| tc.id.clone()).collect();
+                }
+            }
+        }
+        assert!(open.is_empty(), "transcript ends with unanswered tool calls: {:?}", open);
+    }
+
+    #[test]
+    fn test_repair_tool_pairs_drops_orphan_results_and_closes_calls() {
+        let mut messages = vec![
+            ChatMessage::system("sys"),
+            ChatMessage::tool_response("gone", "orphan result"),
+            ChatMessage::user("hi"),
+            call("a"),
+            ChatMessage::tool_response("a", "ok"),
+            ChatMessage::tool_response("stale", "orphan result"),
+            call("b"),
+        ];
+        repair_tool_pairs(&mut messages);
+        assert_tool_pairs_intact(&messages);
+        assert!(messages.iter().all(|m| m.text_content() != Some("orphan result")));
+        assert!(messages.iter().any(|m| m.text_content() == Some("ok")), "valid pair must survive");
+    }
+
+    #[test]
+    fn test_emergency_eviction_keeps_tool_pairs_intact() {
+        let mut messages = vec![ChatMessage::system("sys"), ChatMessage::user("task")];
+        for i in 0..400 {
+            messages.push(call(&format!("c{i}")));
+            messages.push(ChatMessage::tool_response(format!("c{i}"), "x".repeat(40)));
+        }
+        let _ = crate::agent::compactor::compact_conversation_to_target(&mut messages, 300, None);
+        assert_tool_pairs_intact(&messages);
     }
 
     #[test]

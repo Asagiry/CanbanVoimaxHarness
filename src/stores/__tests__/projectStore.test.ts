@@ -245,4 +245,23 @@ describe('projectStore - Global Rules Sync on Project Switching', () => {
     expect(useProjectStore.getState().activeProject.id).toBe('p1');
     expect(loadBoardsSpy).not.toHaveBeenCalled();
   });
+
+  it('performProjectSwitch keeps the previous project board when switch IPC fails', async () => {
+    mockInvoke.mockRejectedValue(new Error('switch failed'));
+    const tasks = [{ id: 'CVH-1' }] as unknown as ReturnType<typeof useBoardStore.getState>['tasks'];
+    const columns = [{ id: 'dev' }] as unknown as ReturnType<typeof useBoardStore.getState>['columns'];
+    useBoardStore.setState({ tasks, columns });
+    useProjectStore.setState({
+      availableProjects: [{ id: 'p2', name: 'P2', rootPath: '/path/p2', activeBranch: 'main', worktreesCount: 0 }],
+      activeProject: { id: 'p1', name: 'P1', rootPath: '/path/p1', activeBranch: 'main', worktreesCount: 0 },
+      hasActiveProject: true,
+    });
+
+    await useProjectStore.getState().switchProject('p2');
+
+    expect(useProjectStore.getState().activeProject.id).toBe('p1');
+    expect(useBoardStore.getState().tasks).toEqual(tasks);
+    expect(useBoardStore.getState().columns).toEqual(columns);
+    expect(useBoardStore.getState().isLoadingTasks).toBe(false);
+  });
 });

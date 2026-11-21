@@ -101,7 +101,12 @@ async fn interrupted_stream_waits_for_retry_until_stopped() {
     let (result, events) = stream_test_http_response("503 Service Unavailable", "offline".into(), 0).await;
     assert!(result.is_ok());
     assert!(matches!(events.last(), Some(StreamChunk::Retry { delay_secs: 5, .. })));
-    for status in ["400 Bad Request", "401 Unauthorized", "403 Forbidden", "429 Too Many Requests"] {
+    let (result, events) = stream_test_http_response("429 Too Many Requests
+Retry-After: 7", "slow down".into(), 0).await;
+    assert!(result.is_ok());
+    assert!(matches!(events.last(), Some(StreamChunk::Retry { delay_secs: 7, .. })), "429 must wait for Retry-After and retry");
+    assert!(events.iter().all(|event| !matches!(event, StreamChunk::Error(_))), "429 must not surface as an error");
+    for status in ["400 Bad Request", "401 Unauthorized", "403 Forbidden"] {
         let (result, events) = stream_test_http_response(status, "request denied".into(), 0).await;
         assert!(result.is_err());
         assert!(matches!(events.last(), Some(StreamChunk::Error(_))));

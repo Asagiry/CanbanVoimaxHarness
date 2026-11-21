@@ -204,9 +204,10 @@ pub async fn internal_advance_task_with_verdict(
                         summary,
                     );
                     let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
+                    relay_repeated_handover(root, existing_sub, &target_col, summary, app_handle).await;
 
                     return Ok(format!(
-                        "Подзадача {} уже активна для задачи {}",
+                        "УСПЕШНО: Подзадача {} уже активна для задачи {}, новое саммари передано ей сообщением",
                         existing_sub_id, task_id
                     ));
                 }
@@ -227,9 +228,28 @@ pub async fn internal_advance_task_with_verdict(
                     task_id, existing_sub.id, target_col.title, existing_sub.status
                 ),
             );
+            let existing_sub = existing_sub.clone();
+            let existing_sub_id = existing_sub.id.clone();
+            if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
+                parent.waiting_for_subtask_id = Some(existing_sub_id.clone());
+                parent.status = Some("done".to_string());
+                parent.updated_at = Utc::now().timestamp_millis();
+                let _ = upsert_single_task(root, parent);
+                sync_single_task_in_app_state(root, parent, app_handle);
+                if let Some(app) = app_handle {
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent, "projectPath": root.to_string_lossy() }));
+                }
+            }
+            let parent_summary_content = format_stage_summary_activity(
+                &current_task.stage_id,
+                Some(&current_task.title),
+                summary,
+            );
+            let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
+            relay_repeated_handover(root, &existing_sub, &target_col, summary, app_handle).await;
             return Ok(format!(
-                "Подзадача {} уже выполняется в колонке {}",
-                existing_sub.id, target_col.title
+                "УСПЕШНО: Подзадача {} уже выполняется в колонке {}, новое саммари передано ей сообщением",
+                existing_sub_id, target_col.title
             ));
         }
 
@@ -407,6 +427,25 @@ pub async fn internal_advance_task_with_verdict(
         target_col.title,
         updated_task.status.as_deref().unwrap_or("done")
     ))
+}
+
+/// Delivers a repeated handover to the subtask that already owns the target stage: the
+/// summary lands in its dialog as a user message, and a stopped subtask is resumed.
+async fn relay_repeated_handover(
+    root: &Path,
+    subtask: &crate::agent::Task,
+    target_col: &crate::config::PipelineColumn,
+    summary: &str,
+    app_handle: Option<&AppHandle>,
+) {
+    let prompt = format_handover_steer_prompt(summary);
+    let _ = append_task_dialog_activity(root, &subtask.id, "steer", &prompt, app_handle).await;
+    let target_has_autorun = target_col.persona.is_some() || target_col.auto_run == Some(true);
+    if target_has_autorun && subtask.status.as_deref() != Some("running") {
+        if let Some(app) = app_handle {
+            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": subtask.id, "prompt": prompt }));
+        }
+    }
 }
 
 pub async fn advance_task(

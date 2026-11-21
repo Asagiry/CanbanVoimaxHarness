@@ -148,7 +148,7 @@ pub async fn steer_agent(
             t.updated_at = Utc::now().timestamp_millis();
             t.waiting_for_subtask_id = None;
             t.completed_at = None;
-            save_tasks_to_disk(&root, &current_tasks).await?;
+            save_tasks_to_disk(&root, std::slice::from_ref(t)).await?;
         }
         if state.is_same_root(&root) {
             let mut guard = state.tasks.lock().unwrap_or_else(|p| p.into_inner());

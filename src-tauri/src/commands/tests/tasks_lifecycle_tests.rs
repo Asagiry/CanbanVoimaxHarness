@@ -1258,3 +1258,39 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_missing_on_enter_hook_script_blocks_transition() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_missing_hook_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(tmp.join(".cvh")).await.expect("test dir");
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [{
+                "id": "development",
+                "name": "Dev",
+                "columns": [
+                    { "id": "backlog", "title": "Backlog", "auto_run": false },
+                    { "id": "gate", "title": "Gate", "auto_run": false, "hooks": { "on_enter": ".cvh/hooks/missing.bat" } }
+                ]
+            }]
+        });
+        tokio::fs::write(tmp.join(".cvh").join("boards.json"), serde_json::to_string_pretty(&boards_cfg).unwrap())
+            .await
+            .expect("write boards.json");
+        internal_create_task(
+            &tmp, "Task".to_string(), "desc".to_string(), "backlog".to_string(),
+            Some("development".to_string()), Some(true), None, Some("CVH-HOOK-1".to_string()), None, None, None,
+        )
+        .await
+        .expect("create task");
+
+        let res = internal_move_task_stage(&tmp, "CVH-HOOK-1", "gate", None, None, None, None, false, None).await;
+
+        assert!(res.is_err(), "missing hook script must reject the transition, got: {:?}", res.map(|t| t.stage_id));
+        let loaded = load_tasks_from_disk(&tmp).await;
+        assert_eq!(loaded[0].stage_id, "backlog", "task must stay in its source stage");
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }

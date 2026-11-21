@@ -358,6 +358,15 @@ use std::path::PathBuf;
         let missing_err = delete_agent_persona_file(&base, "non-existent").await.unwrap_err();
         assert!(missing_err.contains("не найдена"));
 
+        // Role names that escape `.cvh/agents/` must be rejected before touching the filesystem
+        let victim = base.join("victim");
+        tokio::fs::create_dir_all(&victim).await.expect("victim dir");
+        for bad in ["../../victim", r"..\..\victim", ".."] {
+            assert!(delete_agent_persona_file(&base, bad).await.is_err(), "delete must reject {:?}", bad);
+            assert!(rename_agent_persona_file(&base, bad, "moved").await.is_err(), "rename must reject {:?}", bad);
+        }
+        assert!(victim.is_dir(), "directory outside .cvh/agents must survive");
+
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 

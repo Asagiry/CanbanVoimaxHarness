@@ -77,7 +77,7 @@ pub async fn execute_complete_task(
     }
 
     // Persist to disk
-    crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks)
+    crate::commands::tasks::save_tasks_to_disk(repo_root, std::slice::from_ref(&updated_task))
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 

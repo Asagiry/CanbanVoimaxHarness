@@ -139,6 +139,7 @@ impl LlmClient {
                 _ = tx.closed() => return Ok(()),
                 res = tokio::time::timeout(HEADER_TIMEOUT, req.send()) => res,
             };
+            let mut rate_limit_wait: Option<u64> = None;
             let retry_reason = match response_res {
                 Ok(Ok(resp)) if resp.status().is_success() => {
                     match Self::consume_openai_response(resp, &tx).await? {
@@ -148,6 +149,12 @@ impl LlmClient {
                 }
                 Ok(Ok(resp)) => {
                     let status = resp.status();
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.trim().parse::<u64>().ok());
+                        rate_limit_wait = Some(retry_after.unwrap_or(delay_secs).clamp(1, 30));
+                    }
                     let text = tokio::select! {
                         _ = tx.closed() => return Ok(()),
                         text = resp.text() => text.unwrap_or_else(|_| "Failed to read error body".to_string()),
@@ -158,7 +165,7 @@ impl LlmClient {
                     } else {
                         redacted_text.clone()
                     };
-                    if status.is_server_error() {
+                    if status.is_server_error() || rate_limit_wait.is_some() {
                         format!("HTTP {}: {}", status, err_summary)
                     } else {
                         let final_err = format!("OpenAI API error [{}]: {}", status, redacted_text);
@@ -179,7 +186,7 @@ impl LlmClient {
                 Err(_) => "HTTP response header timeout (60s)".to_string(),
             };
             let redacted_reason = redact_secrets(&retry_reason, api_key);
-            if attempt >= MAX_STREAM_RETRIES {
+            if rate_limit_wait.is_none() && attempt >= MAX_STREAM_RETRIES {
                 let final_err = format!(
                     "OpenAI stream failed after {} attempts: {}",
                     attempt + 1,
@@ -189,19 +196,22 @@ impl LlmClient {
                 let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
                 bail!(final_err);
             }
-            attempt += 1;
+            let wait_secs = rate_limit_wait.unwrap_or(delay_secs);
+            if rate_limit_wait.is_none() {
+                attempt += 1;
+                delay_secs = delay_secs.saturating_mul(2).min(30);
+            }
             eprintln!(
                 "CVH [llm_client]: {} (retry {}/{}). Reconnecting in {}s",
-                redacted_reason, attempt, MAX_STREAM_RETRIES, delay_secs
+                redacted_reason, attempt, MAX_STREAM_RETRIES, wait_secs
             );
-            if tx.send(StreamChunk::Retry { id, delay_secs }).await.is_err() {
+            if tx.send(StreamChunk::Retry { id, delay_secs: wait_secs }).await.is_err() {
                 return Ok(());
             }
             tokio::select! {
                 _ = tx.closed() => return Ok(()),
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)) => {},
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)) => {},
             }
-            delay_secs = delay_secs.saturating_mul(2).min(30);
         }
     }
 

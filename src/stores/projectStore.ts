@@ -45,6 +45,7 @@ export async function performProjectSwitch(targetProject: ProjectInfo): Promise<
 
   logEvent('INFO', 'PROJECT_STORE', `performProjectSwitch: switching to project "${targetProject.name}"`, cleanPath);
 
+  const { tasks, stages, columns, boards } = useBoardStore.getState();
   resetWorkspaceStoresOnProjectChange(true);
   useProjectStore.setState({
     activeProject: targetProject,
@@ -73,7 +74,7 @@ export async function performProjectSwitch(targetProject: ProjectInfo): Promise<
       hasActiveProject: prevHasActive,
       projectError: errMsg,
     });
-    useBoardStore.setState({ isLoadingTasks: false, isLoadingBoards: false });
+    useBoardStore.setState({ tasks, stages, columns, boards, isLoadingTasks: false, isLoadingBoards: false });
     return;
   }
 

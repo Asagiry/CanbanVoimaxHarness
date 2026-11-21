@@ -31,23 +31,6 @@ impl<'a> TaskTransitionPipeline<'a> {
         let hook_rel = hook_cfg.script();
         let hook_desc = hook_cfg.description();
         let hook_path = crate::config::resolve_hook_path(self.root, sc.persona.as_deref(), hook_rel);
-        if !hook_path.exists() {
-            if let Some(app) = self.app_handle {
-                let _ = app.emit("hook:finish", serde_json::json!({
-                    "taskId": task.id,
-                    "stageId": sc.id,
-                    "hookType": emit_hook_type,
-                    "success": false,
-                    "exitCode": None::<i32>,
-                    "stdout": "",
-                    "stderr": format!("Script not found: {}", hook_path.display()),
-                    "error": format!("Script not found: {}", hook_path.display()),
-                    "hookName": hook_rel,
-                }));
-            }
-            return Ok(());
-        }
-
         if let Some(app) = self.app_handle {
             let _ = app.emit("hook:start", serde_json::json!({
                 "taskId": task.id,

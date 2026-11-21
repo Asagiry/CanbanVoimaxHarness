@@ -169,7 +169,7 @@ pub(crate) async fn run_agent_inner(
                 if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                     t.description = task.description.clone();
                     t.updated_at = task.updated_at;
-                    let _ = save_tasks_to_disk(&root, &all_tasks).await;
+                    let _ = save_tasks_to_disk(&root, std::slice::from_ref(t)).await;
                 }
                 let mut guard = app_state.tasks.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
@@ -318,7 +318,7 @@ pub(crate) async fn run_agent_inner(
             t.completed_at = None;
             t.waiting_for_subtask_id = None;
             t.updated_at = Utc::now().timestamp_millis();
-            if let Err(e) = save_tasks_to_disk(&root, &all_tasks).await {
+            if let Err(e) = save_tasks_to_disk(&root, std::slice::from_ref(t)).await {
                 cleanup_active_agent_reservation(&app_handle, &root, &task_id);
                 return Err(e);
             }

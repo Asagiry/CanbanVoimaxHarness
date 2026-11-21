@@ -144,6 +144,7 @@ export const createSubagentsSlice: StateCreator<
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       let items: DrawerActivityItem[] | null = null;
+      const idsBeforeLoad = new Set((get().activityFeed[subagentId] || []).map((it) => it.id));
       for (let attempt = 0; attempt < MAX_LOAD_ROLLBACK_RETRIES; attempt++) {
         const rollbackVersion = get().streamRollbackVersions[subagentId];
         const loaded = await invoke<DrawerActivityItem[]>('load_subagent_dialog', {
@@ -156,15 +157,22 @@ export const createSubagentsSlice: StateCreator<
         }
       }
       if (items && Array.isArray(items) && items.length > 0) {
+        const loaded = items;
+        const loadedIds = new Set(loaded.map((it) => it.id));
         set((state) => {
+          // Keep live events that arrived while the snapshot was loading
+          const arrivedDuringLoad = (state.activityFeed[subagentId] || []).filter(
+            (it) => !loadedIds.has(it.id) && !idsBeforeLoad.has(it.id),
+          );
+          const merged = arrivedDuringLoad.length > 0 ? [...loaded, ...arrivedDuringLoad] : loaded;
           const nextFeed = {
             ...state.activityFeed,
-            [subagentId]: items,
+            [subagentId]: merged,
           };
           const mappedToolId = state.subagentIdToToolId[subagentId];
-          if (mappedToolId) nextFeed[mappedToolId] = items;
+          if (mappedToolId) nextFeed[mappedToolId] = merged;
           const mappedSubId = state.toolIdToSubagentId[subagentId];
-          if (mappedSubId) nextFeed[mappedSubId] = items;
+          if (mappedSubId) nextFeed[mappedSubId] = merged;
           return { activityFeed: nextFeed };
         });
       }

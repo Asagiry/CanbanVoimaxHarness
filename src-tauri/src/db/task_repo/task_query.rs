@@ -7,7 +7,11 @@ use std::path::Path;
 /// Retrieves all tasks from SQLite ordered by position and created_at.
 pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    read_all_tasks(&conn, root)
+}
 
+/// Reads all tasks through an existing connection (or an open transaction).
+pub(super) fn read_all_tasks(conn: &rusqlite::Connection, root: &Path) -> Result<Vec<Task>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,

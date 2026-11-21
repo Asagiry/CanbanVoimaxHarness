@@ -25,23 +25,6 @@ impl<'a> TaskTransitionPipeline<'a> {
             self.target_col.persona.as_deref(),
             &hook_rel,
         );
-        if !hook_path.exists() {
-            if let Some(app) = self.app_handle {
-                let _ = app.emit("hook:finish", serde_json::json!({
-                    "taskId": task.id,
-                    "stageId": self.target_col.id,
-                    "hookType": "on_enter",
-                    "success": false,
-                    "exitCode": None::<i32>,
-                    "stdout": "",
-                    "stderr": format!("Script not found: {}", hook_path.display()),
-                    "error": format!("Script not found: {}", hook_path.display()),
-                    "hookName": &hook_rel,
-                }));
-            }
-            return Ok(());
-        }
-
         if let Some(app) = self.app_handle {
             let _ = app.emit("hook:start", serde_json::json!({
                 "taskId": task.id,
